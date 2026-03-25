@@ -1,0 +1,5 @@
+{
+  "name": "Blueprint Home Solutions",
+  "description": "A comprehensive home improvement marketplace dashboard connecting homeowners, contractors, and developers with integrated NYC DOB permit leads.",
+  "requestFramePermissions": ["geolocation"]
+}

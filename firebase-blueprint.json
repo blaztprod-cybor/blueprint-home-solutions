@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID" },
+        "email": { "type": "string", "format": "email", "description": "User email" },
+        "role": { "type": "string", "enum": ["admin", "Contractor", "Homeowner"], "description": "User role" },
+        "name": { "type": "string", "description": "Display name" },
+        "isVerified": { "type": "boolean", "description": "Verification status for contractors" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "OwnedData": {
+      "title": "OwnedData",
+      "description": "Generic data owned by a user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Owner's unique ID" }
+      },
+      "required": ["uid"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Home improvement project",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Owner's unique ID" },
+        "title": { "type": "string", "description": "Project title" },
+        "description": { "type": "string", "description": "Project description" },
+        "category": { "type": "string", "description": "Project category" },
+        "status": { "type": "string", "enum": ["New Open Project", "Rough Estimates", "Final Estimates", "On Hold", "In Contract", "In Progress", "Completed", "Abandoned"], "description": "Project status" },
+        "budget": { "type": "number", "description": "Project budget" },
+        "startDate": { "type": "string", "description": "Projected start date" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "street": { "type": "string" },
+            "town": { "type": "string" },
+            "zip": { "type": "string" }
+          }
+        },
+        "phone": { "type": "string" },
+        "services": { "type": "array", "items": { "type": "string" } },
+        "photoCount": { "type": "number" },
+        "roughEstimates": { "type": "array", "items": { "$ref": "Estimate" } },
+        "finalEstimates": { "type": "array", "items": { "$ref": "Estimate" } },
+        "expirationDate": { "type": "string" },
+        "inspectionDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "title", "status", "createdAt"]
+    },
+    "Estimate": {
+      "title": "Estimate",
+      "description": "Project estimate from a contractor",
+      "type": "object",
+      "properties": {
+        "contractorId": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "amount": { "type": "number" },
+        "submittedAt": { "type": "string" },
+        "type": { "type": "string", "enum": ["rough", "final"] }
+      },
+      "required": ["contractorId", "contractorName", "amount", "submittedAt", "type"]
+    },
+    "ProjectPhoto": {
+      "title": "ProjectPhoto",
+      "description": "Photo associated with a project",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "Base64 or URL of the photo" },
+        "createdAt": { "type": "string" },
+        "uid": { "type": "string", "description": "Uploader's unique ID" }
+      },
+      "required": ["url", "createdAt", "uid"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client managed by a contractor",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Contractor's unique ID" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "type": { "type": "string", "enum": ["Homeowner", "Developer"] },
+        "jobDescription": { "type": "string" },
+        "estimate": { "type": "number" },
+        "actualBudget": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "name", "email", "type", "createdAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "User review for a project",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "targetId": { "type": "string", "description": "ID of the user being reviewed" },
+        "projectId": { "type": "string" },
+        "rating": { "type": "number" },
+        "content": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "projectName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["authorId", "targetId", "projectId", "rating", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Homeowner projects"
+    },
+    "/projects/{projectId}/photos/{photoId}": {
+      "schema": "ProjectPhoto",
+      "description": "Project photos"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Contractor's clients"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Project reviews"
+    },
+    "/{collection}/{docId}": {
+      "schema": "OwnedData",
+      "description": "Generic user-owned data"
+    }
+  }
+}

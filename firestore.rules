@@ -1,0 +1,214 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (uid)
+    // Fields:
+    //   - uid: string (required) - Unique user ID
+    //   - email: string (required, email format) - User email
+    //   - role: string (required, enum: admin, Contractor, Homeowner) - User role
+    //   - name: string (optional) - Display name
+    //   - createdAt: string (optional) - ISO 8601 date string
+    //
+    // Collection: projects
+    // Document ID: projectId
+    // Fields:
+    //   - uid: string (required) - Owner's unique ID
+    //   - title: string (required) - Project title
+    //   - category: string (optional) - Project category
+    //   - status: string (required, enum: Planning, In Progress, Completed, On Hold) - Project status
+    //   - budget: number (optional) - Project budget
+    //   - startDate: string (optional) - Projected start date
+    //   - location: map (optional) - street, town, zip
+    //   - phone: string (optional)
+    //   - services: list (optional) - array of strings
+    //   - createdAt: string (required) - ISO 8601 date string
+    //
+    // Collection: clients
+    // Document ID: clientId
+    // Fields:
+    //   - uid: string (required) - Contractor's unique ID
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - phone: string (optional)
+    //   - address: string (optional)
+    //   - type: string (required, enum: Homeowner, Developer)
+    //   - jobDescription: string (optional)
+    //   - estimate: number (optional)
+    //   - actualBudget: number (optional)
+    //   - createdAt: string (required)
+    //
+    // Collection: reviews
+    // Document ID: reviewId
+    // Fields:
+    //   - authorId: string (required)
+    //   - targetId: string (required)
+    //   - projectId: string (required)
+    //   - rating: number (required, 1-5)
+    //   - content: string (required)
+    //   - authorName: string (optional)
+    //   - authorAvatar: string (optional)
+    //   - authorRole: string (optional)
+    //   - projectName: string (optional)
+    //   - createdAt: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "blaztprod@gmail.com" && request.auth.token.email_verified == true));
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+    
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+        hasOnlyAllowedFields(['uid', 'email', 'role', 'name', 'avatar', 'isVerified', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() > 0 &&
+        data.email is string && isValidEmail(data.email) &&
+        data.role in ['admin', 'Contractor', 'Homeowner'] &&
+        (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+        (!('avatar' in data) || (data.avatar is string && data.avatar.size() < 1048576)) &&
+        (!('isVerified' in data) || data.isVerified is bool) &&
+        (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+    }
+    
+    function isValidProject(data) {
+      return hasRequiredFields(['uid', 'title', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'title', 'description', 'category', 'status', 'budget', 'startDate', 'location', 'phone', 'services', 'photoCount', 'photos', 'roughEstimates', 'finalEstimates', 'expirationDate', 'inspectionDate', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() > 0 &&
+        data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+        data.status in ['New Open Project', 'Rough Estimates', 'Final Estimates', 'On Hold', 'In Contract', 'In Progress', 'Completed', 'Abandoned'] &&
+        data.createdAt is string && isValidDateString(data.createdAt) &&
+        (!('description' in data) || (data.description is string && data.description.size() < 5000)) &&
+        (!('budget' in data) || data.budget is number) &&
+        (!('photoCount' in data) || data.photoCount is number) &&
+        (!('services' in data) || data.services is list) &&
+        (!('photos' in data) || data.photos is list) &&
+        (!('roughEstimates' in data) || data.roughEstimates is list) &&
+        (!('finalEstimates' in data) || data.finalEstimates is list) &&
+        (!('expirationDate' in data) || isValidDateString(data.expirationDate)) &&
+        (!('inspectionDate' in data) || isValidDateString(data.inspectionDate)) &&
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+    }
+
+    function isValidProjectPhoto(data) {
+      return hasRequiredFields(['url', 'createdAt', 'uid']) &&
+        hasOnlyAllowedFields(['url', 'createdAt', 'uid']) &&
+        data.url is string && data.url.size() < 1048576 &&
+        data.createdAt is string && isValidDateString(data.createdAt) &&
+        data.uid is string && data.uid == request.auth.uid;
+    }
+    
+    function isValidClient(data) {
+      return hasRequiredFields(['uid', 'name', 'email', 'type', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'name', 'email', 'phone', 'address', 'type', 'jobDescription', 'estimate', 'actualBudget', 'createdAt']) &&
+        data.uid is string && data.uid.size() > 0 &&
+        data.name is string && data.name.size() > 0 &&
+        data.email is string && isValidEmail(data.email) &&
+        data.type in ['Homeowner', 'Developer'] &&
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+    
+    function isValidReview(data) {
+      return hasRequiredFields(['authorId', 'targetId', 'projectId', 'rating', 'content', 'createdAt']) &&
+        hasOnlyAllowedFields(['authorId', 'targetId', 'projectId', 'rating', 'content', 'authorName', 'authorAvatar', 'authorRole', 'projectName', 'createdAt']) &&
+        data.authorId is string && data.authorId == request.auth.uid &&
+        data.targetId is string &&
+        data.projectId is string &&
+        data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+        data.content is string && data.content.size() > 0 && data.content.size() < 2000 &&
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      (isOwner(userId) && request.resource.data.role != 'admin' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      (isOwner(userId) && request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidProject(request.resource.data) && 
+                      (request.resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && isValidProject(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+
+      match /photos/{photoId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isValidProjectPhoto(request.resource.data);
+        allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      }
+    }
+    
+    match /clients/{clientId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidClient(request.resource.data) && 
+                      (request.resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && isValidClient(request.resource.data) && 
+                      (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+    
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidReview(request.resource.data);
+      allow update: if isAuthenticated() && isValidReview(request.resource.data) && 
+                      (resource.data.authorId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+    
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
