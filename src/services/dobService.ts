@@ -68,6 +68,19 @@ function transformData(data: any[]): DOBPermit[] {
     const firstName = item.owner_s_first_name || item.owner_first_name || '';
     const lastName = item.owner_s_last_name || item.owner_last_name || '';
     const bizName = item.owner_s_business_name || item.owner_business_name || item.company_name || 'N/A';
+    const issuedDate =
+      item.issued_date ||
+      item.issuance_date ||
+      item.issue_date ||
+      item.permit_issued_date ||
+      item.date_issued ||
+      '';
+    const filingDate =
+      item.filing_date ||
+      item.filed_date ||
+      item.application_filed_date ||
+      item.date_filed ||
+      '';
     
     return {
       id: item.permit_number || item.bin || item.job__ || Math.random().toString(36).substr(2, 9),
@@ -76,8 +89,8 @@ function transformData(data: any[]): DOBPermit[] {
       street_name: streetName,
       job_type: item.work_type || item.job_type || 'N/A',
       permit_status: item.permit_status || item.status || 'N/A',
-      filing_date: item.filing_date || item.filed_date || '',
-      issuance_date: item.issued_date || item.issuance_date || '',
+      filing_date: filingDate,
+      issuance_date: issuedDate,
       job_description: item.job_description || item.work_description || item.job_desc || 'No description provided',
       owner_name: lastName ? `${firstName} ${lastName}`.trim() : 'Private Owner',
       owner_business_name: bizName,

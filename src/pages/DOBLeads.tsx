@@ -41,6 +41,20 @@ export default function DOBLeads() {
     return matchesBorough && matchesWorkType;
   });
 
+  const formatPermitDate = (value: string) => {
+    if (!value) return 'N/A';
+
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue) && numericValue > 20000) {
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      const converted = new Date(excelEpoch.getTime() + numericValue * 86400000);
+      return Number.isNaN(converted.getTime()) ? value : converted.toLocaleDateString();
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -151,7 +165,7 @@ export default function DOBLeads() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-lg uppercase tracking-widest whitespace-nowrap">
-                        {permit.issuance_date ? new Date(permit.issuance_date).toLocaleDateString() : 'N/A'}
+                        {formatPermitDate(permit.issuance_date)}
                       </span>
                     </td>
                     <td className="px-6 py-4">
