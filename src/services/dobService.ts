@@ -62,39 +62,23 @@ function getMockData(limit: number): DOBPermit[] {
 
 function transformData(data: any[]): DOBPermit[] {
   return data.map((item: any) => {
-    // Handle variations in field names between different NYC datasets
-    const houseNum = item.house_number || item.house_ || item.house_no || item.houseno || '';
-    const streetName = item.street_name || item.street || item.streetname || '';
-    const firstName = item.owner_s_first_name || item.owner_first_name || '';
-    const lastName = item.owner_s_last_name || item.owner_last_name || '';
-    const bizName = item.owner_s_business_name || item.owner_business_name || item.company_name || 'N/A';
-    const issuedDate =
-      item.issued_date ||
-      item.issuance_date ||
-      item.issue_date ||
-      item.permit_issued_date ||
-      item.date_issued ||
-      '';
-    const filingDate =
-      item.filing_date ||
-      item.filed_date ||
-      item.application_filed_date ||
-      item.date_filed ||
-      '';
+    const houseNum = item.house_no || '';
+    const streetName = item.street_name || '';
+    const bizName = item.applicant_business_name || item.owner_business_name || 'N/A';
     
     return {
-      id: item.permit_number || item.bin || item.job__ || Math.random().toString(36).substr(2, 9),
+      id: item.job_filing_number || item.work_permit || Math.random().toString(36).substr(2, 9),
       borough: item.borough || 'N/A',
       house_number: houseNum,
       street_name: streetName,
-      job_type: item.work_type || item.job_type || 'N/A',
-      permit_status: item.permit_status || item.status || 'N/A',
-      filing_date: filingDate,
-      issuance_date: issuedDate,
-      job_description: item.job_description || item.work_description || item.job_desc || 'No description provided',
-      owner_name: lastName ? `${firstName} ${lastName}`.trim() : 'Private Owner',
+      job_type: item.work_type || 'N/A',
+      permit_status: item.permit_status || 'N/A',
+      filing_date: item.approved_date || '',
+      issuance_date: item.issued_date || '',
+      job_description: item.job_description || 'No description provided',
+      owner_name: item.owner_name || 'Private Owner',
       owner_business_name: bizName,
-      phone_number: item.owner_s_business_phone || item.owner_business_phone || item.applicant_business_phone || item.company_phone || ''
+      phone_number: ''
     };
   });
 }
