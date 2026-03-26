@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Building2, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, ShieldCheck, Hammer, Eye, EyeOff, Camera } from 'lucide-react';
 import { useAuth } from '../AuthContext';
@@ -7,7 +7,10 @@ import { cn } from '../lib/utils';
 import { UserRole } from '../types';
 
 export default function SignUp() {
-  const [role, setRole] = useState<UserRole>('Contractor');
+  const [searchParams] = useSearchParams();
+  const requestedRole = searchParams.get('role');
+  const initialRole: UserRole = requestedRole === 'homeowner' ? 'Homeowner' : 'Contractor';
+  const [role, setRole] = useState<UserRole>(initialRole);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
@@ -25,7 +28,7 @@ export default function SignUp() {
   
     React.useEffect(() => {
       if (user) {
-        navigate(user.role === 'Contractor' ? '/projects' : '/homeowner-dashboard');
+        navigate(user.role === 'admin' ? '/admin' : '/projects');
       }
     }, [user, navigate]);
 

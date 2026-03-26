@@ -1,17 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Search, 
-  Filter, 
-  MapPin, 
-  Calendar, 
-  User, 
-  Building2, 
-  ExternalLink, 
-  Lock,
-  Zap,
-  CheckCircle2,
-  AlertCircle,
   Loader2
 } from 'lucide-react';
 import { fetchDOBPermits } from '../services/dobService';
@@ -21,64 +10,122 @@ import { cn } from '../lib/utils';
 export default function DOBLeads() {
   const [permits, setPermits] = useState<DOBPermit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
+  const [workTypeFilter, setWorkTypeFilter] = useState('All Work Types');
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      const data = await fetchDOBPermits(10);
+      const data = await fetchDOBPermits(50);
       setPermits(data);
       setLoading(false);
     };
     loadData();
   }, []);
 
+  const boroughOptions = ['All Boroughs', ...Array.from(new Set(
+    permits
+      .map((permit) => permit.borough)
+      .filter(Boolean)
+  )).sort()];
+
+  const workTypeOptions = ['All Work Types', ...Array.from(new Set(
+    permits
+      .map((permit) => permit.job_type)
+      .filter(Boolean)
+  )).sort()];
+
+  const filteredPermits = permits.filter((permit) => {
+    const matchesBorough = boroughFilter === 'All Boroughs' || permit.borough === boroughFilter;
+    const matchesWorkType = workTypeFilter === 'All Work Types' || permit.job_type === workTypeFilter;
+    return matchesBorough && matchesWorkType;
+  });
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-3xl font-bold tracking-tight">Recent Permits</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Permit Feed</h1>
             <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest">Live Feed</span>
           </div>
           <p className="text-muted-foreground">Real-time construction permits issued by the NYC Department of Buildings.</p>
         </div>
-        {!isSubscribed && (
-          <button 
-            onClick={() => setIsSubscribed(true)}
-            className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform"
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-right shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Map Setup</p>
+          <p className="mt-1 text-xs font-bold text-slate-600">Use NYC Geoclient to geocode permit addresses for a map view.</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-2">
+          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Filter By Borough</span>
+          <select
+            value={boroughFilter}
+            onChange={(event) => setBoroughFilter(event.target.value)}
+            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary"
           >
-            <Zap size={20} fill="currentColor" />
-            <span>Upgrade for Full Access</span>
-          </button>
-        )}
+            {boroughOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Filter By Work Type</span>
+          <select
+            value={workTypeFilter}
+            onChange={(event) => setWorkTypeFilter(event.target.value)}
+            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary"
+          >
+            {workTypeOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
+        <div className="overflow-x-scroll pb-3">
+          <table className="w-full text-left border-collapse min-w-[1800px]">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">House No</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street Name</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Borough</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant Business Name</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Company</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone Number</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center">
+                  <td colSpan={9} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB Data...</p>
                     </div>
                   </td>
                 </tr>
+              ) : filteredPermits.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <p className="text-lg font-bold text-slate-700">No permits match these filters</p>
+                      <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
+                    </div>
+                  </td>
+                </tr>
               ) : (
-                permits.map((permit, i) => (
+                filteredPermits.map((permit, i) => (
                   <motion.tr 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -87,32 +134,48 @@ export default function DOBLeads() {
                     className="hover:bg-slate-50/50 transition-colors group"
                   >
                     <td className="px-6 py-4">
-                      <span className={cn("text-sm font-bold", !isSubscribed && "blur-[4px] select-none")}>
-                        {isSubscribed ? permit.house_number : "123"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={cn("text-sm font-medium text-slate-600", !isSubscribed && "blur-[4px] select-none")}>
-                        {isSubscribed ? permit.street_name : "Hidden Street"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <span className="text-sm font-bold text-slate-700">{permit.borough}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded uppercase tracking-widest">
-                        {permit.job_type}
+                      <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
+                        {[permit.house_number, permit.street_name].filter(Boolean).join(' ') || 'Unavailable'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn("text-sm font-medium text-slate-600", !isSubscribed && "blur-[4px] select-none")}>
-                        {isSubscribed ? permit.owner_business_name : "•••• •••••"}
+                      <span className="text-sm font-medium text-slate-600">{permit.street_name || 'Unavailable'}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[10px] font-bold px-2 py-1 bg-amber-50 text-amber-700 rounded-lg uppercase tracking-widest">
+                        {permit.job_type || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-xs text-slate-500 line-clamp-1 italic max-w-xs">
+                      <span className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-lg uppercase tracking-widest whitespace-nowrap">
+                        {permit.issuance_date ? new Date(permit.issuance_date).toLocaleDateString() : 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs text-slate-500 italic max-w-md min-w-[260px]">
                         "{permit.job_description}"
                       </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={cn(
+                        "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
+                        permit.permit_status === 'ISSUED' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-600"
+                      )}>
+                        {permit.permit_status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                        {permit.owner_business_name || permit.owner_name || 'Unavailable'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
+                        {permit.phone_number || 'Phone not connected yet'}
+                      </span>
                     </td>
                   </motion.tr>
                 ))

@@ -29,7 +29,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // Redirect to their own dashboard if they try to access the wrong one
-    const defaultPath = user.role === 'admin' ? '/admin' : (user.role === 'Contractor' ? '/projects' : '/homeowner-dashboard');
+    const defaultPath = user.role === 'admin' ? '/admin' : '/projects';
     return <Navigate to={defaultPath} replace />;
   }
 

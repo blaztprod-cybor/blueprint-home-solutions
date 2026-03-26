@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useLocation } from 'react-router-dom';
 import { 
   Briefcase, 
   Search, 
@@ -15,7 +16,6 @@ import {
   Loader2,
   X,
   MapPin,
-  Phone,
   Hammer,
   Calculator,
   CalendarCheck,
@@ -29,7 +29,7 @@ import {
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, deleteDoc, orderBy, limit, getDoc } from 'firebase/firestore';
 import { Project, Estimate } from '../types';
 import { Toaster, toast } from 'sonner';
 
@@ -116,6 +116,12 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
           >
             <h2 className="text-2xl font-black mb-6">Submit {type.charAt(0).toUpperCase() + type.slice(1)} Estimate</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Platform Agreement</p>
+                <p className="mt-2 text-sm font-medium leading-6 text-amber-900">
+                  By submitting this bid, you agree to the Blueprint Home Solutions terms and guidelines and acknowledge that homeowner introductions originating on the platform must continue through the platform.
+                </p>
+              </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Estimate Amount ($)</label>
                 <div className="relative">
@@ -154,7 +160,20 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
   );
 }
 
+const getProjectLocationLabel = (project: Project, hideExactAddress: boolean) => {
+  const town = project.location?.town || (project.location as any)?.city || 'Unknown';
+  const street = project.location?.street || '';
+
+  if (hideExactAddress) {
+    const streetWithoutNumber = street.replace(/^\s*\d+\s+/, '').trim();
+    return [streetWithoutNumber || 'Project Area', town].filter(Boolean).join(', ');
+  }
+
+  return [street, town].filter(Boolean).join(', ');
+};
+
 export default function Projects() {
+  const location = useLocation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -220,6 +239,7 @@ export default function Projects() {
         id: doc.id,
         ...doc.data()
       })) as Project[];
+      projectsData.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setProjects(projectsData);
       setIsLoading(false);
     }, (error) => {
@@ -253,59 +273,34 @@ export default function Projects() {
     return () => unsubscribe();
   }, [selectedProject]);
 
-  const handleStatusUpdate = async (projectId: string, newStatus: Project['status']) => {
-    if (!selectedProject || isUpdating) return;
-    
-    const oldStatus = selectedProject.status;
-    if (oldStatus === newStatus) return;
+  useEffect(() => {
+    const highlightedProjectId = location.state?.highlightProjectId;
+    if (!highlightedProjectId || projects.length === 0) return;
 
-    setIsUpdating(true);
-    const projectRef = doc(db, 'projects', projectId);
+    const matchedProject = projects.find(project => project.id === highlightedProjectId);
+    if (!matchedProject) return;
 
-    try {
-      await updateDoc(projectRef, {
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+    setActiveTab('All');
+    setSelectedProject(matchedProject);
+    setIsModalOpen(true);
 
-      // Update local state for immediate feedback in modal
-      setSelectedProject({ ...selectedProject, status: newStatus });
-      
-      toast.success(`Project status updated to ${newStatus}`);
-
-      // Send notification email
-      try {
-        await fetch('/api/send-status-update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: user?.email,
-            name: user?.name,
-            projectTitle: selectedProject.title,
-            oldStatus,
-            newStatus
-          })
-        });
-      } catch (emailError) {
-        console.error("Failed to send status update email:", emailError);
-      }
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast.error("Failed to update project status");
-      handleFirestoreError(error, OperationType.UPDATE, `projects/${projectId}`);
-    } finally {
-      setIsUpdating(false);
+    if (location.state?.projectSubmitted) {
+      toast.success('Project submitted and added to My Projects.');
+      window.history.replaceState({}, document.title);
     }
-  };
+  }, [location.state, projects]);
 
   const handleScheduleAppointment = async (projectId: string) => {
-    if (!selectedProject || isUpdating) return;
+    if (!selectedProject || isUpdating || !user) return;
     
     setIsUpdating(true);
     const projectRef = doc(db, 'projects', projectId);
     const inspectionDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // Default to 2 days from now
 
     try {
+      const homeownerSnapshot = await getDoc(doc(db, 'users', selectedProject.uid));
+      const homeownerData = homeownerSnapshot.exists() ? homeownerSnapshot.data() : null;
+
       const updateData: any = {
         inspectionDate,
         inspectionContractorId: user.id, // Track which contractor scheduled it
@@ -317,12 +312,39 @@ export default function Projects() {
       }
 
       await updateDoc(projectRef, updateData);
+      await addDoc(collection(db, 'notifications'), {
+        uid: selectedProject.uid,
+        projectId,
+        type: 'visit-request',
+        title: 'New visit request',
+        message: `${user.name} requested to schedule a visit for ${selectedProject.title}.`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+
+      if (homeownerData?.email) {
+        try {
+          await fetch('/api/send-visit-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: homeownerData.email,
+              homeownerName: homeownerData.name || 'Homeowner',
+              contractorName: user.name,
+              projectTitle: selectedProject.title,
+              requestedVisitDate: inspectionDate
+            })
+          });
+        } catch (emailError) {
+          console.error("Failed to send visit request email:", emailError);
+        }
+      }
 
       setSelectedProject({ ...selectedProject, ...updateData });
-      toast.success(`In-person inspection scheduled for ${new Date(inspectionDate).toLocaleDateString()}`);
+      toast.success(`Visit request sent for ${new Date(inspectionDate).toLocaleDateString()}`);
     } catch (error) {
       console.error("Error scheduling appointment:", error);
-      toast.error("Failed to schedule appointment");
+      toast.error("Failed to send visit request");
     } finally {
       setIsUpdating(false);
     }
@@ -741,288 +763,168 @@ export default function Projects() {
       )}
 
       <div className="grid grid-cols-1 gap-6">
-        {isContractor ? (
-          contractorView === 'projects' && (
-            <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/30">
-                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Preview</th>
-                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Project Details</th>
-                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ESTIMATES</th>
-                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
-                      <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {filteredProjects.length > 0 ? (
-                      filteredProjects.map((project) => {
-                        const isExpired = project.expirationDate && new Date(project.expirationDate) < new Date();
-  const handleScheduleAppointment = async (projectId: string) => {
-    if (!selectedProject || isUpdating || !user) return;
-    
-    setIsUpdating(true);
-    const projectRef = doc(db, 'projects', projectId);
-    const inspectionDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // Default to 2 days from now
+        {(!isContractor || contractorView === 'projects') && (
+          <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/30">
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Preview</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Project Details</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Estimates</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredProjects.length > 0 ? (
+                    filteredProjects.map((project) => {
+                      const isExpired = project.expirationDate && new Date(project.expirationDate) < new Date();
+                      const locationLabel = getProjectLocationLabel(project, isContractor);
 
-    try {
-      const updateData: any = {
-        inspectionDate,
-        inspectionContractorId: user.id, // Track which contractor scheduled it
-        updatedAt: new Date().toISOString()
-      };
-
-      if (selectedProject.status === 'New Open Project') {
-        updateData.status = 'Rough Estimates';
-      }
-
-      await updateDoc(projectRef, updateData);
-
-      setSelectedProject({ ...selectedProject, ...updateData });
-      toast.success(`In-person inspection scheduled for ${new Date(inspectionDate).toLocaleDateString()}`);
-    } catch (error) {
-      console.error("Error scheduling appointment:", error);
-      toast.error("Failed to schedule appointment");
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-                         return (
-                           <tr 
-                             key={project.id} 
-                             onClick={() => {
-                               setSelectedProject(project);
-                               setIsModalOpen(true);
-                             }}
-                             className={cn(
-                               "group hover:bg-slate-50/40 transition-all cursor-pointer border-b border-slate-50",
-                               isExpired && "opacity-50 grayscale"
-                             )}
-                           >
-                             <td className="px-8 py-6">
-                               <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white border border-slate-100 shadow-sm group-hover:shadow-md transition-all">
-                                 {project.photos && project.photos.length > 0 ? (
-                                   <img src={project.photos[0]} className="w-full h-full object-cover" alt="Preview" />
-                                 ) : (
-                                   <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                     <ImageIcon size={20} />
-                                   </div>
-                                 )}
-                               </div>
-                             </td>
-                             <td className="px-8 py-6">
-                               <div className="space-y-1.5">
-                                 <div className="flex items-center gap-2">
-                                   <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[8px] font-black uppercase tracking-widest rounded-md border border-slate-200">
-                                     {project.category}
-                                   </span>
-                                 </div>
-                                 <p className="font-black text-slate-900 text-base leading-tight group-hover:text-primary transition-colors">{project.title}</p>
-                                 <div className="flex items-center gap-2">
-                                   <MapPin size={10} className="text-primary" />
-                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{project.location?.town || project.location?.city || 'Unknown'}</span>
-                                 </div>
-                               </div>
-                             </td>
-                             <td className="px-8 py-6">
-                               <div className="space-y-3">
-                                 <div className="flex flex-col">
-                                   <div className="flex items-center justify-between mb-1">
-                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Final Bid</span>
-                                     <span className="text-[10px] font-black text-emerald-500">
-                                       {project.finalEstimates?.length || 0}
-                                     </span>
-                                   </div>
-                                   <span className="text-xs font-black text-slate-900">
-                                     {project.finalEstimates && project.finalEstimates.length > 0 
-                                       ? `$${Math.max(...project.finalEstimates.map((e: any) => e.amount)).toLocaleString()}`
-                                       : 'NONE'}
-                                   </span>
-                                 </div>
-                                 <div className="flex flex-col">
-                                   <div className="flex items-center justify-between mb-1">
-                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rough Bid</span>
-                                     <span className="text-[10px] font-black text-primary">
-                                       {project.roughEstimates?.length || 0}
-                                     </span>
-                                   </div>
-                                   <span className="text-xs font-black text-slate-500">
-                                     {project.roughEstimates && project.roughEstimates.length > 0
-                                       ? `$${Math.max(...project.roughEstimates.map((e: any) => e.amount)).toLocaleString()}`
-                                       : 'NONE'}
-                                   </span>
-                                 </div>
-                               </div>
-                             </td>
-                             <td className="px-8 py-6">
-                               <span className={cn(
-                                 "text-[10px] font-black px-4 py-2 rounded-2xl uppercase tracking-[0.1em] inline-block shadow-sm border",
-                                 isExpired ? "bg-red-50 text-red-600 border-red-100" :
-                                 project.status === 'In Progress' ? "bg-blue-50 text-blue-600 border-blue-100" : 
-                                 project.status === 'Completed' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                                 ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                 project.status === 'New Open Project' ? "bg-purple-50 text-purple-600 border-purple-100 animate-pulse" :
-                                 "bg-slate-50 text-slate-500 border-slate-100"
-                               )}>
-                                 {isExpired ? 'Expired' : 
-                                  ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? 'Taking Bids' :
-                                  project.status === 'New Open Project' ? 'New' : 
-                                  project.status}
-                               </span>
-                             </td>
-                             <td className="px-8 py-6 text-right">
-                               <div className="flex items-center justify-end gap-2">
-                                 <button 
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setEstimateModal({ isOpen: true, type: 'rough', project: project });
-                                   }}
-                                   className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-all border border-slate-100"
-                                   title="Submit Rough Estimate"
-                                 >
-                                   <PlusCircle size={20} />
-                                 </button>
-                                 <button 
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setEstimateModal({ isOpen: true, type: 'final', project: project });
-                                   }}
-                                   className="w-10 h-10 flex items-center justify-center bg-emerald-50 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-100"
-                                   title="Submit Final Estimate"
-                                 >
-                                   <PlusCircle size={20} className="rotate-45" />
-                                 </button>
-                               </div>
-                             </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={5} className="px-8 py-32 text-center">
-                          <div className="flex flex-col items-center justify-center">
-                            <div className="w-24 h-24 bg-slate-50 rounded-[32px] flex items-center justify-center mx-auto mb-8 border border-slate-100 shadow-inner">
-                              <Briefcase size={40} className="text-slate-300" />
+                      return (
+                        <tr 
+                          key={project.id} 
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setIsModalOpen(true);
+                          }}
+                          className={cn(
+                            "group hover:bg-slate-50/40 transition-all cursor-pointer border-b border-slate-50",
+                            isExpired && "opacity-50 grayscale"
+                          )}
+                        >
+                          <td className="px-8 py-6">
+                            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white border border-slate-100 shadow-sm group-hover:shadow-md transition-all">
+                              {project.photos && project.photos.length > 0 ? (
+                                <img src={project.photos[0]} className="w-full h-full object-cover" alt="Preview" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                  <ImageIcon size={20} />
+                                </div>
+                              )}
                             </div>
-                            <h3 className="text-2xl font-black text-slate-900 mb-3">No projects found</h3>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[8px] font-black uppercase tracking-widest rounded-md border border-slate-200">
+                                  {project.category}
+                                </span>
+                              </div>
+                              <p className="font-black text-slate-900 text-base leading-tight group-hover:text-primary transition-colors">{project.title}</p>
+                              <div className="flex items-center gap-2">
+                                <MapPin size={10} className="text-primary" />
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{locationLabel}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="space-y-3">
+                              <div className="flex flex-col">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Final Bid</span>
+                                  <span className="text-[10px] font-black text-emerald-500">
+                                    {project.finalEstimates?.length || 0}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-black text-slate-900">
+                                  {project.finalEstimates && project.finalEstimates.length > 0 
+                                    ? `$${Math.max(...project.finalEstimates.map((e: any) => e.amount)).toLocaleString()}`
+                                    : 'NONE'}
+                                </span>
+                              </div>
+                              <div className="flex flex-col">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rough Bid</span>
+                                  <span className="text-[10px] font-black text-primary">
+                                    {project.roughEstimates?.length || 0}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-black text-slate-500">
+                                  {project.roughEstimates && project.roughEstimates.length > 0
+                                    ? `$${Math.max(...project.roughEstimates.map((e: any) => e.amount)).toLocaleString()}`
+                                    : 'NONE'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <span className={cn(
+                              "text-[10px] font-black px-4 py-2 rounded-2xl uppercase tracking-[0.1em] inline-block shadow-sm border",
+                              isExpired ? "bg-red-50 text-red-600 border-red-100" :
+                              project.status === 'In Progress' ? "bg-blue-50 text-blue-600 border-blue-100" : 
+                              project.status === 'Completed' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
+                              ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? "bg-amber-50 text-amber-600 border-amber-100" :
+                              project.status === 'New Open Project' ? "bg-purple-50 text-purple-600 border-purple-100 animate-pulse" :
+                              "bg-slate-50 text-slate-500 border-slate-100"
+                            )}>
+                              {isExpired ? 'Expired' : 
+                               ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? 'Taking Bids' :
+                               project.status === 'New Open Project' ? 'New' : 
+                               project.status}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-right">
+                            {isContractor ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEstimateModal({ isOpen: true, type: 'rough', project: project });
+                                  }}
+                                  className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-all border border-slate-100"
+                                  title="Submit Rough Estimate"
+                                >
+                                  <PlusCircle size={20} />
+                                </button>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEstimateModal({ isOpen: true, type: 'final', project: project });
+                                  }}
+                                  className="w-10 h-10 flex items-center justify-center bg-emerald-50 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-100"
+                                  title="Submit Final Estimate"
+                                >
+                                  <PlusCircle size={20} className="rotate-45" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProject(project);
+                                  setIsModalOpen(true);
+                                }}
+                                className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-primary transition-all shadow-xl shadow-slate-900/10 hover:shadow-primary/20 active:scale-95"
+                              >
+                                View Details
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-32 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-24 h-24 bg-slate-50 rounded-[32px] flex items-center justify-center mx-auto mb-8 border border-slate-100 shadow-inner">
+                            <Briefcase size={40} className="text-slate-300" />
+                          </div>
+                          <h3 className="text-2xl font-black text-slate-900 mb-3">{isContractor ? 'No projects found' : 'No projects yet'}</h3>
+                          {isContractor && (
                             <p className="text-slate-500 font-medium max-w-sm mx-auto mb-10">
                               You haven't been assigned to any projects yet. Projects will appear here once homeowners select you for their home improvements.
                             </p>
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                              <button className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-105 transition-all">
-                                Browse Marketplace
-                              </button>
-                              <button className="px-8 py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all">
-                                View Documentation
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProjects.length > 0 ? (
-              filteredProjects.map((project) => (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  key={project.id} 
-                  className="bg-white rounded-[3rem] border border-slate-200 shadow-xl shadow-slate-200/30 hover:shadow-2xl hover:shadow-primary/10 transition-all group overflow-hidden flex flex-col"
-                >
-                  <div className="aspect-[16/11] relative overflow-hidden bg-slate-100">
-                    {project.photos && project.photos.length > 0 ? (
-                      <img 
-                        src={project.photos[0]} 
-                        alt={project.title} 
-                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-200 bg-slate-50">
-                        <ImageIcon size={64} strokeWidth={1} />
-                      </div>
-                    )}
-                    <div className="absolute top-6 left-6">
-                      <span className={cn(
-                        "text-[10px] font-black px-4 py-2 rounded-2xl uppercase tracking-[0.2em] backdrop-blur-xl shadow-2xl border border-white/20",
-                        project.status === 'In Progress' ? "bg-blue-500/80 text-white" : 
-                        project.status === 'Completed' ? "bg-emerald-500/80 text-white" : 
-                        project.status === 'New Open Project' ? "bg-primary/80 text-white" :
-                        "bg-amber-500/80 text-white"
-                      )}>
-                        {project.status === 'New Open Project' ? 'New Project' : project.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-10 flex-1 flex flex-col">
-                    <div className="mb-8">
-                      <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-2">{project.category}</p>
-                      <h3 className="font-black text-2xl leading-[1.1] text-slate-900 group-hover:text-primary transition-colors">{project.title}</h3>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-8 mb-10">
-                      <div className="space-y-1.5">
-                        <p className="text-[9px] uppercase tracking-[0.2em] text-slate-400 font-black">Est. Budget</p>
-                        <p className="text-lg font-black text-slate-900 flex items-center gap-2">
-                          <DollarSign size={18} className="text-emerald-500" />
-                          {project.budget.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <p className="text-[9px] uppercase tracking-[0.2em] text-slate-400 font-black">Target Start</p>
-                        <p className="text-lg font-black text-slate-900 flex items-center gap-2">
-                          <Calendar size={18} className="text-blue-500" />
-                          {project.startDate}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-auto pt-8 border-t border-slate-100 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex -space-x-2">
-                          {(project.photos || []).slice(0, 3).map((photo, i) => (
-                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 overflow-hidden">
-                              <img src={photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            </div>
-                          ))}
-                          {(project.photoCount || 0) > 3 && (
-                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-900 flex items-center justify-center text-[10px] font-black text-white">
-                              +{(project.photoCount || 0) - 3}
-                            </div>
                           )}
                         </div>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{project.photoCount || 0} Photos</span>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setIsModalOpen(true);
-                        }}
-                        className="px-8 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-primary transition-all shadow-xl shadow-slate-900/10 hover:shadow-primary/20 active:scale-95"
-                      >
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))
-            ) : (
-              <div className="col-span-full bg-white p-20 rounded-[3rem] border border-slate-200 border-dashed flex flex-col items-center justify-center text-center">
-                <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-200 mb-8">
-                  <Briefcase size={48} />
-                </div>
-                <h3 className="text-2xl font-black text-slate-900">No projects yet</h3>
-                <p className="text-base text-slate-500 mt-2 max-w-sm font-medium">Your active and completed projects will appear here once you start working with clients.</p>
-              </div>
-            )}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -1045,7 +947,7 @@ export default function Projects() {
                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                className="relative ml-auto h-full w-full max-w-2xl bg-white shadow-2xl flex flex-col"
              >
-               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
                     <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">{selectedProject.category}</span>
@@ -1068,108 +970,6 @@ export default function Projects() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-10 space-y-12">
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Budget</p>
-                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      <DollarSign size={20} className="text-emerald-500" />
-                      {selectedProject.budget.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Start Date</p>
-                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      <Calendar size={20} className="text-blue-500" />
-                      {selectedProject.startDate}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Photos</p>
-                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      <Camera size={20} className="text-purple-500" />
-                      {selectedProject.photoCount || 0}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Status</p>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      <p className="text-xl font-black text-slate-900">{selectedProject.status === 'New Open Project' ? 'New' : selectedProject.status}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-12">
-                  <div className="space-y-8">
-                    <section className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
-                          <MapPin size={20} />
-                        </div>
-                        <h3 className="font-black text-lg text-slate-900">Project Location</h3>
-                      </div>
-                      {selectedProject.location ? (
-                        <div className="pl-13 space-y-1">
-                          <p className="text-base font-bold text-slate-600">{selectedProject.location.street}</p>
-                          <p className="text-base font-bold text-slate-600">{selectedProject.location.town}, {selectedProject.location.zip}</p>
-                        </div>
-                      ) : (
-                        <p className="pl-13 text-sm text-slate-400 italic font-medium">No location provided</p>
-                      )}
-                    </section>
-
-                    <section className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
-                          <Phone size={20} />
-                        </div>
-                        <h3 className="font-black text-lg text-slate-900">Contact Information</h3>
-                      </div>
-                      <p className="pl-13 text-base font-bold text-slate-600">{selectedProject.phone || 'No phone provided'}</p>
-                    </section>
-                  </div>
-
-                  <div className="space-y-8">
-                    <section className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
-                          <Hammer size={20} />
-                        </div>
-                        <h3 className="font-black text-lg text-slate-900">Services Requested</h3>
-                      </div>
-                      <div className="pl-13 flex flex-wrap gap-2">
-                        {selectedProject.services && selectedProject.services.length > 0 ? (
-                          selectedProject.services.map((service, idx) => (
-                            <span key={idx} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200">
-                              {service}
-                            </span>
-                          ))
-                        ) : (
-                          <p className="text-sm text-slate-400 italic font-medium">No services listed</p>
-                        )}
-                      </div>
-                    </section>
-
-                    {selectedProject.inspectionDate && (
-                      <section className="p-6 bg-emerald-50 rounded-[2rem] border border-emerald-100 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
-                            <CalendarCheck size={20} />
-                          </div>
-                          <h3 className="font-black text-lg text-emerald-900">Inspection Scheduled</h3>
-                        </div>
-                        <div className="pl-13">
-                          <p className="text-lg font-black text-emerald-700">
-                            {new Date(selectedProject.inspectionDate).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}
-                          </p>
-                          <p className="text-xs text-emerald-600/70 mt-1 font-bold uppercase tracking-wider">Site visit confirmed</p>
-                        </div>
-                      </section>
-                    )}
-                  </div>
-                </div>
-
                 {/* Photos Section */}
                 <section className="space-y-6">
                   <div className="flex items-center justify-between">
@@ -1226,71 +1026,152 @@ export default function Projects() {
                   )}
                 </section>
 
-                {/* Status Management */}
-                <section className="space-y-6 pt-12 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Budget</p>
+                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
+                      <DollarSign size={20} className="text-emerald-500" />
+                      {selectedProject.budget.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Start Date</p>
+                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
+                      <Calendar size={20} className="text-blue-500" />
+                      {selectedProject.startDate}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Photos</p>
+                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
+                      <Camera size={20} className="text-purple-500" />
+                      {selectedProject.photoCount || 0}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Status</p>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                      <p className="text-xl font-black text-slate-900">{selectedProject.status === 'New Open Project' ? 'New' : selectedProject.status}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  <section className="space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
-                        <Clock size={20} />
+                        <FileText size={20} />
                       </div>
-                      <h3 className="font-black text-lg text-slate-900">Project Status Management</h3>
+                      <h3 className="font-black text-lg text-slate-900">Project Description</h3>
                     </div>
-                    {isUpdating && <Loader2 className="animate-spin text-primary" size={20} />}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {(['New Open Project', 'Rough Estimates', 'Final Estimates', 'On Hold', 'In Contract', 'In Progress', 'Completed'] as const).map((status) => (
-                      <button
-                        key={status}
-                        disabled={isUpdating}
-                        onClick={() => handleStatusUpdate(selectedProject.id, status)}
-                        className={cn(
-                          "px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border",
-                          selectedProject.status === status
-                            ? "bg-primary text-white border-primary shadow-xl shadow-primary/20 scale-[1.02]"
-                            : "bg-white text-slate-500 border-slate-200 hover:border-primary/50 hover:bg-slate-50"
+                    <p className="pl-13 text-base font-medium leading-7 text-slate-600">
+                      {selectedProject.description || 'No project description provided.'}
+                    </p>
+                  </section>
+
+                  <section className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
+                        <MapPin size={20} />
+                      </div>
+                      <h3 className="font-black text-lg text-slate-900">Project Location</h3>
+                    </div>
+                    {selectedProject.location ? (
+                      <div className="pl-13 space-y-1">
+                        {isContractor ? (
+                          <>
+                            <p className="text-base font-bold text-slate-600">
+                              {getProjectLocationLabel(selectedProject, true)}
+                            </p>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                              Address hidden until estimate accepted by homeowner
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-base font-bold text-slate-600">{selectedProject.location.street}</p>
+                            <p className="text-base font-bold text-slate-600">{selectedProject.location.town}, {selectedProject.location.zip}</p>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                              Your full address stays private until you accept a rough bid and request an in-person inspection for a final estimate.
+                            </p>
+                          </>
                         )}
-                      >
-                        {status === 'New Open Project' ? 'New Open' : status}
-                      </button>
-                    ))}
+                      </div>
+                    ) : (
+                      <p className="pl-13 text-sm text-slate-400 italic font-medium">No location provided</p>
+                    )}
+                  </section>
+
+                  {selectedProject.inspectionDate && (
+                    <section className="p-6 bg-emerald-50 rounded-[2rem] border border-emerald-100 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+                          <CalendarCheck size={20} />
+                        </div>
+                        <h3 className="font-black text-lg text-emerald-900">Inspection Scheduled</h3>
+                      </div>
+                      <div className="pl-13">
+                        <p className="text-lg font-black text-emerald-700">
+                          {new Date(selectedProject.inspectionDate).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}
+                        </p>
+                        <p className="text-xs text-emerald-600/70 mt-1 font-bold uppercase tracking-wider">Inspection requested through the platform</p>
+                      </div>
+                    </section>
+                  )}
+
+                  {isContractor && selectedProject.status === 'New Open Project' && (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <button 
+                          onClick={() => {
+                            setEstimateModal({ isOpen: true, type: 'rough', project: selectedProject });
+                            setIsModalOpen(false);
+                          }}
+                          className="px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl hover:bg-slate-100 transition-all shadow-sm text-left"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Submit your</span>
+                            <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                              <Calculator size={16} className="text-primary" />
+                              Rough Estimate
+                            </span>
+                          </div>
+                        </button>
+                        <button 
+                          onClick={() => handleScheduleAppointment(selectedProject.id)}
+                          disabled={isUpdating}
+                          className="px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl hover:bg-slate-100 transition-all disabled:opacity-50 shadow-sm text-left"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Request to</span>
+                            <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                              <CalendarCheck size={16} className="text-primary" />
+                              {isUpdating ? 'Send Inspection Request' : 'Schedule Inspection'}
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-left">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Bid Notice</p>
+                        <p className="mt-2 text-sm font-medium leading-6 text-amber-900">
+                          Submitting a bid means you agree to the Blueprint terms, platform rules, and compensation guidelines for homeowner introductions that begin here.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="pt-2">
+                    <button 
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-8 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors"
+                    >
+                      Close
+                    </button>
                   </div>
-                </section>
-              </div>
-
-              <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-4 flex-wrap sticky bottom-0 z-10">
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-8 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors"
-                >
-                  Close
-                </button>
-                
-                {isContractor && selectedProject.status === 'New Open Project' && (
-                  <>
-                    <button 
-                      onClick={() => {
-                        setEstimateModal({ isOpen: true, type: 'rough', project: selectedProject });
-                        setIsModalOpen(false);
-                      }}
-                      className="px-8 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all shadow-sm"
-                    >
-                      <Calculator size={16} className="text-primary" />
-                      Rough Estimate
-                    </button>
-                    <button 
-                      onClick={() => handleScheduleAppointment(selectedProject.id)}
-                      disabled={isUpdating}
-                      className="px-8 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-100 transition-all disabled:opacity-50 shadow-sm"
-                    >
-                      <CalendarCheck size={16} className="text-primary" />
-                      {isUpdating ? 'Scheduling...' : 'Schedule Visit'}
-                    </button>
-                  </>
-                )}
-
-                <button className="px-10 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-primary/30 hover:scale-[1.05] active:scale-95 transition-all">
-                  {isContractor ? 'Manage Project' : 'Track Progress'}
-                </button>
+                </div>
               </div>
             </motion.div>
           </div>

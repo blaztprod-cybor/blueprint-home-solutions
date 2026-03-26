@@ -3,12 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, 
   Mail, 
-  Phone, 
-  MapPin, 
   Shield, 
-  Bell, 
   CreditCard, 
-  ExternalLink,
   Camera,
   CheckCircle2,
   Loader2,
@@ -307,24 +303,6 @@ export default function ProfileSettings() {
             </div>
           </div>
 
-          <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl relative overflow-hidden">
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-              <div>
-                <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Current Plan</p>
-                <h3 className="text-2xl font-bold">{user.role === 'Contractor' ? 'Pro Contractor' : 'Standard Homeowner'}</h3>
-                <p className="text-white/60 text-sm mt-1">Next billing date: April 15, 2026</p>
-              </div>
-              <div className="flex gap-3">
-                <button className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-colors">
-                  Manage Plan
-                </button>
-                <button className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform">
-                  Upgrade
-                </button>
-              </div>
-            </div>
-            <div className="absolute -left-12 -top-12 w-48 h-48 bg-white/5 rounded-full blur-3xl"></div>
-          </div>
         </div>
       </div>
     </div>

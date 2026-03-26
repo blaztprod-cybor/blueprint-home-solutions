@@ -44,6 +44,10 @@ import TermsOfService from './pages/TermsOfService';
 import ThankYou from './pages/ThankYou';
 import StartProject from './pages/StartProject';
 import MessagingWindow from './components/MessagingWindow';
+import ScrollToTop from './components/ScrollToTop';
+import ContractorPaywall from './pages/ContractorPaywall';
+import AboutUs from './pages/AboutUs';
+import DOBLeads from './pages/DOBLeads';
 
 const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   <Link
@@ -77,6 +81,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
 
   const contractorLinks = [
     { to: "/projects", icon: Briefcase, label: "Projects" },
+    { to: "/permit-feed", icon: Building2, label: "Permit Feed" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
     { to: "/invoices", icon: FileText, label: "Invoices" },
@@ -259,6 +264,7 @@ export default function App() {
   const { user } = useAuth();
   return (
     <Router>
+      <ScrollToTop />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
@@ -268,6 +274,8 @@ export default function App() {
         <Route path="/thank-you" element={<ThankYou />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/contractor-paywall" element={<ContractorPaywall />} />
+        <Route path="/about" element={<AboutUs />} />
 
         {/* Protected Portal Routes */}
         <Route path="/*" element={
@@ -276,20 +284,21 @@ export default function App() {
               <Routes>
                 {user?.role === 'Homeowner' && <Route path="/marketplace" element={<Marketplace />} />}
                 <Route path="/projects" element={<Projects />} />
+                <Route path="/permit-feed" element={<DOBLeads />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/reviews" element={<Reviews />} />
                 <Route path="/invoices" element={<Invoices />} />
                 <Route path="/settings" element={<ProfileSettings />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/start-project" element={<StartProject />} />
-                <Route path="/homeowner-dashboard" element={<HomeownerDashboard />} />
+                <Route path="/homeowner-dashboard" element={<Navigate to="/projects" replace />} />
                 <Route path="/admin" element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 {/* Default redirects based on role */}
-                <Route path="*" element={<Navigate to={user?.role === 'admin' ? "/admin" : (user?.role === 'Contractor' ? "/projects" : "/homeowner-dashboard")} replace />} />
+                <Route path="*" element={<Navigate to={user?.role === 'admin' ? "/admin" : "/projects"} replace />} />
               </Routes>
             </DashboardLayout>
           </ProtectedRoute>

@@ -78,6 +78,7 @@ export interface DOBPermit {
   job_description: string;
   owner_name: string;
   owner_business_name: string;
+  phone_number?: string;
 }
 
 export type UserRole = 'Homeowner' | 'Contractor' | 'admin';

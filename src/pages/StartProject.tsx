@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ShieldCheck, 
@@ -40,6 +40,35 @@ const services = [
   { id: 'environmental', title: "Environmental", icon: Leaf },
 ];
 
+const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/;
+const DIGIT_WORDS = new Set(['zero', 'oh', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']);
+const SQUARE_FOOTAGE_SERVICE_IDS = new Set(['bathrooms', 'kitchens', 'basements', 'floors']);
+
+const containsBlockedContactInfo = (value: string) => {
+  if (!value) return false;
+
+  if (EMAIL_PATTERN.test(value) || PHONE_PATTERN.test(value)) {
+    return true;
+  }
+
+  const tokens = value.toLowerCase().match(/[a-z]+/g) || [];
+  let consecutiveDigitWords = 0;
+
+  for (const token of tokens) {
+    if (DIGIT_WORDS.has(token)) {
+      consecutiveDigitWords += 1;
+      if (consecutiveDigitWords >= 7) {
+        return true;
+      }
+    } else {
+      consecutiveDigitWords = 0;
+    }
+  }
+
+  return false;
+};
+
 export default function StartProject() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -56,12 +85,36 @@ export default function StartProject() {
     phone: '',
     startDate: '',
     description: '',
+    lengthFt: '',
+    widthFt: '',
   });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [descriptionError, setDescriptionError] = useState('');
+  const [submittedProjectId, setSubmittedProjectId] = useState('');
+  const redirectTimerRef = useRef<number | null>(null);
+
+  const selectedServiceTitles = useMemo(
+    () => services
+      .filter(service => selectedServices.includes(service.id))
+      .map(service => service.title),
+    [selectedServices]
+  );
+  const needsSquareFootage = selectedServices.some(service => SQUARE_FOOTAGE_SERVICE_IDS.has(service));
+  const estimatedSquareFootage = needsSquareFootage
+    ? (Number(formData.lengthFt) || 0) * (Number(formData.widthFt) || 0)
+    : 0;
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const toggleService = (id: string) => {
     setSelectedServices(prev => 
@@ -83,6 +136,11 @@ export default function StartProject() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    if (containsBlockedContactInfo(formData.description)) {
+      setDescriptionError('Please remove phone numbers and email addresses from the project description.');
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -142,8 +200,17 @@ export default function StartProject() {
       console.log("[StartProject] All photos saved to subcollection.");
 
       // 4. Show success state
+      setSubmittedProjectId(docRef.id);
       setIsSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      redirectTimerRef.current = window.setTimeout(() => {
+        navigate('/projects', {
+          state: {
+            highlightProjectId: docRef.id,
+            projectSubmitted: true
+          }
+        });
+      }, 5000);
 
       // 4. Background: Send confirmation email
       (async () => {
@@ -157,7 +224,7 @@ export default function StartProject() {
               name: user.name,
               projectTitle,
               startDate: formData.startDate,
-              description: formData.description || `Project at ${formData.street}, ${formData.town} ${formData.zip}. Services: ${selectedServices.join(', ')}`,
+              description: formData.description || `Project at ${formData.street}, ${formData.town} ${formData.zip}. Services: ${selectedServiceTitles.join(', ')}`,
               photos: photoBase64s.slice(0, 5) // Limit to 5 photos for email
             })
           });
@@ -167,11 +234,6 @@ export default function StartProject() {
           console.error("[StartProject] Background task failed:", bgError);
         }
       })();
-
-      // 4. Navigate away after delay
-      setTimeout(() => {
-        navigate('/projects');
-      }, 5000);
     } catch (error) {
       console.error("Error creating project:", error);
       handleFirestoreError(error, OperationType.WRITE, 'projects');
@@ -193,6 +255,44 @@ export default function StartProject() {
         <h1 className="text-xl font-bold text-slate-900">Start New</h1>
         <div className="w-10" /> {/* Spacer for centering */}
       </div>
+
+      {isSubmitted && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+          <section className="w-full max-w-xl rounded-[2rem] border border-emerald-200 bg-white p-8 shadow-2xl">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 shadow-sm">
+                <CheckCircle2 size={28} />
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-600">Project Submitted</p>
+                  <h2 className="text-3xl font-black leading-tight text-slate-950">Your project request has been submitted.</h2>
+                </div>
+                <p className="text-sm font-medium leading-7 text-slate-600">
+                  Your information and photos have been saved. You can open My Projects now to track the request inside your homeowner portal.
+                </p>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/projects', {
+                      state: {
+                        highlightProjectId: submittedProjectId,
+                        projectSubmitted: true
+                      }
+                    })}
+                    className="rounded-2xl bg-slate-900 px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    Go To My Projects
+                  </button>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                    This window will close in 5 seconds.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-12">
         {/* Services Checklist */}
@@ -246,35 +346,38 @@ export default function StartProject() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2 md:col-span-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Street Address</label>
-              <input 
-                required
-                type="text" 
-                placeholder="123 Main St" 
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-                value={formData.street}
-                onChange={e => setFormData({...formData, street: e.target.value})}
+                <input 
+                  required
+                  type="text" 
+                  placeholder="123 Main St" 
+                  disabled={isSubmitted}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  value={formData.street}
+                  onChange={e => setFormData({...formData, street: e.target.value})}
               />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Town / City</label>
-              <input 
-                required
-                type="text" 
-                placeholder="Queens" 
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-                value={formData.town}
-                onChange={e => setFormData({...formData, town: e.target.value})}
+                <input 
+                  required
+                  type="text" 
+                  placeholder="Queens" 
+                  disabled={isSubmitted}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  value={formData.town}
+                  onChange={e => setFormData({...formData, town: e.target.value})}
               />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Zip Code</label>
-              <input 
-                required
-                type="text" 
-                placeholder="11101" 
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-                value={formData.zip}
-                onChange={e => setFormData({...formData, zip: e.target.value})}
+                <input 
+                  required
+                  type="text" 
+                  placeholder="11101" 
+                  disabled={isSubmitted}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  value={formData.zip}
+                  onChange={e => setFormData({...formData, zip: e.target.value})}
               />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -285,6 +388,7 @@ export default function StartProject() {
                   required
                   type="tel" 
                   placeholder="(555) 000-0000" 
+                  disabled={isSubmitted}
                   className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                   value={formData.phone}
                   onChange={e => setFormData({...formData, phone: e.target.value})}
@@ -311,6 +415,7 @@ export default function StartProject() {
                   required
                   type="date" 
                   min={new Date().toISOString().split('T')[0]}
+                  disabled={isSubmitted}
                   className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                   value={formData.startDate}
                   onChange={e => setFormData({...formData, startDate: e.target.value})}
@@ -322,13 +427,74 @@ export default function StartProject() {
               <textarea 
                 required
                 placeholder="Briefly describe the improvements or repairs needed..." 
+                disabled={isSubmitted}
                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium min-h-[120px]"
                 value={formData.description}
-                onChange={e => setFormData({...formData, description: e.target.value})}
+                onChange={e => {
+                  const nextValue = e.target.value;
+                  setFormData({...formData, description: nextValue});
+                  setDescriptionError(
+                    containsBlockedContactInfo(nextValue)
+                      ? 'Please remove phone numbers and email addresses from the project description.'
+                      : ''
+                  );
+                }}
               />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                Please do not include phone numbers or email addresses in the project description.
+              </p>
+              {descriptionError && (
+                <p className="text-sm font-bold text-red-600">{descriptionError}</p>
+              )}
             </div>
           </div>
         </section>
+
+        {needsSquareFootage && (
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                <Home size={20} />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">Estimated Room Size</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Length (ft)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  disabled={isSubmitted}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  value={formData.lengthFt}
+                  onChange={e => setFormData({...formData, lengthFt: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Width (ft)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  disabled={isSubmitted}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  value={formData.widthFt}
+                  onChange={e => setFormData({...formData, widthFt: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Estimated Square Footage</label>
+                <div className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-slate-900">
+                  {estimatedSquareFootage > 0 ? `${estimatedSquareFootage.toFixed(1)} sq ft` : 'Add room dimensions'}
+                </div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Calculator only. This estimate is not saved to the project.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Media Upload */}
         <section className="space-y-6">
@@ -345,6 +511,7 @@ export default function StartProject() {
               onChange={handlePhotoChange}
               multiple
               accept="image/*"
+              disabled={isSubmitted}
               className="hidden"
             />
             
@@ -369,6 +536,7 @@ export default function StartProject() {
                 {selectedPhotos.length < 10 && (
                   <button
                     type="button"
+                    disabled={isSubmitted}
                     onClick={() => fileInputRef.current?.click()}
                     className="aspect-square rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-primary/30 hover:text-primary transition-all"
                   >
@@ -385,6 +553,7 @@ export default function StartProject() {
                 </div>
                 <button 
                   type="button"
+                  disabled={isSubmitted}
                   onClick={() => fileInputRef.current?.click()}
                   className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-sm transition-all flex items-center gap-2 mx-auto hover:scale-105 shadow-lg shadow-purple-500/20"
                 >
@@ -416,7 +585,7 @@ export default function StartProject() {
             ) : isSubmitted ? (
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={24} />
-                <span>PROJECT SUBMITTED!</span>
+                <span>Project Submitted</span>
               </div>
             ) : (
               <>

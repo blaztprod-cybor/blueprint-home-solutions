@@ -26,7 +26,7 @@ export default function Login() {
 
   React.useEffect(() => {
     if (user) {
-      navigate(user.role === 'Contractor' ? '/projects' : '/homeowner-dashboard');
+      navigate(user.role === 'admin' ? '/admin' : '/projects');
     }
   }, [user, navigate]);
 

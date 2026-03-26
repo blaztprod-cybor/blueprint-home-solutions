@@ -1,14 +1,13 @@
 import { DOBPermit } from '../types';
 
-// NYC Open Data API for DOB Permit Issuance (BIS)
-// Updated to the current dataset ID
-const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/797e-42m4.json';
+// NYC Open Data API for DOB NOW permit issuance feed
+const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
 
 export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
   try {
     const params = new URLSearchParams({
       '$limit': limit.toString(),
-      '$order': 'issuance_date DESC'
+      '$order': 'issued_date DESC'
     });
     
     const url = `${NYC_DATA_API}?${params.toString()}`;
@@ -64,24 +63,25 @@ function getMockData(limit: number): DOBPermit[] {
 function transformData(data: any[]): DOBPermit[] {
   return data.map((item: any) => {
     // Handle variations in field names between different NYC datasets
-    const houseNum = item.house_number || item.house_ || item.house_no || '';
-    const streetName = item.street_name || '';
+    const houseNum = item.house_number || item.house_ || item.house_no || item.houseno || '';
+    const streetName = item.street_name || item.street || item.streetname || '';
     const firstName = item.owner_s_first_name || item.owner_first_name || '';
     const lastName = item.owner_s_last_name || item.owner_last_name || '';
-    const bizName = item.owner_s_business_name || item.owner_business_name || 'N/A';
+    const bizName = item.owner_s_business_name || item.owner_business_name || item.company_name || 'N/A';
     
     return {
-      id: item.bin || item.job__ || Math.random().toString(36).substr(2, 9),
+      id: item.permit_number || item.bin || item.job__ || Math.random().toString(36).substr(2, 9),
       borough: item.borough || 'N/A',
       house_number: houseNum,
       street_name: streetName,
-      job_type: item.job_type || 'N/A',
-      permit_status: item.permit_status || 'N/A',
-      filing_date: item.filing_date || '',
-      issuance_date: item.issuance_date || '',
-      job_description: item.job_description || 'No description provided',
+      job_type: item.work_type || item.job_type || 'N/A',
+      permit_status: item.permit_status || item.status || 'N/A',
+      filing_date: item.filing_date || item.filed_date || '',
+      issuance_date: item.issued_date || item.issuance_date || '',
+      job_description: item.job_description || item.work_description || item.job_desc || 'No description provided',
       owner_name: lastName ? `${firstName} ${lastName}`.trim() : 'Private Owner',
-      owner_business_name: bizName
+      owner_business_name: bizName,
+      phone_number: item.owner_s_business_phone || item.owner_business_phone || item.applicant_business_phone || item.company_phone || ''
     };
   });
 }
