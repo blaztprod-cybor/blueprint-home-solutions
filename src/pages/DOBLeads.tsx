@@ -8,15 +8,17 @@ import { DOBPermit } from '../types';
 import { cn } from '../lib/utils';
 
 export default function DOBLeads() {
+  const ITEMS_PER_PAGE = 100;
   const [permits, setPermits] = useState<DOBPermit[]>([]);
   const [loading, setLoading] = useState(true);
   const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
   const [workTypeFilter, setWorkTypeFilter] = useState('All Work Types');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      const data = await fetchDOBPermits(50);
+      const data = await fetchDOBPermits(5000);
       setPermits(data);
       setLoading(false);
     };
@@ -40,6 +42,16 @@ export default function DOBLeads() {
     const matchesWorkType = workTypeFilter === 'All Work Types' || permit.job_type === workTypeFilter;
     return matchesBorough && matchesWorkType;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [boroughFilter, workTypeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPermits.length / ITEMS_PER_PAGE));
+  const paginatedPermits = filteredPermits.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const formatPermitDate = (value: string) => {
     if (!value) return 'N/A';
@@ -104,6 +116,39 @@ export default function DOBLeads() {
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Permit Feed Pages</p>
+            <p className="mt-1 text-sm font-semibold text-slate-600">
+              Showing {filteredPermits.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1}
+              {' '}-{' '}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredPermits.length)} of {filteredPermits.length}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+              className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <div className="min-w-[120px] text-center text-sm font-bold text-slate-700">
+              Page {currentPage} of {totalPages}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              disabled={currentPage === totalPages}
+              className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
         <div className="overflow-x-scroll pb-3">
           <table className="w-full text-left border-collapse min-w-[1800px]">
             <thead>
@@ -139,11 +184,11 @@ export default function DOBLeads() {
                   </td>
                 </tr>
               ) : (
-                filteredPermits.map((permit, i) => (
+                paginatedPermits.map((permit, i) => (
                   <motion.tr 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
+                    transition={{ delay: i * 0.01 }}
                     key={permit.id} 
                     className="hover:bg-slate-50/50 transition-colors group"
                   >
