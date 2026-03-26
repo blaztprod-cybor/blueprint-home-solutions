@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, ArrowRight, ShieldCheck, Zap, Users, Hammer, CheckCircle2, Home, DraftingCompass, LogOut, Loader2 } from 'lucide-react';
+import { Building2, ArrowRight, ShieldCheck, Zap, Users, Hammer, CheckCircle2, Home, DraftingCompass, LogOut, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
 
 export default function Landing() {
+  const PREVIEW_ITEMS_PER_PAGE = 5;
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [permitData, setPermitData] = useState<DOBPermit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewPage, setPreviewPage] = useState(1);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const data = await fetchDOBPermits(20);
+        const data = await fetchDOBPermits(25);
         setPermitData(data);
       } catch (error) {
         console.error('Error loading permit data:', error);
@@ -26,6 +28,30 @@ export default function Landing() {
     };
     loadData();
   }, []);
+
+  const previewTotalPages = Math.max(1, Math.ceil(permitData.length / PREVIEW_ITEMS_PER_PAGE));
+  const previewRows = permitData.slice(
+    (previewPage - 1) * PREVIEW_ITEMS_PER_PAGE,
+    previewPage * PREVIEW_ITEMS_PER_PAGE
+  );
+
+  const previewPages = Array.from(
+    { length: Math.min(5, previewTotalPages) },
+    (_, index) => {
+      const startPage = Math.min(
+        Math.max(1, previewPage - 2),
+        Math.max(1, previewTotalPages - 4)
+      );
+      return startPage + index;
+    }
+  );
+
+  const formatPermitDate = (value: string) => {
+    if (!value) return 'N/A';
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -167,6 +193,48 @@ export default function Landing() {
                   <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Updated Daily</span>
                 </div>
                 </div>
+              {!loading && permitData.length > 0 && (
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs font-semibold text-slate-500">
+                    Preview page {previewPage} of {previewTotalPages}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPage((page) => Math.max(1, page - 1))}
+                      disabled={previewPage === 1}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Previous preview page"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    {previewPages.map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setPreviewPage(page)}
+                        className={cn(
+                          "h-9 min-w-[36px] rounded-lg border px-2 text-xs font-bold transition-colors",
+                          previewPage === page
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPage((page) => Math.min(previewTotalPages, page + 1))}
+                      disabled={previewPage === previewTotalPages}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Next preview page"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <div className="max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                   <table className="w-full text-left border-collapse">
@@ -190,21 +258,22 @@ export default function Landing() {
                           </td>
                         </tr>
                       ) : (
-                        permitData.map((row, i) => (
+                        previewRows.map((row, i) => (
                           <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-4 py-3 text-sm font-bold text-slate-700">{row.borough}</td>
                             <td className="px-4 py-3 text-sm font-medium text-slate-500">{row.street_name}</td>
                             <td className="px-4 py-3 text-sm font-medium text-slate-500">
                               <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold">
-                                {new Date(row.issuance_date).toLocaleDateString()}
+                                {formatPermitDate(row.issuance_date)}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-sm font-medium text-slate-600 italic whitespace-nowrap">{row.job_description}</td>
                             <td className="px-4 py-3 text-sm font-medium">
                               <span className={cn(
                                 "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                                row.permit_status === 'ISSUED' ? "bg-emerald-50 text-emerald-600" :
-                                "bg-slate-50 text-slate-600"
+                                row.permit_status === 'Permit Issued' || row.permit_status === 'ISSUED'
+                                  ? "bg-emerald-50 text-emerald-600"
+                                  : "bg-slate-50 text-slate-600"
                               )}>
                                 {row.permit_status}
                               </span>
@@ -216,6 +285,48 @@ export default function Landing() {
                   </table>
                 </div>
               </div>
+              {!loading && permitData.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs font-semibold text-slate-500">
+                    Preview page {previewPage} of {previewTotalPages}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPage((page) => Math.max(1, page - 1))}
+                      disabled={previewPage === 1}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Previous preview page"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    {previewPages.map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setPreviewPage(page)}
+                        className={cn(
+                          "h-9 min-w-[36px] rounded-lg border px-2 text-xs font-bold transition-colors",
+                          previewPage === page
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPage((page) => Math.min(previewTotalPages, page + 1))}
+                      disabled={previewPage === previewTotalPages}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Next preview page"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-primary/5 rounded-full blur-3xl -z-10" />
           </motion.div>
