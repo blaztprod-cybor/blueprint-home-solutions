@@ -109,20 +109,21 @@ export default function Landing() {
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-start">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
+            className="w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0"
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold uppercase tracking-widest mb-6">
               <Zap size={12} className="fill-primary" />
               Revolutionizing Home Improvement
             </div>
-            <h1 className="text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-6">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-6">
               Home Improvement Marketplace
             </h1>
-            <p className="text-lg text-slate-600 leading-relaxed mb-10 max-w-xl">
+            <p className="text-base sm:text-lg text-slate-600 leading-relaxed mb-8 sm:mb-10 max-w-xl">
               We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors. Our mission is to remove the guesswork from renovations, ensuring every project starts with the right team and a solid plan for success.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -155,8 +156,8 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="mt-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/40">
-              <div className="relative aspect-video overflow-hidden rounded-[1.5rem] bg-slate-950">
+            <div className="mt-8 w-full max-w-2xl mx-auto lg:mx-0 overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200 bg-white p-2 sm:p-3 shadow-xl shadow-slate-200/40">
+              <div className="relative aspect-video overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem] bg-slate-950">
                 <iframe
                   className="h-full w-full"
                   src="https://www.youtube.com/embed/2d0qOtWXNyQ"
@@ -173,13 +174,13 @@ export default function Landing() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="relative space-y-6"
+            className="relative w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0 space-y-6"
           >
-            <div className="relative z-10 rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl">
+            <div className="relative z-10 rounded-[1.5rem] sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-4 shadow-2xl">
               <img 
                 src="/hero-image-v2.jpg" 
                 alt="Blueprint Home Solutions - Free Estimates" 
-                className="rounded-2xl w-full h-auto object-cover"
+                className="rounded-[1.125rem] sm:rounded-2xl w-full h-auto object-cover"
               />
             </div>
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
