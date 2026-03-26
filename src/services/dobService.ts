@@ -2,9 +2,21 @@ import { DOBPermit } from '../types';
 
 // NYC Open Data API for DOB NOW permit issuance feed
 const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
+const STATIC_PERMIT_FEED = '/data/permits.json';
 
 export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
   try {
+    const staticResponse = await fetch(STATIC_PERMIT_FEED, { cache: 'no-store' });
+
+    if (staticResponse.ok) {
+      const payload = await staticResponse.json();
+      const staticPermits = Array.isArray(payload) ? payload : payload.permits;
+
+      if (Array.isArray(staticPermits) && staticPermits.length > 0) {
+        return staticPermits.slice(0, limit);
+      }
+    }
+
     const params = new URLSearchParams({
       '$limit': limit.toString(),
       '$order': 'issued_date DESC'
