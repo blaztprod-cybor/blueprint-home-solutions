@@ -12,6 +12,7 @@ export default function DOBLeads() {
   const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
   const [workTypeFilter, setWorkTypeFilter] = useState('All Work Types');
   const [currentPage, setCurrentPage] = useState(1);
+  const [copyLabel, setCopyLabel] = useState('Copy For Paste');
 
   useEffect(() => {
     const loadData = async () => {
@@ -76,6 +77,27 @@ export default function DOBLeads() {
     }
   );
 
+  const handleCopyForPaste = async () => {
+    const lines = [
+      ['Borough', 'Address', 'Street', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License'].join('\t'),
+      ...paginatedPermits.map((permit) => ([
+        permit.borough,
+        permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' '),
+        permit.street_name,
+        permit.job_type,
+        permit.permit_status,
+        formatPermitDate(permit.issuance_date),
+        permit.job_description.replace(/\s+/g, ' ').trim(),
+        permit.owner_business_name || permit.owner_name || 'Unavailable',
+        permit.applicant_license || 'Unavailable',
+      ].join('\t')))
+    ];
+
+    await navigator.clipboard.writeText(lines.join('\n'));
+    setCopyLabel('Copied');
+    window.setTimeout(() => setCopyLabel('Copy For Paste'), 2000);
+  };
+
   const PaginationControls = () => (
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
@@ -88,6 +110,14 @@ export default function DOBLeads() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handleCopyForPaste}
+          className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+        >
+          {copyLabel}
+        </button>
+
         <button
           type="button"
           onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
