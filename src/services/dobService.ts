@@ -3,9 +3,45 @@ import { DOBPermit } from '../types';
 // NYC Open Data API for DOB NOW permit issuance feed
 const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
 const STATIC_PERMIT_FEED = '/data/permits.json';
+const LICENSE_LOOKUP_FEED = '/data/license-lookup.json';
 
 export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
   try {
+    const licenseLookupResponse = await fetch(LICENSE_LOOKUP_FEED, { cache: 'no-store' });
+    let licenseLookup = new Map<string, { contact_name?: string; phone?: string }>();
+    let businessLookup = new Map<string, { contact_name?: string; phone?: string }>();
+
+    if (licenseLookupResponse.ok) {
+      const lookupPayload = await licenseLookupResponse.json();
+      const records = Array.isArray(lookupPayload) ? lookupPayload : lookupPayload.records;
+
+      if (Array.isArray(records)) {
+        licenseLookup = new Map(
+          records
+            .filter((record: any) => String(record.license_number || '').trim())
+            .map((record: any) => [
+              String(record.license_number || '').trim(),
+              {
+                contact_name: record.contact_name || '',
+                phone: record.phone || '',
+              }
+            ])
+        );
+
+        businessLookup = new Map(
+          records
+            .filter((record: any) => String(record.business_name || '').trim())
+            .map((record: any) => [
+              String(record.business_name || '').trim().toUpperCase(),
+              {
+                contact_name: record.contact_name || '',
+                phone: record.phone || '',
+              }
+            ])
+        );
+      }
+    }
+
     const staticResponse = await fetch(STATIC_PERMIT_FEED, { cache: 'no-store' });
 
     if (staticResponse.ok) {
@@ -13,7 +49,18 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
       const staticPermits = Array.isArray(payload) ? payload : payload.permits;
 
       if (Array.isArray(staticPermits) && staticPermits.length > 0) {
-        return staticPermits.slice(0, limit);
+        return staticPermits
+          .map((permit) => {
+            const lookup =
+              licenseLookup.get(String(permit.applicant_license || '').trim()) ||
+              businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+            return {
+              ...permit,
+              contact_name: lookup?.contact_name || '',
+              phone: lookup?.phone || '',
+            };
+          })
+          .slice(0, limit);
       }
     }
 
@@ -35,7 +82,7 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
         const fallbackResponse = await fetch(fallbackUrl);
         if (fallbackResponse.ok) {
           const data = await fallbackResponse.json();
-          return transformData(data);
+          return transformData(data, licenseLookup, businessLookup);
         }
       }
       
@@ -45,7 +92,7 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
     }
     
     const data = await response.json();
-    return transformData(data);
+    return transformData(data, licenseLookup, businessLookup);
   } catch (error) {
     console.error('Error fetching DOB permits:', error);
     return getMockData(limit);
@@ -72,11 +119,19 @@ function getMockData(limit: number): DOBPermit[] {
   }));
 }
 
-function transformData(data: any[]): DOBPermit[] {
+function transformData(
+  data: any[],
+  licenseLookup: Map<string, { contact_name?: string; phone?: string }>,
+  businessLookup: Map<string, { contact_name?: string; phone?: string }>
+): DOBPermit[] {
   return data.map((item: any) => {
     const houseNum = item.house_no || '';
     const streetName = item.street_name || '';
     const bizName = item.applicant_business_name || item.owner_business_name || 'N/A';
+    const applicantLicense = item.applicant_license || '';
+    const lookup =
+      licenseLookup.get(String(applicantLicense).trim()) ||
+      businessLookup.get(String(bizName).trim().toUpperCase());
     
     return {
       id: item.job_filing_number || item.work_permit || Math.random().toString(36).substr(2, 9),
@@ -90,7 +145,9 @@ function transformData(data: any[]): DOBPermit[] {
       job_description: item.job_description || 'No description provided',
       owner_name: item.owner_name || 'Private Owner',
       owner_business_name: bizName,
-      applicant_license: item.applicant_license || ''
+      applicant_license: applicantLicense,
+      contact_name: lookup?.contact_name || '',
+      phone: lookup?.phone || ''
     };
   });
 }

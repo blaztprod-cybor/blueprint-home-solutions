@@ -13,6 +13,7 @@ export default function DOBLeads() {
   const [workTypeFilter, setWorkTypeFilter] = useState('All Work Types');
   const [currentPage, setCurrentPage] = useState(1);
   const [copyLabel, setCopyLabel] = useState('Copy For Paste');
+  const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -51,6 +52,7 @@ export default function DOBLeads() {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+  const allVisibleSelected = paginatedPermits.length > 0 && paginatedPermits.every((permit) => selectedPermitIds.includes(permit.id));
 
   const formatPermitDate = (value: string) => {
     if (!value) return 'N/A';
@@ -78,9 +80,13 @@ export default function DOBLeads() {
   );
 
   const handleCopyForPaste = async () => {
+    const permitsToCopy = selectedPermitIds.length > 0
+      ? paginatedPermits.filter((permit) => selectedPermitIds.includes(permit.id))
+      : paginatedPermits;
+
     const lines = [
-      ['Borough', 'Address', 'Street', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License'].join('\t'),
-      ...paginatedPermits.map((permit) => ([
+      ['Borough', 'Address', 'Street', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License', 'Contact Name', 'Phone'].join('\t'),
+      ...permitsToCopy.map((permit) => ([
         permit.borough,
         permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' '),
         permit.street_name,
@@ -90,12 +96,34 @@ export default function DOBLeads() {
         permit.job_description.replace(/\s+/g, ' ').trim(),
         permit.owner_business_name || permit.owner_name || 'Unavailable',
         permit.applicant_license || 'Unavailable',
+        permit.contact_name || 'Not added yet',
+        permit.phone || 'Not added yet',
       ].join('\t')))
     ];
 
     await navigator.clipboard.writeText(lines.join('\n'));
     setCopyLabel('Copied');
     window.setTimeout(() => setCopyLabel('Copy For Paste'), 2000);
+  };
+
+  const togglePermitSelection = (permitId: string) => {
+    setSelectedPermitIds((current) =>
+      current.includes(permitId)
+        ? current.filter((id) => id !== permitId)
+        : [...current, permitId]
+    );
+  };
+
+  const toggleVisibleSelections = () => {
+    const visibleIds = paginatedPermits.map((permit) => permit.id);
+
+    setSelectedPermitIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((id) => !visibleIds.includes(id));
+      }
+
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
   };
 
   const PaginationControls = () => (
@@ -211,9 +239,18 @@ export default function DOBLeads() {
         </div>
 
         <div className="overflow-x-scroll pb-3">
-          <table className="w-full text-left border-collapse min-w-[1800px]">
+          <table className="w-full text-left border-collapse min-w-[2100px]">
             <thead>
               <tr className="bg-slate-50/50">
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleVisibleSelections}
+                    aria-label="Select all visible permit rows"
+                    className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                  />
+                </th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Borough</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street</th>
@@ -222,12 +259,14 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Company</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Name</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-20 text-center">
+                  <td colSpan={11} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB Data...</p>
@@ -236,7 +275,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-20 text-center">
+                  <td colSpan={11} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No permits match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -252,6 +291,15 @@ export default function DOBLeads() {
                     key={permit.id} 
                     className="hover:bg-slate-50/50 transition-colors group"
                   >
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedPermitIds.includes(permit.id)}
+                        onChange={() => togglePermitSelection(permit.id)}
+                        aria-label={`Select permit ${permit.address || permit.street_name}`}
+                        className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-slate-700">{permit.borough}</span>
                     </td>
@@ -296,6 +344,16 @@ export default function DOBLeads() {
                     <td className="px-6 py-4">
                       <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
                         {permit.applicant_license || 'Unavailable'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                        {permit.contact_name || 'Not added yet'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
+                        {permit.phone || 'Not added yet'}
                       </span>
                     </td>
                   </motion.tr>
