@@ -90,7 +90,7 @@ function transformData(data: any[]): DOBPermit[] {
       job_description: item.job_description || 'No description provided',
       owner_name: item.owner_name || 'Private Owner',
       owner_business_name: bizName,
-      phone_number: ''
+      applicant_license: item.applicant_license || ''
     };
   });
 }

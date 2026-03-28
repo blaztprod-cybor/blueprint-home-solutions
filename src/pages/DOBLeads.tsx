@@ -187,18 +187,17 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Borough</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type / Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Company</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone Number</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-20 text-center">
+                  <td colSpan={8} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB Data...</p>
@@ -207,7 +206,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-20 text-center">
+                  <td colSpan={8} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No permits match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -235,9 +234,19 @@ export default function DOBLeads() {
                       <span className="text-sm font-medium text-slate-600">{permit.street_name || 'Unavailable'}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-[10px] font-bold px-2 py-1 bg-amber-50 text-amber-700 rounded-lg uppercase tracking-widest">
-                        {permit.job_type || 'N/A'}
-                      </span>
+                      <div className="space-y-2">
+                        <span className="inline-flex text-[10px] font-bold px-2 py-1 bg-amber-50 text-amber-700 rounded-lg uppercase tracking-widest">
+                          {permit.job_type || 'N/A'}
+                        </span>
+                        <span className={cn(
+                          "inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
+                          permit.permit_status === 'Permit Issued' || permit.permit_status === 'ISSUED'
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-slate-50 text-slate-600"
+                        )}>
+                          {permit.permit_status}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-lg uppercase tracking-widest whitespace-nowrap">
@@ -250,23 +259,13 @@ export default function DOBLeads() {
                       </p>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn(
-                        "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                        permit.permit_status === 'Permit Issued' || permit.permit_status === 'ISSUED'
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-slate-50 text-slate-600"
-                      )}>
-                        {permit.permit_status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
                         {permit.owner_business_name || permit.owner_name || 'Unavailable'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
-                        {permit.phone_number || 'Phone not connected yet'}
+                        {permit.applicant_license || 'Unavailable'}
                       </span>
                     </td>
                   </motion.tr>
