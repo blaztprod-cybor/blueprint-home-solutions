@@ -48,6 +48,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ContractorPaywall from './pages/ContractorPaywall';
 import AboutUs from './pages/AboutUs';
 import DOBLeads from './pages/DOBLeads';
+import HomeProTrial from './pages/HomeProTrial';
 
 const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   <Link
@@ -281,6 +282,7 @@ export default function App() {
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/contractor-paywall" element={<ContractorPaywall />} />
+        <Route path="/home-pro-trial" element={<HomeProTrial />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/start-project" element={<PublicStartProjectPage />} />
 

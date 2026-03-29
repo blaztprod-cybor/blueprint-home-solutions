@@ -182,7 +182,7 @@ export default function Landing() {
             </p>
             <div className="flex justify-center">
               <Link
-                to="/signup?role=contractor"
+                to="/home-pro-trial"
                 className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-500/25 transition-transform hover:scale-[1.02]"
               >
                 Sign Up as a Home Professional
