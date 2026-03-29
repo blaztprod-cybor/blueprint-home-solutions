@@ -34,7 +34,7 @@ export default function Marketplace() {
                 <button
                   type="button"
                   onClick={() => navigate(`/start-project?category=${encodeURIComponent(category.id)}`, { state: { category: category.id } })}
-                  className="w-full rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white"
+                  className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
                 >
                     Select
                 </button>

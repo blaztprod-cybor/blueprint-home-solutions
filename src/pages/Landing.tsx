@@ -147,7 +147,7 @@ export default function Landing() {
                       <button
                         type="button"
                         onClick={() => navigate(`/start-project?category=${encodeURIComponent(category.id)}`, { state: { category: category.id } })}
-                        className="w-full rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white"
+                        className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
                       >
                           Select
                       </button>
@@ -180,16 +180,14 @@ export default function Landing() {
             <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-4xl mx-auto text-center">
               We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors. We also bring highly valuable leads to contractors and tradesmen with the "Recently Issued Permits Data Feed."
             </p>
-            {!user && (
-              <div className="flex justify-center">
-                <Link
-                  to="/signup?role=contractor"
-                  className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-500/25 transition-transform hover:scale-[1.02]"
-                >
-                  Sign Up as a Home Professional
-                </Link>
-              </div>
-            )}
+            <div className="flex justify-center">
+              <Link
+                to="/signup?role=contractor"
+                className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-500/25 transition-transform hover:scale-[1.02]"
+              >
+                Sign Up as a Home Professional
+              </Link>
+            </div>
           </motion.div>
 
           <div className="grid gap-10 pt-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12">
