@@ -65,10 +65,6 @@ export default function Landing() {
   const footerMarketplaceLink = user?.role === 'Contractor' ? '/contractor-paywall' : '/contractor-paywall';
   const featuredCategories = projectCategories.filter((category) => featuredCategoryIds.includes(category.id));
 
-  const handleCategoryStart = (category: string) => {
-    navigate(`/start-project?category=${encodeURIComponent(category)}`, { state: { category } });
-  };
-
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-slate-50">
       <div className="pointer-events-none absolute inset-0">
@@ -151,41 +147,54 @@ export default function Landing() {
 
             <div className="overflow-x-auto pb-3">
               <div className="flex min-w-max justify-center gap-3 px-4">
-                {featuredCategories.map((category) => (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => handleCategoryStart(category.id)}
-                    disabled={user?.role === 'Contractor'}
-                    className={cn(
-                      "group w-[122px] overflow-hidden rounded-[1.5rem] border bg-white text-left transition-all",
-                      user?.role === 'Contractor'
-                        ? "cursor-not-allowed border-slate-200 text-slate-400"
-                        : "border-white/60 shadow-xl shadow-slate-300/40 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50"
-                    )}
-                  >
-                    <div className="relative h-32 overflow-hidden">
+                {featuredCategories.map((category) => {
+                  const cardContent = (
+                    <>
+                      <div className="relative h-32 overflow-hidden">
+                        <div
+                          className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
+                          style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
+                        />
+                        <div className={cn(
+                          "absolute inset-0",
+                          user?.role === 'Contractor'
+                            ? "bg-slate-950/30"
+                            : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
+                        )} />
+                      </div>
+                      <div className="space-y-1 px-3 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-wider text-slate-900">
+                          {category.title}
+                        </p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+                          Describe Project
+                        </p>
+                      </div>
+                    </>
+                  );
+
+                  if (user?.role === 'Contractor') {
+                    return (
                       <div
-                        className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
-                        style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
-                      />
-                      <div className={cn(
-                        "absolute inset-0",
-                        user?.role === 'Contractor'
-                          ? "bg-slate-950/30"
-                          : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
-                      )} />
-                    </div>
-                    <div className="space-y-1 px-3 py-3">
-                      <p className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                        {category.title}
-                      </p>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
-                        Describe Project
-                      </p>
-                    </div>
-                  </button>
-                ))}
+                        key={category.id}
+                        className="group w-[122px] cursor-not-allowed overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left text-slate-400 transition-all"
+                      >
+                        {cardContent}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Link
+                      key={category.id}
+                      to={`/start-project?category=${encodeURIComponent(category.id)}`}
+                      state={{ category: category.id }}
+                      className="group block w-[122px] overflow-hidden rounded-[1.5rem] border border-white/60 bg-white text-left shadow-xl shadow-slate-300/40 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50"
+                    >
+                      {cardContent}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
 

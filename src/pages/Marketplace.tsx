@@ -1,13 +1,7 @@
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { projectCategories } from '../data/projectCategories';
 
 export default function Marketplace() {
-  const navigate = useNavigate();
-
-  const handleCategoryStart = (category: string) => {
-    navigate(`/start-project?category=${encodeURIComponent(category)}`, { state: { category } });
-  };
-
   return (
     <div className="space-y-10">
       <div className="space-y-3 text-center">
@@ -20,10 +14,10 @@ export default function Marketplace() {
       <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-wrap justify-center gap-3">
           {projectCategories.map((category) => (
-            <button
+            <Link
               key={category.id}
-              type="button"
-              onClick={() => handleCategoryStart(category.id)}
+              to={`/start-project?category=${encodeURIComponent(category.id)}`}
+              state={{ category: category.id }}
               className="group w-[122px] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-xl shadow-slate-200/50 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/70"
             >
               <div className="relative h-32 overflow-hidden">
@@ -44,7 +38,7 @@ export default function Marketplace() {
                   Describe Project
                 </p>
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </section>
