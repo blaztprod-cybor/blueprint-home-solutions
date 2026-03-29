@@ -71,6 +71,8 @@ export interface DOBPermit {
   borough: string;
   house_number: string;
   street_name: string;
+  address?: string;
+  zip_code?: string;
   job_type: string;
   permit_status: string;
   filing_date: string;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchDOBPermits } from '../services/dobService';
@@ -11,14 +11,11 @@ export default function DOBLeads() {
   const [loading, setLoading] = useState(true);
   const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
   const [workTypeFilter, setWorkTypeFilter] = useState('All Work Types');
+  const [sortOrder, setSortOrder] = useState<'none' | 'zip-asc' | 'zip-desc'>('none');
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [copyLabel, setCopyLabel] = useState('Copy For Paste');
   const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-
-  const scrollTableBy = (delta: number) => {
-    tableScrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
-  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -42,15 +39,40 @@ export default function DOBLeads() {
       .filter(Boolean)
   )).sort()];
 
-  const filteredPermits = permits.filter((permit) => {
-    const matchesBorough = boroughFilter === 'All Boroughs' || permit.borough === boroughFilter;
-    const matchesWorkType = workTypeFilter === 'All Work Types' || permit.job_type === workTypeFilter;
-    return matchesBorough && matchesWorkType;
-  });
+  const filteredPermits = permits
+    .filter((permit) => {
+      const matchesBorough = boroughFilter === 'All Boroughs' || permit.borough === boroughFilter;
+      const matchesWorkType = workTypeFilter === 'All Work Types' || permit.job_type === workTypeFilter;
+      const haystack = [
+        permit.borough,
+        permit.address,
+        permit.house_number,
+        permit.street_name,
+        permit.zip_code,
+        permit.job_type,
+        permit.permit_status,
+        permit.job_description,
+        permit.owner_business_name,
+        permit.owner_name,
+        permit.applicant_license,
+        permit.contact_name,
+        permit.phone,
+      ]
+        .join(' ')
+        .toLowerCase();
+      const matchesSearch = haystack.includes(searchQuery.toLowerCase());
+      return matchesBorough && matchesWorkType && matchesSearch;
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'none') return 0;
+      const left = Number(a.zip_code || 0);
+      const right = Number(b.zip_code || 0);
+      return sortOrder === 'zip-asc' ? left - right : right - left;
+    });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [boroughFilter, workTypeFilter]);
+  }, [boroughFilter, workTypeFilter, searchQuery, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPermits.length / ITEMS_PER_PAGE));
   const paginatedPermits = filteredPermits.slice(
@@ -58,22 +80,6 @@ export default function DOBLeads() {
     currentPage * ITEMS_PER_PAGE
   );
   const allVisibleSelected = paginatedPermits.length > 0 && paginatedPermits.every((permit) => selectedPermitIds.includes(permit.id));
-
-  useEffect(() => {
-    const el = tableScrollRef.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      if (el.scrollWidth <= el.clientWidth) return;
-      if (e.shiftKey) return;
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      e.preventDefault();
-      el.scrollLeft += e.deltaY;
-    };
-
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [loading, currentPage, permits.length, boroughFilter, workTypeFilter]);
 
   const formatPermitDate = (value: string) => {
     if (!value) return 'N/A';
@@ -106,10 +112,11 @@ export default function DOBLeads() {
       : paginatedPermits;
 
     const lines = [
-      ['Borough', 'Address', 'Street', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License', 'Contact Name', 'Phone'].join('\t'),
+      ['Borough', 'Address', 'ZIP', 'Street', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License', 'Contact Name', 'Phone'].join('\t'),
       ...permitsToCopy.map((permit) => ([
         permit.borough,
         permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' '),
+        permit.zip_code || 'Unavailable',
         permit.street_name,
         permit.job_type,
         permit.permit_status,
@@ -207,7 +214,7 @@ export default function DOBLeads() {
   );
 
   return (
-    <div className="space-y-8 min-w-0 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -222,7 +229,7 @@ export default function DOBLeads() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <label className="space-y-2">
           <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Filter By Borough</span>
           <select
@@ -252,42 +259,39 @@ export default function DOBLeads() {
             ))}
           </select>
         </label>
+
+        <label className="space-y-2">
+          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sort ZIP Code</span>
+          <select
+            value={sortOrder}
+            onChange={(event) => setSortOrder(event.target.value as 'none' | 'zip-asc' | 'zip-desc')}
+            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary"
+          >
+            <option value="none">None</option>
+            <option value="zip-asc">Low to High</option>
+            <option value="zip-desc">High to Low</option>
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Search</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder='Search "New C of O"'
+            className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary"
+          />
+        </label>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-w-0 w-full max-w-full">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4">
           <PaginationControls />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-2.5">
-          <p className="text-xs text-slate-600 max-w-[min(100%,28rem)] leading-snug">
-            <span className="font-semibold text-slate-700">Split window?</span>{' '}
-            Drag the bar under the table, use the arrows, or scroll vertically with the mouse/trackpad while the pointer is over the table to move sideways.
-          </p>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => scrollTableBy(-360)}
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-              aria-label="Scroll table left"
-            >
-              <ChevronLeft size={16} />
-              Left
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollTableBy(360)}
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-              aria-label="Scroll table right"
-            >
-              Right
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-
-        <div ref={tableScrollRef} className="permit-feed-scroll min-w-0 w-full max-w-full pb-1">
-          <table className="w-full text-left border-collapse min-w-[2100px]">
+        <div className="overflow-x-scroll pb-3">
+          <table className="w-full text-left border-collapse min-w-[2200px]">
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -301,6 +305,7 @@ export default function DOBLeads() {
                 </th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Borough</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ZIP</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type / Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</th>
@@ -314,7 +319,7 @@ export default function DOBLeads() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-20 text-center">
+                  <td colSpan={12} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB Data...</p>
@@ -323,7 +328,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-20 text-center">
+                  <td colSpan={12} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No permits match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -354,6 +359,11 @@ export default function DOBLeads() {
                     <td className="px-6 py-4">
                       <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
                         {[permit.house_number, permit.street_name].filter(Boolean).join(' ') || 'Unavailable'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                        {permit.zip_code || 'Unavailable'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
