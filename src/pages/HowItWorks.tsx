@@ -32,8 +32,11 @@ export default function HowItWorks() {
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <Link to="/">
-            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-12 w-auto object-contain py-1" />
+          <Link to="/" className="flex flex-col items-center">
+            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-12 w-auto rounded-xl object-contain py-1" />
+            <a href="tel:7187019090" className="mt-2 text-sm font-black tracking-[0.14em] text-slate-600 hover:text-primary">
+              718-701-9090
+            </a>
           </Link>
           <Link to="/" className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-primary transition-colors">
             <ArrowLeft size={18} />

@@ -121,9 +121,12 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full">
-          <div className="p-6 flex items-center justify-between">
-            <Link to="/" className="flex items-center group">
-              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-40 w-auto object-contain transition-transform group-hover:scale-105" />
+          <div className="p-6 flex items-start justify-between">
+            <Link to="/" className="flex flex-col items-center group">
+              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-40 w-auto rounded-2xl object-contain transition-transform group-hover:scale-105" />
+              <a href="tel:7187019090" className="mt-3 text-base font-black tracking-[0.14em] text-slate-600 hover:text-primary">
+                718-701-9090
+              </a>
             </Link>
             <button 
               onClick={() => setIsMobileMenuOpen(false)}

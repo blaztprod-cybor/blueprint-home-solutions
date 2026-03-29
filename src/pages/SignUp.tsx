@@ -180,8 +180,11 @@ export default function SignUp() {
         className="w-full max-w-xl"
       >
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center mb-6 group">
-            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto object-contain transition-transform group-hover:scale-105" />
+          <Link to="/" className="mb-6 inline-flex flex-col items-center group">
+            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto rounded-2xl object-contain transition-transform group-hover:scale-105" />
+            <a href="tel:7187019090" className="mt-2 text-sm font-black tracking-[0.14em] text-slate-600 hover:text-primary">
+              718-701-9090
+            </a>
           </Link>
           <h2 className="text-3xl font-black tracking-tight mb-2">Create Account</h2>
           <p className="text-slate-500 font-medium">Join the network and start building your vision</p>

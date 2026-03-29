@@ -48,8 +48,11 @@ export default function ForgotPassword() {
       >
         <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-slate-200/50 p-8 md:p-12 border border-slate-100">
           <div className="flex flex-col items-center mb-10">
-            <Link to="/" className="flex items-center mb-8 group">
-              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto object-contain transition-transform group-hover:scale-110" />
+            <Link to="/" className="mb-8 flex flex-col items-center group">
+              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto rounded-2xl object-contain transition-transform group-hover:scale-110" />
+              <a href="tel:7187019090" className="mt-2 text-sm font-black tracking-[0.14em] text-slate-600 hover:text-primary">
+                718-701-9090
+              </a>
             </Link>
             <h2 className="text-3xl font-black tracking-tight text-center">Reset Password</h2>
             <p className="text-slate-500 font-medium text-center mt-3">

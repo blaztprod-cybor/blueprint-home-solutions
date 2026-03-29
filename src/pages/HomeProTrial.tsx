@@ -10,18 +10,26 @@ const trialHighlights = [
 
 export default function HomeProTrial() {
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-5xl space-y-10">
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute inset-0 scale-125 bg-cover bg-center opacity-[0.28]"
+          style={{ backgroundImage: "url('/home-pro-trial-bg.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,250,252,0.44)_0%,rgba(248,250,252,0.5)_30%,rgba(248,250,252,0.56)_60%,rgba(248,250,252,0.64)_100%)]" />
+      </div>
+
+      <div className="relative mx-auto max-w-5xl space-y-10">
         <div className="flex justify-start">
-          <Link to="/" className="inline-flex items-center group">
-            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-20 w-auto object-contain transition-transform group-hover:scale-105" />
+          <Link to="/" className="inline-flex flex-col items-center group">
+            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-40 w-auto rounded-2xl object-contain transition-transform group-hover:scale-105" />
+            <a href="tel:7187019090" className="mt-3 text-base font-black tracking-[0.14em] text-slate-700 hover:text-primary">
+              718-701-9090
+            </a>
           </Link>
         </div>
 
         <div className="text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
-            <BadgeCheck size={30} />
-          </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-900">New Home Pro Trial Subscription</h1>
           <p className="mx-auto mt-4 max-w-3xl text-base font-medium leading-7 text-slate-600">
             Homeowners always use Blueprint Home Solutions for free. Contractors and tradesmen can start with a trial subscription to review permit leads, test the platform, and decide if ongoing access fits their business.
