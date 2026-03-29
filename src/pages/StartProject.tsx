@@ -1,12 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
-  ShieldCheck, 
-  Users, 
-  Zap, 
-  Leaf, 
-  Home, 
-  Thermometer,
   Calendar,
   MapPin,
   Phone,
@@ -23,22 +17,7 @@ import { cn } from '../lib/utils';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
-
-const services = [
-  { id: 'roofs', title: "Roofs", icon: Home },
-  { id: 'kitchens', title: "Kitchens", icon: Zap },
-  { id: 'bathrooms', title: "Bathrooms", icon: Thermometer },
-  { id: 'windows', title: "Windows", icon: ShieldCheck },
-  { id: 'floors', title: "Floors", icon: Home },
-  { id: 'fencing', title: "Fencing", icon: ShieldCheck },
-  { id: 'brickwork', title: "Brick Work", icon: Home },
-  { id: 'basements', title: "Basements", icon: Home },
-  { id: 'hvac', title: "HVAC", icon: Thermometer },
-  { id: 'energy', title: "Energy Efficiency", icon: Zap },
-  { id: 'compliance', title: "Code Compliance", icon: ShieldCheck },
-  { id: 'senior', title: "Senior Services", icon: Users },
-  { id: 'environmental', title: "Environmental", icon: Leaf },
-];
+import { projectCategories as services } from '../data/projectCategories';
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/;
@@ -135,7 +114,14 @@ export default function StartProject() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      navigate('/signup?role=homeowner', {
+        state: {
+          category: selectedServices[0] || initialCategory || null,
+        },
+      });
+      return;
+    }
 
     if (containsBlockedContactInfo(formData.description)) {
       setDescriptionError('Please remove phone numbers and email addresses from the project description.');

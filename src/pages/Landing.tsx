@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, ArrowRight, ShieldCheck, Zap, Users, Hammer, CheckCircle2, Home, DraftingCompass, LogOut, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Building2, ShieldCheck, Zap, Users, Hammer, CheckCircle2, Home, DraftingCompass, LogOut, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
+import { projectCategories } from '../data/projectCategories';
 
 export default function Landing() {
   const PREVIEW_ITEMS_PER_PAGE = 5;
+  const featuredCategoryIds = ['roofs', 'bathrooms', 'kitchens', 'basements', 'windows', 'fencing', 'brickwork', 'floors'];
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [permitData, setPermitData] = useState<DOBPermit[]>([]);
@@ -58,9 +60,13 @@ export default function Landing() {
     navigate('/');
   };
 
-  const homeownerLink = user?.role === 'Homeowner' ? '/projects' : '/login?role=homeowner';
   const contractorLink = user?.role === 'Contractor' ? '/projects' : '/login?role=contractor';
   const footerMarketplaceLink = user?.role === 'Contractor' ? '/contractor-paywall' : '/contractor-paywall';
+  const featuredCategories = projectCategories.filter((category) => featuredCategoryIds.includes(category.id));
+
+  const handleCategoryStart = (category: string) => {
+    navigate('/start-project', { state: { category } });
+  };
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-slate-50">
@@ -78,21 +84,25 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link to="/">
-              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto object-contain py-1" />
+              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-32 w-auto object-contain py-1" />
             </Link>
           </div>
           <div className="hidden md:flex items-center gap-8">
             <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
             <div className="flex items-center gap-4">
-              {user ? (
-                <Link to="/projects" className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 hover:scale-[1.02] transition-transform">
-                  Go to Portal
+              <div className="flex items-center gap-3">
+                <Link
+                  to={contractorLink}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-bold transition-transform",
+                    user?.role === 'Homeowner'
+                      ? "bg-slate-200 text-slate-400 pointer-events-none"
+                      : "bg-slate-900 text-white shadow-lg shadow-slate-300/60 hover:scale-[1.02]"
+                  )}
+                >
+                  Home Pro Portal
                 </Link>
-              ) : (
-                <Link to="/terms" className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 hover:scale-[1.02] transition-transform">
-                  Get Started
-                </Link>
-              )}
+              </div>
               {user && (
                 <button 
                   onClick={handleLogout}
@@ -108,55 +118,69 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-start">
+      <section className="pt-32 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        <div className="space-y-8">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
-            className="w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0"
+            className="space-y-6"
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold uppercase tracking-widest mb-6">
-              <Zap size={12} className="fill-primary" />
-              Revolutionizing Home Improvement
-            </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-6">
+            <div className="flex flex-col gap-4 items-center text-center">
+              <div>
+                <h1 className="whitespace-nowrap text-3xl sm:text-4xl lg:text-[3.6rem] font-black tracking-tight leading-[1.05]">
               Home Improvement Marketplace
-            </h1>
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed mb-8 sm:mb-10 max-w-xl">
-              We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors. Our mission is to remove the guesswork from renovations, ensuring every project starts with the right team and a solid plan for success.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative group">
-                <Link to={homeownerLink} className={cn(
-                  "px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-xl shadow-purple-500/30 transition-all flex items-center justify-center gap-2 w-full sm:w-auto hover:scale-[1.02] hover:-translate-y-1",
-                  user?.role === 'Contractor' ? "opacity-40 grayscale pointer-events-none" : ""
-                )}>
-                  Homeowner Portal
-                </Link>
-                {user?.role === 'Contractor' && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-full h-3 bg-black/90 shadow-2xl transform -rotate-6" />
-                  </div>
-                )}
-              </div>
-
-              <div className="relative group">
-                <Link to={contractorLink} className={cn(
-                  "px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-xl shadow-purple-500/30 transition-all flex items-center justify-center w-full sm:w-auto hover:scale-[1.02] hover:-translate-y-1",
-                  user?.role === 'Homeowner' ? "opacity-40 grayscale pointer-events-none" : ""
-                )}>
-                  Home Pro Portal
-                </Link>
-                {user?.role === 'Homeowner' && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-full h-3 bg-black/90 shadow-2xl transform rotate-6" />
-                  </div>
-                )}
+                </h1>
               </div>
             </div>
 
-            <div className="mt-8 w-full max-w-2xl mx-auto lg:mx-0 overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200 bg-white p-2 sm:p-3 shadow-xl shadow-slate-200/40">
+            <div className="overflow-x-auto pb-3">
+              <div className="flex min-w-max justify-center gap-3 px-4">
+                {featuredCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => handleCategoryStart(category.id)}
+                    disabled={user?.role === 'Contractor'}
+                    className={cn(
+                      "group relative h-32 w-[122px] overflow-hidden rounded-[1.5rem] border text-left transition-all",
+                      user?.role === 'Contractor'
+                        ? "cursor-not-allowed border-slate-200 bg-slate-200 text-slate-400"
+                        : "border-white/60 bg-slate-900 text-white shadow-xl shadow-slate-300/40 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50"
+                    )}
+                  >
+                    <div
+                      className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
+                      style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
+                    />
+                    <div className={cn(
+                      "absolute inset-0",
+                      user?.role === 'Contractor'
+                        ? "bg-slate-950/30"
+                        : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
+                    )} />
+                    <div className="relative flex h-full flex-col justify-between p-4">
+                      <div />
+                      <div />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-4xl mx-auto text-center">
+              We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors.
+            </p>
+          </motion.div>
+
+          <div className="grid gap-10 pt-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.15 }}
+            className="order-2 lg:order-1"
+          >
+            <div className="w-full overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200 bg-white p-2 sm:p-3 shadow-xl shadow-slate-200/40">
               <div className="relative aspect-video overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem] bg-slate-950">
                 <iframe
                   className="h-full w-full"
@@ -168,21 +192,20 @@ export default function Landing() {
                 />
               </div>
             </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="relative w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0 space-y-6"
-          >
-            <div className="relative z-10 rounded-[1.5rem] sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-4 shadow-2xl">
+            <div className="mt-6 relative z-10 rounded-[1.5rem] sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-4 shadow-2xl">
               <img 
                 src="/hero-image-v2.jpg" 
                 alt="Blueprint Home Solutions - Free Estimates" 
                 className="rounded-[1.125rem] sm:rounded-2xl w-full h-auto object-cover"
               />
             </div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="order-1 lg:order-2 relative w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0"
+          >
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
               <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
                 <div>
@@ -331,6 +354,7 @@ export default function Landing() {
             </div>
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-primary/5 rounded-full blur-3xl -z-10" />
           </motion.div>
+          </div>
         </div>
       </section>
 
