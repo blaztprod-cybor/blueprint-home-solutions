@@ -9,7 +9,7 @@ import { DOBPermit } from '../types';
 import { projectCategories } from '../data/projectCategories';
 
 export default function Landing() {
-  const PREVIEW_ITEMS_PER_PAGE = 5;
+  const PREVIEW_ITEMS_PER_PAGE = 20;
   const featuredCategoryIds = ['roofs', 'bathrooms', 'kitchens', 'basements', 'windows', 'fencing', 'brickwork', 'floors'];
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function Landing() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const data = await fetchDOBPermits(25);
+        const data = await fetchDOBPermits(1000);
         setPermitData(data);
       } catch (error) {
         console.error('Error loading permit data:', error);
@@ -60,6 +60,7 @@ export default function Landing() {
     navigate('/');
   };
 
+  const homeownerLink = user?.role === 'Homeowner' ? '/projects' : '/login?role=homeowner';
   const contractorLink = user?.role === 'Contractor' ? '/projects' : '/login?role=contractor';
   const footerMarketplaceLink = user?.role === 'Contractor' ? '/contractor-paywall' : '/contractor-paywall';
   const featuredCategories = projectCategories.filter((category) => featuredCategoryIds.includes(category.id));
@@ -91,6 +92,17 @@ export default function Landing() {
             <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
+                <Link
+                  to={homeownerLink}
+                  className={cn(
+                    "px-5 py-2.5 rounded-xl text-sm font-bold transition-transform",
+                    user?.role === 'Contractor'
+                      ? "bg-slate-200 text-slate-400 pointer-events-none"
+                      : "bg-white text-slate-900 border border-slate-200 shadow-lg shadow-slate-200/60 hover:scale-[1.02]"
+                  )}
+                >
+                  Homeowner Portal
+                </Link>
                 <Link
                   to={contractorLink}
                   className={cn(
@@ -143,25 +155,31 @@ export default function Landing() {
                     onClick={() => handleCategoryStart(category.id)}
                     disabled={user?.role === 'Contractor'}
                     className={cn(
-                      "group relative h-32 w-[122px] overflow-hidden rounded-[1.5rem] border text-left transition-all",
+                      "group w-[122px] overflow-hidden rounded-[1.5rem] border bg-white text-left transition-all",
                       user?.role === 'Contractor'
-                        ? "cursor-not-allowed border-slate-200 bg-slate-200 text-slate-400"
-                        : "border-white/60 bg-slate-900 text-white shadow-xl shadow-slate-300/40 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50"
+                        ? "cursor-not-allowed border-slate-200 text-slate-400"
+                        : "border-white/60 shadow-xl shadow-slate-300/40 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50"
                     )}
                   >
-                    <div
-                      className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
-                      style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
-                    />
-                    <div className={cn(
-                      "absolute inset-0",
-                      user?.role === 'Contractor'
-                        ? "bg-slate-950/30"
-                        : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
-                    )} />
-                    <div className="relative flex h-full flex-col justify-between p-4">
-                      <div />
-                      <div />
+                    <div className="relative h-32 overflow-hidden">
+                      <div
+                        className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
+                        style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
+                      />
+                      <div className={cn(
+                        "absolute inset-0",
+                        user?.role === 'Contractor'
+                          ? "bg-slate-950/30"
+                          : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
+                      )} />
+                    </div>
+                    <div className="space-y-1 px-3 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-wider text-slate-900">
+                        {category.title}
+                      </p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+                        Describe Project
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -209,18 +227,23 @@ export default function Landing() {
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
               <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-black tracking-tight">Live Permit Data Stream</h2>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-widest">Recent NYC DOB permit activity</p>
+                  <h2 className="text-base font-black tracking-tight">Recently Issued Permits</h2>
+                  <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-widest">NYC DOB</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                   <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Updated Daily</span>
                 </div>
                 </div>
+              <div className="border-b border-slate-100 px-4 py-4">
+                <p className="text-xs font-bold text-rose-600">
+                  Full Permit data available with subscription, full address, company name, contact number.
+                </p>
+              </div>
               {!loading && permitData.length > 0 && (
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-semibold text-slate-500">
-                    Preview page {previewPage} of {previewTotalPages}
+                    Preview Pages {previewPage}-{previewTotalPages}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -312,7 +335,7 @@ export default function Landing() {
               {!loading && permitData.length > 0 && (
                 <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-semibold text-slate-500">
-                    Preview page {previewPage} of {previewTotalPages}
+                    Preview Pages {previewPage}-{previewTotalPages}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button

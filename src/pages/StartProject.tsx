@@ -62,6 +62,7 @@ export default function StartProject() {
     town: '',
     zip: '',
     phone: '',
+    email: user?.email || '',
     startDate: '',
     description: '',
     lengthFt: '',
@@ -95,6 +96,15 @@ export default function StartProject() {
     };
   }, []);
 
+  useEffect(() => {
+    if (user?.email) {
+      setFormData((current) => ({
+        ...current,
+        email: current.email || user.email,
+      }));
+    }
+  }, [user?.email]);
+
   const toggleService = (id: string) => {
     setSelectedServices(prev => 
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
@@ -115,11 +125,17 @@ export default function StartProject() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      navigate('/signup?role=homeowner', {
-        state: {
-          category: selectedServices[0] || initialCategory || null,
-        },
+      const category = selectedServices[0] || initialCategory || '';
+      const signupParams = new URLSearchParams({
+        role: 'homeowner',
+        redirect: 'start-project',
       });
+
+      if (category) {
+        signupParams.set('category', category);
+      }
+
+      navigate(`/signup?${signupParams.toString()}`);
       return;
     }
 
@@ -163,6 +179,7 @@ export default function StartProject() {
           zip: formData.zip
         },
         phone: formData.phone,
+        email: formData.email || user.email,
         services: selectedServices,
         photoCount: selectedPhotos.length,
         photos: photoBase64s.slice(0, 3), // Keep first 3 as preview
@@ -381,6 +398,18 @@ export default function StartProject() {
                 />
               </div>
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Email</label>
+              <input
+                required
+                type="email"
+                placeholder="name@example.com"
+                disabled={isSubmitted}
+                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                value={formData.email}
+                onChange={e => setFormData({...formData, email: e.target.value})}
+              />
+            </div>
           </div>
         </section>
 
@@ -412,7 +441,7 @@ export default function StartProject() {
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Project Description</label>
               <textarea 
                 required
-                placeholder="Briefly describe the improvements or repairs needed..." 
+                placeholder="Briefly describe the project..." 
                 disabled={isSubmitted}
                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium min-h-[120px]"
                 value={formData.description}

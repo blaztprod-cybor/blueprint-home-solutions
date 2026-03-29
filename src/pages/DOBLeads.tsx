@@ -309,7 +309,7 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type / Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
+                <th className="w-[195px] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Company</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Name</th>
@@ -389,8 +389,16 @@ export default function DOBLeads() {
                         {formatPermitDate(permit.issuance_date)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <p className="text-xs text-slate-500 italic max-w-md min-w-[260px]">
+                    <td className="w-[195px] px-6 py-4 align-top">
+                      <p
+                        className="w-[195px] text-xs italic text-slate-500 whitespace-normal break-words"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
                         "{permit.job_description}"
                       </p>
                     </td>
