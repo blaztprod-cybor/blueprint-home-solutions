@@ -76,42 +76,78 @@ export default function Landing() {
       <div className="relative z-10">
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+        <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
+          <div className="flex items-start justify-between">
             <Link to="/" className="flex flex-col items-center">
-              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-32 w-auto rounded-2xl object-contain py-1" />
-              <a href="tel:7187019090" className="mt-2 text-sm font-black tracking-[0.14em] text-slate-600 hover:text-primary">
+              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto rounded-2xl object-contain py-1 md:h-32" />
+              <a href="tel:7187019090" className="mt-2 hidden text-sm font-black tracking-[0.14em] text-slate-600 hover:text-primary md:block">
                 718-701-9090
               </a>
             </Link>
-          </div>
-          <div className="hidden md:flex items-center gap-8">
-            <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
-            <div className="flex items-center gap-4">
-              {!user && (
-                <Link
-                  to="/login"
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-transform bg-slate-900 text-white shadow-lg shadow-slate-300/60 hover:scale-[1.02]"
-                >
-                  Login
-                </Link>
-              )}
-              {user && (
-                <button 
-                  onClick={handleLogout}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 hover:scale-[1.02] transition-transform group"
-                >
-                  <LogOut size={18} className="group-hover:translate-x-0.5 transition-transform" />
-                  <span>Logout</span>
-                </button>
-              )}
+            <div className="px-3 pt-2 text-right md:hidden">
+              <p className="text-lg font-black leading-tight text-slate-900">
+                Home Improvement Marketplace
+              </p>
             </div>
+            <div className="hidden md:flex items-center gap-8">
+              <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
+              <Link to="/home-pro-trial" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">Pricing</Link>
+              <div className="flex items-center gap-4">
+                {!user && (
+                  <Link
+                    to="/login"
+                    className="px-5 py-2.5 rounded-xl text-sm font-bold transition-transform bg-slate-900 text-white shadow-lg shadow-slate-300/60 hover:scale-[1.02]"
+                  >
+                    Login
+                  </Link>
+                )}
+                {user && (
+                  <button 
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 hover:scale-[1.02] transition-transform group"
+                  >
+                    <LogOut size={18} className="group-hover:translate-x-0.5 transition-transform" />
+                    <span>Logout</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-center gap-2 md:hidden">
+            <Link
+              to="/how-it-works"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              How it Works
+            </Link>
+            <Link
+              to="/home-pro-trial"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              Pricing
+            </Link>
+            {!user && (
+              <Link
+                to="/login"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white shadow-lg shadow-slate-300/60"
+              >
+                Login
+              </Link>
+            )}
+            {user && (
+              <button 
+                onClick={handleLogout}
+                className="rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white shadow-lg shadow-purple-500/30"
+              >
+                Logout
+              </button>
+            )}
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section className="pt-32 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto md:pt-36">
         <div className="space-y-8">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
@@ -121,10 +157,10 @@ export default function Landing() {
           >
             <div className="flex flex-col gap-4 items-center text-center">
               <div>
-                <h1 className="whitespace-nowrap text-3xl sm:text-4xl lg:text-[3.6rem] font-black tracking-tight leading-[1.05]">
+                <h1 className="hidden text-3xl font-black tracking-tight leading-[1.05] md:block md:text-4xl lg:text-[3.6rem]">
               Home Improvement Marketplace
                 </h1>
-                <p className="mt-4 text-3xl font-black tracking-tight text-slate-700">
+                <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
                   Pick a category to start a new project
                 </p>
               </div>
@@ -180,7 +216,7 @@ export default function Landing() {
               </div>
             </div>
 
-            <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-4xl mx-auto text-center">
+            <p className="mx-auto max-w-4xl text-base leading-relaxed text-slate-600 text-center sm:text-lg">
               We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors. We also bring highly valuable leads to contractors and tradesmen with the "Recently Issued Permits Data Feed."
             </p>
             <div className="flex justify-center">
@@ -193,12 +229,12 @@ export default function Landing() {
             </div>
           </motion.div>
 
-          <div className="grid gap-10 pt-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12">
+          <div className="grid gap-6 pt-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:pt-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.15 }}
-            className="order-2 lg:order-1"
+            className="order-2 w-full lg:order-1"
           >
             <div className="w-full overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200 bg-white p-2 sm:p-3 shadow-xl shadow-slate-200/40">
               <div className="relative aspect-video overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem] bg-slate-950">
@@ -212,7 +248,7 @@ export default function Landing() {
                 />
               </div>
             </div>
-            <div className="mt-6 relative z-10 rounded-[1.5rem] sm:rounded-3xl border border-slate-100 bg-white p-3 sm:p-4 shadow-2xl">
+            <div className="relative z-10 mt-4 rounded-[1.5rem] border border-slate-100 bg-white p-3 shadow-2xl sm:mt-6 sm:rounded-3xl sm:p-4">
               <img 
                 src="/hero-image-v2.jpg" 
                 alt="Blueprint Home Solutions - Free Estimates" 
@@ -224,9 +260,9 @@ export default function Landing() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="order-1 lg:order-2 relative w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0"
+            className="relative order-1 mx-auto w-full max-w-full lg:order-2 lg:max-w-none lg:mx-0"
           >
-            <p className="mb-4 text-center text-lg font-black tracking-tight text-slate-700">
+            <p className="mx-auto mb-4 max-w-[18rem] text-center text-base font-black tracking-tight text-slate-700 sm:max-w-none sm:text-lg">
               Hundreds of new residential and commercial leads updated daily
             </p>
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
