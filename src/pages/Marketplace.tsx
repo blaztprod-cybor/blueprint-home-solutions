@@ -1,7 +1,9 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { projectCategories } from '../data/projectCategories';
 
 export default function Marketplace() {
+  const navigate = useNavigate();
+
   return (
     <div className="space-y-10">
       <div className="space-y-3 text-center">
@@ -14,13 +16,11 @@ export default function Marketplace() {
       <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-wrap justify-center gap-3">
           {projectCategories.map((category) => (
-            <Link
+            <div
               key={category.id}
-              to={`/start-project?category=${encodeURIComponent(category.id)}`}
-              state={{ category: category.id }}
-              className="group w-[122px] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-xl shadow-slate-200/50"
+              className="group w-[122px] text-left"
             >
-              <div className="space-y-3 p-2">
+              <div className="space-y-3">
                 <div className="relative h-32 overflow-hidden rounded-[1.2rem]">
                   <div
                     className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04]"
@@ -31,13 +31,15 @@ export default function Marketplace() {
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]" />
                 </div>
-                <div className="px-1 pb-2">
-                  <div className="rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/start-project?category=${encodeURIComponent(category.id)}`, { state: { category: category.id } })}
+                  className="w-full rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white"
+                >
                     Select
-                  </div>
-                </div>
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       </section>

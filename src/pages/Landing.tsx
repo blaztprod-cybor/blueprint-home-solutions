@@ -131,7 +131,7 @@ export default function Landing() {
               <div className="flex min-w-max justify-center gap-3 px-4">
                 {featuredCategories.map((category) => {
                   const cardContent = (
-                    <div className="space-y-3 p-2">
+                    <div className="space-y-3">
                       <div className="relative h-32 overflow-hidden rounded-[1.2rem]">
                         <div
                           className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04]"
@@ -144,34 +144,34 @@ export default function Landing() {
                             : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
                         )} />
                       </div>
-                      <div className="px-1 pb-2">
-                        <div className="rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/start-project?category=${encodeURIComponent(category.id)}`, { state: { category: category.id } })}
+                        className="w-full rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white"
+                      >
                           Select
-                        </div>
-                      </div>
+                      </button>
                     </div>
                   );
 
                   if (user?.role === 'Contractor') {
                     return (
                       <div
-                      key={category.id}
-                      className="group w-[122px] cursor-not-allowed overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left text-slate-400"
-                    >
-                      {cardContent}
-                    </div>
+                        key={category.id}
+                        className="group w-[122px] cursor-not-allowed text-left text-slate-400"
+                      >
+                        {cardContent}
+                      </div>
                     );
                   }
 
                   return (
-                    <Link
+                    <div
                       key={category.id}
-                      to={`/start-project?category=${encodeURIComponent(category.id)}`}
-                      state={{ category: category.id }}
-                      className="group block w-[122px] overflow-hidden rounded-[1.5rem] border border-white/60 bg-white text-left shadow-xl shadow-slate-300/40"
+                      className="group w-[122px] text-left"
                     >
                       {cardContent}
-                    </Link>
+                    </div>
                   );
                 })}
               </div>
@@ -184,9 +184,9 @@ export default function Landing() {
               <div className="flex justify-center">
                 <Link
                   to="/signup?role=contractor"
-                  className="rounded-2xl bg-primary px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-primary/25 transition-transform hover:scale-[1.02]"
+                  className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-500/25 transition-transform hover:scale-[1.02]"
                 >
-                  Become a Home Pro. Press here for your free Home Professional trial.
+                  Sign Up as a Home Professional
                 </Link>
               </div>
             )}
