@@ -151,7 +151,7 @@ export default function SignUp() {
       setError('');
       setIsSubmitting(true);
       try {
-        await loginWithGoogle();
+        await loginWithGoogle(role);
       } catch (err: any) {
         console.error(err);
         setError('Google sign-up failed. Please try again.');

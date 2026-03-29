@@ -83,7 +83,12 @@ export default function Login() {
     setError('');
     setIsSubmitting(true);
     try {
-      await loginWithGoogle();
+      const requestedRole = portalRole === 'contractor'
+        ? 'Contractor'
+        : portalRole === 'homeowner'
+          ? 'Homeowner'
+          : undefined;
+      await loginWithGoogle(requestedRole);
     } catch (err: any) {
       console.error(err);
       setError('Google sign-in failed. Please try again.');

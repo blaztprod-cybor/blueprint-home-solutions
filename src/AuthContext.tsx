@@ -72,7 +72,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (role?: UserRole) => Promise<void>;
   signup: (email: string, password: string, name: string, role: UserRole, licenseNumber?: string, avatar?: string, isTradesman?: boolean, trade?: string) => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -169,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (requestedRole?: UserRole) => {
     try {
       const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
@@ -179,7 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
-        const role: UserRole = isAdminEmail ? 'admin' : 'Homeowner'; // Default role for Google sign-in
+        const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
         await setDoc(doc(db, 'users', firebaseUser.uid), {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
