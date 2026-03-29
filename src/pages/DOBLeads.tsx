@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchDOBPermits } from '../services/dobService';
@@ -14,6 +14,11 @@ export default function DOBLeads() {
   const [currentPage, setCurrentPage] = useState(1);
   const [copyLabel, setCopyLabel] = useState('Copy For Paste');
   const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollTableBy = (delta: number) => {
+    tableScrollRef.current?.scrollBy({ left: delta, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -53,6 +58,22 @@ export default function DOBLeads() {
     currentPage * ITEMS_PER_PAGE
   );
   const allVisibleSelected = paginatedPermits.length > 0 && paginatedPermits.every((permit) => selectedPermitIds.includes(permit.id));
+
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      if (e.shiftKey) return;
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [loading, currentPage, permits.length, boroughFilter, workTypeFilter]);
 
   const formatPermitDate = (value: string) => {
     if (!value) return 'N/A';
@@ -186,7 +207,7 @@ export default function DOBLeads() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 min-w-0 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -233,12 +254,39 @@ export default function DOBLeads() {
         </label>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-w-0 w-full max-w-full">
         <div className="border-b border-slate-100 px-6 py-4">
           <PaginationControls />
         </div>
 
-        <div className="overflow-x-scroll pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/90 px-4 py-2.5">
+          <p className="text-xs text-slate-600 max-w-[min(100%,28rem)] leading-snug">
+            <span className="font-semibold text-slate-700">Split window?</span>{' '}
+            Drag the bar under the table, use the arrows, or scroll vertically with the mouse/trackpad while the pointer is over the table to move sideways.
+          </p>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => scrollTableBy(-360)}
+              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+              aria-label="Scroll table left"
+            >
+              <ChevronLeft size={16} />
+              Left
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTableBy(360)}
+              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+              aria-label="Scroll table right"
+            >
+              Right
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div ref={tableScrollRef} className="permit-feed-scroll min-w-0 w-full max-w-full pb-1">
           <table className="w-full text-left border-collapse min-w-[2100px]">
             <thead>
               <tr className="bg-slate-50/50">

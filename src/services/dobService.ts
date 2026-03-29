@@ -5,6 +5,12 @@ const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
 const STATIC_PERMIT_FEED = '/data/permits.json';
 const LICENSE_LOOKUP_FEED = '/data/license-lookup.json';
 
+function normalizeLicenseKey(value: string | number | null | undefined): string {
+  const digitsOnly = String(value || '').replace(/\D/g, '');
+  const stripped = digitsOnly.replace(/^0+/, '');
+  return stripped || digitsOnly || '';
+}
+
 export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
   try {
     const licenseLookupResponse = await fetch(LICENSE_LOOKUP_FEED, { cache: 'no-store' });
@@ -18,9 +24,9 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
       if (Array.isArray(records)) {
         licenseLookup = new Map(
           records
-            .filter((record: any) => String(record.license_number || '').trim())
+            .filter((record: any) => normalizeLicenseKey(record.license_number))
             .map((record: any) => [
-              String(record.license_number || '').trim(),
+              normalizeLicenseKey(record.license_number),
               {
                 contact_name: record.contact_name || '',
                 phone: record.phone || '',
@@ -50,10 +56,10 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
 
       if (Array.isArray(staticPermits) && staticPermits.length > 0) {
         return staticPermits
-          .map((permit) => {
-            const lookup =
-              licenseLookup.get(String(permit.applicant_license || '').trim()) ||
-              businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+            .map((permit) => {
+              const lookup =
+                licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
+                businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
             return {
               ...permit,
               contact_name: lookup?.contact_name || '',
@@ -130,7 +136,7 @@ function transformData(
     const bizName = item.applicant_business_name || item.owner_business_name || 'N/A';
     const applicantLicense = item.applicant_license || '';
     const lookup =
-      licenseLookup.get(String(applicantLicense).trim()) ||
+      licenseLookup.get(normalizeLicenseKey(applicantLicense)) ||
       businessLookup.get(String(bizName).trim().toUpperCase());
     
     return {

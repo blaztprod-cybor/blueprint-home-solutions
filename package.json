@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "permits:sync": "node scripts/fetch-permits.mjs"
+    "permits:sync": "node scripts/fetch-permits.mjs",
+    "license:merge": "node scripts/merge-license-lookup.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
