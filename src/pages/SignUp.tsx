@@ -154,7 +154,19 @@ export default function SignUp() {
         await loginWithGoogle(role);
       } catch (err: any) {
         console.error(err);
-        setError('Google sign-up failed. Please try again.');
+        if (err?.code === 'auth/operation-not-allowed') {
+          setError('Google sign-up is not enabled in Firebase Authentication. Enable Google under Authentication > Sign-in method.');
+        } else if (err?.code === 'auth/unauthorized-domain') {
+          setError('This domain is not authorized for Google sign-up. Add localhost under Firebase Authentication > Settings > Authorized domains.');
+        } else if (err?.code === 'auth/popup-blocked') {
+          setError('The Google popup was blocked by the browser. Allow popups for localhost and try again.');
+        } else if (err?.code === 'auth/popup-closed-by-user') {
+          setError('The Google sign-up popup was closed before completion.');
+        } else if (err?.code === 'auth/cancelled-popup-request') {
+          setError('Another Google sign-up popup is already open or was interrupted. Close it and try again.');
+        } else {
+          setError(`Google sign-up failed: ${err?.code || err?.message || 'Unknown error'}`);
+        }
       } finally {
         setIsSubmitting(false);
       }
