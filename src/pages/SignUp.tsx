@@ -9,6 +9,8 @@ import { UserRole } from '../types';
 export default function SignUp() {
   const [searchParams] = useSearchParams();
   const requestedRole = searchParams.get('role');
+  const redirectTarget = searchParams.get('redirect');
+  const category = searchParams.get('category');
   const initialRole: UserRole = requestedRole === 'homeowner' ? 'Homeowner' : 'Contractor';
   const [role, setRole] = useState<UserRole>(initialRole);
   const [name, setName] = useState('');
@@ -28,9 +30,14 @@ export default function SignUp() {
   
     React.useEffect(() => {
       if (user) {
+        if (redirectTarget === 'start-project' && user.role === 'Homeowner') {
+          navigate('/start-project', { state: { category } });
+          return;
+        }
+
         navigate(user.role === 'admin' ? '/admin' : '/projects');
       }
-    }, [user, navigate]);
+    }, [user, navigate, redirectTarget, category]);
 
     const compressImage = (base64Str: string): Promise<string> => {
       return new Promise((resolve) => {
@@ -278,7 +285,7 @@ export default function SignUp() {
                           type="text" 
                           value={trade}
                           onChange={(e) => setTrade(e.target.value)}
-                          placeholder="e.g. Plumber, Electrician, Painter" 
+                          placeholder="" 
                           className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
                         />
                       </div>
@@ -293,7 +300,7 @@ export default function SignUp() {
                           type="text" 
                           value={licenseNumber}
                           onChange={(e) => setLicenseNumber(e.target.value)}
-                          placeholder="e.g. LIC-12345678" 
+                          placeholder="" 
                           className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
                         />
                       </div>
@@ -312,7 +319,7 @@ export default function SignUp() {
                       type="email" 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@email.com" 
+                      placeholder="" 
                       className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
                     />
                   </div>
@@ -326,7 +333,7 @@ export default function SignUp() {
                       type="email" 
                       value={confirmEmail}
                       onChange={(e) => setConfirmEmail(e.target.value)}
-                      placeholder="name@email.com" 
+                      placeholder="" 
                       className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
                     />
                   </div>

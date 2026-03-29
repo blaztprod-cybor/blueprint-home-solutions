@@ -356,7 +356,7 @@ export default function Reviews() {
                   <input 
                     required
                     type="text" 
-                    placeholder="e.g. Kitchen Remodel"
+                    placeholder=""
                     className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                     value={newReview.projectName}
                     onChange={e => setNewReview({...newReview, projectName: e.target.value})}

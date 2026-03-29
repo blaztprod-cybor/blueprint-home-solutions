@@ -17,6 +17,8 @@ export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const portalRole = searchParams.get('role');
+  const redirectTarget = searchParams.get('redirect');
+  const category = searchParams.get('category');
 
   const welcomeText = portalRole === 'homeowner' 
     ? 'Welcome Homeowner' 
@@ -26,9 +28,14 @@ export default function Login() {
 
   React.useEffect(() => {
     if (user) {
+      if (redirectTarget === 'start-project' && user.role === 'Homeowner') {
+        navigate('/start-project', { state: { category } });
+        return;
+      }
+
       navigate(user.role === 'admin' ? '/admin' : '/projects');
     }
-  }, [user, navigate]);
+  }, [user, navigate, redirectTarget, category]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +128,7 @@ export default function Login() {
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@email.com" 
+                  placeholder="" 
                   className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
                 />
               </div>

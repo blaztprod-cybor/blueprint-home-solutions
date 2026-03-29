@@ -215,7 +215,7 @@ export default function ProfileSettings() {
                   type="text" 
                   value={formData.address} 
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="123 Main St, City, State"
+                  placeholder=""
                   className="w-full bg-slate-50 border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" 
                 />
               </div>
@@ -244,7 +244,7 @@ export default function ProfileSettings() {
                           type="text" 
                           value={formData.trade}
                           onChange={(e) => setFormData({ ...formData, trade: e.target.value })}
-                          placeholder="e.g. Plumber, Electrician, Painter" 
+                          placeholder="" 
                           className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>
@@ -258,7 +258,7 @@ export default function ProfileSettings() {
                           type="text" 
                           value={formData.licenseNumber}
                           onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
-                          placeholder="e.g. LIC-12345678" 
+                          placeholder="" 
                           className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                       </div>

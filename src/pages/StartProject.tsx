@@ -255,7 +255,7 @@ export default function StartProject() {
         >
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold text-slate-900">Start New</h1>
+        <h1 className="text-xl font-bold text-slate-900">Start a New Project</h1>
         <div className="w-10" /> {/* Spacer for centering */}
       </div>
 
@@ -352,7 +352,7 @@ export default function StartProject() {
                 <input 
                   required
                   type="text" 
-                  placeholder="123 Main St" 
+                  placeholder="" 
                   disabled={isSubmitted}
                   className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                   value={formData.street}
@@ -364,7 +364,7 @@ export default function StartProject() {
                 <input 
                   required
                   type="text" 
-                  placeholder="Queens" 
+                  placeholder="" 
                   disabled={isSubmitted}
                   className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                   value={formData.town}
@@ -376,7 +376,7 @@ export default function StartProject() {
                 <input 
                   required
                   type="text" 
-                  placeholder="11101" 
+                  placeholder="" 
                   disabled={isSubmitted}
                   className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                   value={formData.zip}
@@ -390,7 +390,7 @@ export default function StartProject() {
                 <input 
                   required
                   type="tel" 
-                  placeholder="(555) 000-0000" 
+                  placeholder="" 
                   disabled={isSubmitted}
                   className="w-full pl-12 pr-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                   value={formData.phone}
@@ -403,7 +403,7 @@ export default function StartProject() {
               <input
                 required
                 type="email"
-                placeholder="name@example.com"
+                placeholder=""
                 disabled={isSubmitted}
                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                 value={formData.email}
@@ -564,7 +564,6 @@ export default function StartProject() {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <p className="font-bold text-slate-900">Add up to 10 photos</p>
-                  <p className="text-sm text-slate-500 font-medium">Upload photos of the area that needs work</p>
                 </div>
                 <button 
                   type="button"
