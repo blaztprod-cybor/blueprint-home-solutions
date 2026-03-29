@@ -12,6 +12,12 @@ export default function HomeProTrial() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-10">
+        <div className="flex justify-start">
+          <Link to="/" className="inline-flex items-center group">
+            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-20 w-auto object-contain transition-transform group-hover:scale-105" />
+          </Link>
+        </div>
+
         <div className="text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
             <BadgeCheck size={30} />
@@ -56,15 +62,6 @@ export default function HomeProTrial() {
             </div>
 
             <div className="mt-8 space-y-5">
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck size={20} className="mt-0.5 text-amber-700" />
-                  <p className="text-sm font-medium leading-6 text-amber-900">
-                    New Home Pro trial access is for contractors and tradesmen. Homeowners remain free and do not need a subscription.
-                  </p>
-                </div>
-              </div>
-
               <Link
                 to="/signup?role=contractor"
                 className="block rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 text-center text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-500/25 transition-transform hover:scale-[1.02]"
