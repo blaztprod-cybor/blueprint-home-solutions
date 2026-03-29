@@ -18,25 +18,24 @@ export default function Marketplace() {
               key={category.id}
               to={`/start-project?category=${encodeURIComponent(category.id)}`}
               state={{ category: category.id }}
-              className="group w-[122px] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-xl shadow-slate-200/50 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/70"
+              className="group w-[122px] overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left shadow-xl shadow-slate-200/50"
             >
-              <div className="relative h-32 overflow-hidden">
-                <div
-                  className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
-                  style={{
-                    backgroundImage: `url('${category.image}')`,
-                    backgroundPosition: category.imagePosition ?? 'center',
-                  }}
-                />
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]" />
-              </div>
-              <div className="space-y-1 px-3 py-3">
-                <p className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                  {category.title}
-                </p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
-                  Describe Project
-                </p>
+              <div className="space-y-3 p-2">
+                <div className="relative h-32 overflow-hidden rounded-[1.2rem]">
+                  <div
+                    className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04]"
+                    style={{
+                      backgroundImage: `url('${category.image}')`,
+                      backgroundPosition: category.imagePosition ?? 'center',
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]" />
+                </div>
+                <div className="px-1 pb-2">
+                  <div className="rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                    Select
+                  </div>
+                </div>
               </div>
             </Link>
           ))}

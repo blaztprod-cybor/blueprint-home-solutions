@@ -60,8 +60,6 @@ export default function Landing() {
     navigate('/');
   };
 
-  const homeownerLink = user?.role === 'Homeowner' ? '/projects' : '/login?role=homeowner';
-  const contractorLink = user?.role === 'Contractor' ? '/projects' : '/login?role=contractor';
   const footerMarketplaceLink = user?.role === 'Contractor' ? '/contractor-paywall' : '/contractor-paywall';
   const featuredCategories = projectCategories.filter((category) => featuredCategoryIds.includes(category.id));
 
@@ -87,30 +85,14 @@ export default function Landing() {
           <div className="hidden md:flex items-center gap-8">
             <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
+              {!user && (
                 <Link
-                  to={homeownerLink}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-sm font-bold transition-transform",
-                    user?.role === 'Contractor'
-                      ? "bg-slate-200 text-slate-400 pointer-events-none"
-                      : "bg-white text-slate-900 border border-slate-200 shadow-lg shadow-slate-200/60 hover:scale-[1.02]"
-                  )}
+                  to="/login"
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold transition-transform bg-slate-900 text-white shadow-lg shadow-slate-300/60 hover:scale-[1.02]"
                 >
-                  Homeowner Portal
+                  Login
                 </Link>
-                <Link
-                  to={contractorLink}
-                  className={cn(
-                    "px-5 py-2.5 rounded-xl text-sm font-bold transition-transform",
-                    user?.role === 'Homeowner'
-                      ? "bg-slate-200 text-slate-400 pointer-events-none"
-                      : "bg-slate-900 text-white shadow-lg shadow-slate-300/60 hover:scale-[1.02]"
-                  )}
-                >
-                  Home Pro Portal
-                </Link>
-              </div>
+              )}
               {user && (
                 <button 
                   onClick={handleLogout}
@@ -149,10 +131,10 @@ export default function Landing() {
               <div className="flex min-w-max justify-center gap-3 px-4">
                 {featuredCategories.map((category) => {
                   const cardContent = (
-                    <>
-                      <div className="relative h-32 overflow-hidden">
+                    <div className="space-y-3 p-2">
+                      <div className="relative h-32 overflow-hidden rounded-[1.2rem]">
                         <div
-                          className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04] transition-transform duration-500 group-hover:scale-110"
+                          className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04]"
                           style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
                         />
                         <div className={cn(
@@ -162,25 +144,22 @@ export default function Landing() {
                             : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
                         )} />
                       </div>
-                      <div className="space-y-1 px-3 py-3">
-                        <p className="text-[11px] font-black uppercase tracking-wider text-slate-900">
-                          {category.title}
-                        </p>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
-                          Describe Project
-                        </p>
+                      <div className="px-1 pb-2">
+                        <div className="rounded-xl bg-primary px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                          Select
+                        </div>
                       </div>
-                    </>
+                    </div>
                   );
 
                   if (user?.role === 'Contractor') {
                     return (
                       <div
-                        key={category.id}
-                        className="group w-[122px] cursor-not-allowed overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left text-slate-400 transition-all"
-                      >
-                        {cardContent}
-                      </div>
+                      key={category.id}
+                      className="group w-[122px] cursor-not-allowed overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white text-left text-slate-400"
+                    >
+                      {cardContent}
+                    </div>
                     );
                   }
 
@@ -189,7 +168,7 @@ export default function Landing() {
                       key={category.id}
                       to={`/start-project?category=${encodeURIComponent(category.id)}`}
                       state={{ category: category.id }}
-                      className="group block w-[122px] overflow-hidden rounded-[1.5rem] border border-white/60 bg-white text-left shadow-xl shadow-slate-300/40 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300/50"
+                      className="group block w-[122px] overflow-hidden rounded-[1.5rem] border border-white/60 bg-white text-left shadow-xl shadow-slate-300/40"
                     >
                       {cardContent}
                     </Link>
@@ -199,8 +178,18 @@ export default function Landing() {
             </div>
 
             <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-4xl mx-auto text-center">
-              We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors.
+              We serve as the vital link between vision and execution. We simplify the home improvement process by connecting homeowners with a curated network of vetted, reliable contractors. We also bring highly valuable leads to contractors and tradesmen with the "Recently Issued Permits Data Feed."
             </p>
+            {!user && (
+              <div className="flex justify-center">
+                <Link
+                  to="/signup?role=contractor"
+                  className="rounded-2xl bg-primary px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-primary/25 transition-transform hover:scale-[1.02]"
+                >
+                  Become a Home Pro. Press here for your free Home Professional trial.
+                </Link>
+              </div>
+            )}
           </motion.div>
 
           <div className="grid gap-10 pt-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12">
