@@ -67,10 +67,10 @@ export default function Landing() {
     <div className="relative min-h-screen overflow-x-hidden bg-slate-50">
       <div className="pointer-events-none absolute inset-0">
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-[0.16]"
+          className="absolute inset-0 bg-cover bg-center opacity-[0.32]"
           style={{ backgroundImage: "url('/hero-image-v2.jpg')" }}
         />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,250,252,0.72)_0%,rgba(248,250,252,0.88)_28%,rgba(248,250,252,0.96)_58%,rgba(248,250,252,1)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,250,252,0.56)_0%,rgba(248,250,252,0.74)_28%,rgba(248,250,252,0.88)_58%,rgba(248,250,252,0.96)_100%)]" />
       </div>
 
       <div className="relative z-10">
@@ -138,7 +138,7 @@ export default function Landing() {
               </button>
             )}
           </div>
-          <div className="mt-3 text-center">
+          <div className="-mt-10 text-center md:-mt-16">
             <p className="text-xl font-black leading-tight text-slate-900 md:text-3xl">
               Home Improvement Marketplace
             </p>
@@ -158,7 +158,7 @@ export default function Landing() {
             <div className="flex flex-col gap-4 items-center text-center">
               <div>
                 <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
-                  Make a selection to start your new project
+                  Select your improvement to start the process
                 </p>
               </div>
             </div>
