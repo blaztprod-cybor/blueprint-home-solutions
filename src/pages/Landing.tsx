@@ -143,6 +143,9 @@ export default function Landing() {
                 <h1 className="whitespace-nowrap text-3xl sm:text-4xl lg:text-[3.6rem] font-black tracking-tight leading-[1.05]">
               Home Improvement Marketplace
                 </h1>
+                <p className="mt-4 text-3xl font-black tracking-tight text-slate-700">
+                  Pick a category to start a new project
+                </p>
               </div>
             </div>
 
@@ -224,6 +227,9 @@ export default function Landing() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="order-1 lg:order-2 relative w-full max-w-2xl mx-auto lg:max-w-none lg:mx-0"
           >
+            <p className="mb-4 text-center text-lg font-black tracking-tight text-slate-700">
+              Hundreds of new residential and commercial leads updated daily
+            </p>
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
               <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
                 <div>
