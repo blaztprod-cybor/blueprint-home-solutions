@@ -1,9 +1,7 @@
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { projectCategories } from '../data/projectCategories';
 
 export default function Marketplace() {
-  const navigate = useNavigate();
-
   return (
     <div className="space-y-10">
       <div className="space-y-3 text-center">
@@ -31,13 +29,13 @@ export default function Marketplace() {
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/start-project?category=${encodeURIComponent(category.id)}`, { state: { category: category.id } })}
-                  className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
+                <Link
+                  to={`/start-project?category=${encodeURIComponent(category.id)}`}
+                  state={{ category: category.id }}
+                  className="block w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
                 >
-                    Select
-                </button>
+                  Select
+                </Link>
               </div>
             </div>
           ))}

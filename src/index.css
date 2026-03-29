@@ -69,34 +69,3 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Wide table: scroll inside this box only (narrow / split browser windows). */
-.permit-feed-scroll {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: scroll;
-  overflow-y: visible;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(148 163 184) rgb(241 245 249);
-  touch-action: pan-x pan-y;
-}
-
-.permit-feed-scroll::-webkit-scrollbar {
-  height: 14px;
-}
-
-.permit-feed-scroll::-webkit-scrollbar-track {
-  background: rgb(241 245 249);
-  border-radius: 9999px;
-}
-
-.permit-feed-scroll::-webkit-scrollbar-thumb {
-  background: rgb(148 163 184);
-  border-radius: 9999px;
-  border: 2px solid rgb(241 245 249);
-}
-
-.permit-feed-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgb(100 116 139);
-}
-

@@ -33,50 +33,42 @@ export default function Clients() {
       where('inspectionContractorId', '==', user.id)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const projectsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Project[];
-
+      
       setProjects(projectsData);
       setIsLoading(false);
 
-      const uids = Array.from(new Set(projectsData.map((p) => p.uid).filter(Boolean)));
-
-      setHomeownerDetails((prev) => {
-        const uidsToFetch = uids.filter((uid) => !prev[uid]);
-        if (uidsToFetch.length === 0) return prev;
-
-        void (async () => {
-          const additions: Record<string, { name: string; email: string }> = {};
-          for (const uid of uidsToFetch) {
-            try {
-              const userDoc = await getDoc(doc(db, 'users', uid));
-              if (userDoc.exists()) {
-                const data = userDoc.data();
-                additions[uid] = {
-                  name: data.name || 'Unknown Homeowner',
-                  email: data.email || '',
-                };
-              }
-            } catch (err) {
-              console.error(`Error fetching user ${uid}:`, err);
+      // Fetch homeowner details for any new uids
+      const uidsToFetch = Array.from(new Set(projectsData.map(p => p.uid))).filter(uid => !homeownerDetails[uid]);
+      
+      if (uidsToFetch.length > 0) {
+        const newDetails = { ...homeownerDetails };
+        await Promise.all(uidsToFetch.map(async (uid) => {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', uid));
+            if (userDoc.exists()) {
+              newDetails[uid] = { 
+                name: userDoc.data().name || 'Unknown Homeowner',
+                email: userDoc.data().email || ''
+              };
             }
+          } catch (err) {
+            console.error(`Error fetching user ${uid}:`, err);
           }
-          if (Object.keys(additions).length === 0) return;
-          setHomeownerDetails((latest) => ({ ...latest, ...additions }));
-        })();
-
-        return prev;
-      });
+        }));
+        setHomeownerDetails(newDetails);
+      }
     }, (error) => {
       console.error("Error fetching projects for clients:", error);
       setIsLoading(false);
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, homeownerDetails]);
 
   const filteredProjects = projects.filter(p => {
     const homeowner = homeownerDetails[p.uid];

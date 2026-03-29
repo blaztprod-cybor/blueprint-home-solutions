@@ -78,12 +78,17 @@ export default function Landing() {
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
           <div className="flex items-start justify-between">
-            <Link to="/" className="flex flex-col items-center">
-              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto rounded-2xl object-contain py-1 md:h-32" />
-              <a href="tel:7187019090" className="mt-2 hidden text-sm font-black tracking-[0.14em] text-slate-600 hover:text-primary md:block">
+            <div className="flex items-center gap-3 md:gap-5">
+              <Link to="/" className="flex shrink-0 items-center">
+                <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-16 w-auto rounded-2xl object-contain py-1 md:h-32" />
+              </Link>
+              <a
+                href="tel:7187019090"
+                className="hidden whitespace-nowrap text-base font-black tracking-[0.14em] text-slate-600 hover:text-primary md:block"
+              >
                 718-701-9090
               </a>
-            </Link>
+            </div>
             <div className="hidden md:flex items-center gap-8">
               <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
               <Link to="/home-pro-trial" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">Pricing</Link>
@@ -180,13 +185,13 @@ export default function Landing() {
                             : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
                         )} />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/start-project?category=${encodeURIComponent(category.id)}`, { state: { category: category.id } })}
-                        className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
+                      <Link
+                        to={`/start-project?category=${encodeURIComponent(category.id)}`}
+                        state={{ category: category.id }}
+                        className="block w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
                       >
-                          Select
-                      </button>
+                        Select
+                      </Link>
                     </div>
                   );
 

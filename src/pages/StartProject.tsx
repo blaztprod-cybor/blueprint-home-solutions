@@ -112,11 +112,7 @@ export default function StartProject() {
     }
   }, [initialCategory]);
 
-  const toggleService = (id: string) => {
-    setSelectedServices(prev => 
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
-  };
+  const selectedService = services.find((service) => service.id === selectedServices[0]) ?? null;
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -307,41 +303,62 @@ export default function StartProject() {
       <form onSubmit={handleSubmit} className="space-y-12">
         {/* Services Checklist */}
         <section className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {services.map((service) => (
-              <label
-                key={service.id}
-                className={cn(
-                  "flex items-center gap-4 p-4 rounded-2xl border transition-all cursor-pointer group",
-                  selectedServices.includes(service.id)
-                    ? "bg-primary/5 border-primary shadow-sm"
-                    : "bg-white border-slate-200 hover:border-primary/30 hover:shadow-md"
-                )}
-              >
-                <div className="relative flex items-center">
-                  <input 
-                    type="checkbox"
-                    checked={selectedServices.includes(service.id)}
-                    onChange={() => toggleService(service.id)}
-                    className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary transition-all cursor-pointer"
-                  />
+          <div className="rounded-[1.75rem] border border-primary/15 bg-primary/5 p-5 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-primary">Selected Improvement</p>
+            <div className="mt-3 flex items-center gap-4">
+              {selectedService ? (
+                <>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
+                    <selectedService.icon size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight text-slate-950">{selectedService.title}</h2>
+                    <p className="text-sm font-medium text-slate-600">This project request is locked to the improvement you selected.</p>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight text-slate-950">Select an improvement first</h2>
+                  <p className="text-sm font-medium text-slate-600">Go back and choose a category to start the project form.</p>
                 </div>
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center border transition-colors",
-                  selectedServices.includes(service.id)
-                    ? "bg-primary/10 border-primary/20 text-primary"
-                    : "bg-slate-50 border-slate-100 group-hover:border-primary/20 text-slate-400"
-                )}>
-                  <service.icon size={20} />
-                </div>
-                <span className={cn(
-                  "font-bold text-sm",
-                  selectedServices.includes(service.id) ? "text-slate-900" : "text-slate-600"
-                )}>
-                  {service.title}
-                </span>
-              </label>
-            ))}
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+              <ArrowRight size={20} />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight">Describe The Project</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Project Description</label>
+              <textarea 
+                required
+                placeholder="Briefly describe the project..." 
+                disabled={isSubmitted}
+                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium min-h-[120px]"
+                value={formData.description}
+                onChange={e => {
+                  const nextValue = e.target.value;
+                  setFormData({...formData, description: nextValue});
+                  setDescriptionError(
+                    containsBlockedContactInfo(nextValue)
+                      ? 'Please remove phone numbers and email addresses from the project description.'
+                      : ''
+                  );
+                }}
+              />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
+                Please do not include phone numbers or email addresses in the project description.
+              </p>
+              {descriptionError && (
+                <p className="text-sm font-bold text-red-600">{descriptionError}</p>
+              )}
+            </div>
           </div>
         </section>
 
@@ -426,7 +443,7 @@ export default function StartProject() {
             <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
               <Calendar size={20} />
             </div>
-            <h2 className="text-xl font-bold tracking-tight">Timeline & Details</h2>
+            <h2 className="text-xl font-bold tracking-tight">Timeline</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -443,31 +460,6 @@ export default function StartProject() {
                   onChange={e => setFormData({...formData, startDate: e.target.value})}
                 />
               </div>
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Project Description</label>
-              <textarea 
-                required
-                placeholder="Briefly describe the project..." 
-                disabled={isSubmitted}
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium min-h-[120px]"
-                value={formData.description}
-                onChange={e => {
-                  const nextValue = e.target.value;
-                  setFormData({...formData, description: nextValue});
-                  setDescriptionError(
-                    containsBlockedContactInfo(nextValue)
-                      ? 'Please remove phone numbers and email addresses from the project description.'
-                      : ''
-                  );
-                }}
-              />
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600">
-                Please do not include phone numbers or email addresses in the project description.
-              </p>
-              {descriptionError && (
-                <p className="text-sm font-bold text-red-600">{descriptionError}</p>
-              )}
             </div>
           </div>
         </section>
