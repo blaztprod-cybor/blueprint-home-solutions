@@ -5,7 +5,7 @@ export default function Marketplace() {
   const navigate = useNavigate();
 
   const handleCategoryStart = (category: string) => {
-    navigate('/start-project', { state: { category } });
+    navigate(`/start-project?category=${encodeURIComponent(category)}`, { state: { category } });
   };
 
   return (

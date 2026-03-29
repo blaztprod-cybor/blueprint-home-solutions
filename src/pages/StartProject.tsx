@@ -12,7 +12,7 @@ import {
   X,
   Loader2
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
@@ -51,9 +51,10 @@ const containsBlockedContactInfo = (value: string) => {
 export default function StartProject() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
-  const initialCategory = location.state?.category;
+  const initialCategory = location.state?.category || searchParams.get('category') || '';
   const [selectedServices, setSelectedServices] = useState<string[]>(
     initialCategory ? [initialCategory] : []
   );
@@ -104,6 +105,12 @@ export default function StartProject() {
       }));
     }
   }, [user?.email]);
+
+  useEffect(() => {
+    if (initialCategory) {
+      setSelectedServices([initialCategory]);
+    }
+  }, [initialCategory]);
 
   const toggleService = (id: string) => {
     setSelectedServices(prev => 

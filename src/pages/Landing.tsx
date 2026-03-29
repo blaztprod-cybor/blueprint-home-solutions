@@ -66,7 +66,7 @@ export default function Landing() {
   const featuredCategories = projectCategories.filter((category) => featuredCategoryIds.includes(category.id));
 
   const handleCategoryStart = (category: string) => {
-    navigate('/start-project', { state: { category } });
+    navigate(`/start-project?category=${encodeURIComponent(category)}`, { state: { category } });
   };
 
   return (
