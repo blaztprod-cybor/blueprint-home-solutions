@@ -84,11 +84,6 @@ export default function Landing() {
                 718-701-9090
               </a>
             </Link>
-            <div className="px-3 pt-2 text-right md:hidden">
-              <p className="text-lg font-black leading-tight text-slate-900">
-                Home Improvement Marketplace
-              </p>
-            </div>
             <div className="hidden md:flex items-center gap-8">
               <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
               <Link to="/home-pro-trial" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">Pricing</Link>
@@ -143,11 +138,16 @@ export default function Landing() {
               </button>
             )}
           </div>
+          <div className="mt-3 text-center">
+            <p className="text-xl font-black leading-tight text-slate-900 md:text-3xl">
+              Home Improvement Marketplace
+            </p>
+          </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto md:pt-36">
+      <section className="pt-40 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto md:pt-36">
         <div className="space-y-8">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
@@ -157,11 +157,8 @@ export default function Landing() {
           >
             <div className="flex flex-col gap-4 items-center text-center">
               <div>
-                <h1 className="hidden text-3xl font-black tracking-tight leading-[1.05] md:block md:text-4xl lg:text-[3.6rem]">
-              Home Improvement Marketplace
-                </h1>
                 <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
-                  Pick a category to start a new project
+                  Make a selection to start your new project
                 </p>
               </div>
             </div>
