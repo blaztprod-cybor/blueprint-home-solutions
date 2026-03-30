@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchDOBPermits } from '../services/dobService';
@@ -230,10 +231,13 @@ export default function DOBLeads() {
           </div>
           <p className="text-muted-foreground">Real-time construction permits issued by the NYC Department of Buildings.</p>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-right shadow-sm">
+        <Link
+          to="/permit-map"
+          className="block rounded-2xl border border-slate-200 bg-white px-5 py-3 text-right shadow-sm transition-colors hover:bg-slate-50"
+        >
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Map Setup</p>
-          <p className="mt-1 text-xs font-bold text-slate-600">Use NYC Geoclient to geocode permit addresses for a map view.</p>
-        </div>
+          <p className="mt-1 text-xs font-bold text-slate-600">Open permit map view</p>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

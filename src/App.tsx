@@ -50,6 +50,7 @@ import ContractorPaywall from './pages/ContractorPaywall';
 import AboutUs from './pages/AboutUs';
 import DOBLeads from './pages/DOBLeads';
 import HomeProTrial from './pages/HomeProTrial';
+import PermitMap from './pages/PermitMap';
 
 const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   <Link
@@ -314,6 +315,7 @@ export default function App() {
                 {user?.role === 'Homeowner' && <Route path="/marketplace" element={<Marketplace />} />}
                 <Route path="/projects" element={<Projects />} />
                 <Route path="/permit-feed" element={<DOBLeads />} />
+                <Route path="/permit-map" element={<PermitMap />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/reviews" element={<Reviews />} />
                 <Route path="/invoices" element={<Invoices />} />

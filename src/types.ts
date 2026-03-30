@@ -73,6 +73,8 @@ export interface DOBPermit {
   street_name: string;
   address?: string;
   zip_code?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   job_type: string;
   permit_status: string;
   filing_date: string;
