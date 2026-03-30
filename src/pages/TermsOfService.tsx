@@ -1,16 +1,24 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Building2, ArrowLeft, Check } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Check } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function TermsOfService() {
   const [agreed, setAgreed] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const signupFlow = searchParams.get('flow') === 'signup';
+  const role = searchParams.get('role');
 
   const handleContinue = () => {
-    if (agreed) {
-      navigate('/signup');
+    if (!agreed) return;
+
+    const nextParams = new URLSearchParams();
+    if (role) {
+      nextParams.set('role', role);
     }
+
+    navigate(`/signup${nextParams.toString() ? `?${nextParams.toString()}` : ''}`);
   };
 
   return (
@@ -153,45 +161,47 @@ export default function TermsOfService() {
             </section>
           </div>
 
-          <div className="mt-12 pt-8 border-t border-slate-100">
-            <label className="flex items-start gap-4 cursor-pointer group" htmlFor="terms-checkbox">
-              <div className="relative flex items-center justify-center mt-1">
-                <input 
-                  type="checkbox" 
-                  id="terms-checkbox"
-                  className="peer appearance-none w-6 h-6 border-2 border-slate-200 rounded-lg checked:border-black transition-all cursor-pointer"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                />
-                <motion.div
-                  initial={false}
-                  animate={{ 
-                    opacity: agreed ? 1 : 0,
-                    scale: agreed ? 1 : 0.5
-                  }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute text-black pointer-events-none flex items-center justify-center"
-                >
-                  <Check size={16} strokeWidth={4} />
-                </motion.div>
-              </div>
-              <span className="text-sm font-medium text-slate-700 select-none">
-                I have read and agree to the Website Terms of Service. I understand that Blueprint Home Solutions is a bridge between homeowners and contractors.
-              </span>
-            </label>
+          {signupFlow && (
+            <div className="mt-12 pt-8 border-t border-slate-100">
+              <label className="flex items-start gap-4 cursor-pointer group" htmlFor="terms-checkbox">
+                <div className="relative flex items-center justify-center mt-1">
+                  <input 
+                    type="checkbox" 
+                    id="terms-checkbox"
+                    className="peer appearance-none w-6 h-6 border-2 border-slate-200 rounded-lg checked:border-black transition-all cursor-pointer"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                  />
+                  <motion.div
+                    initial={false}
+                    animate={{ 
+                      opacity: agreed ? 1 : 0,
+                      scale: agreed ? 1 : 0.5
+                    }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute text-black pointer-events-none flex items-center justify-center"
+                  >
+                    <Check size={16} strokeWidth={4} />
+                  </motion.div>
+                </div>
+                <span className="text-sm font-medium text-slate-700 select-none">
+                  I have read and agree to the Website Terms of Service. I understand that Blueprint Home Solutions is a bridge between homeowners and contractors.
+                </span>
+              </label>
 
-            <button
-              onClick={handleContinue}
-              disabled={!agreed}
-              className={`w-full mt-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl ${
-                agreed 
-                ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]" 
-                : "bg-slate-100 text-slate-400 cursor-not-allowed"
-              }`}
-            >
-              Continue to Sign Up
-            </button>
-          </div>
+              <button
+                onClick={handleContinue}
+                disabled={!agreed}
+                className={`w-full mt-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl ${
+                  agreed 
+                  ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]" 
+                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                }`}
+              >
+                Continue to Sign Up
+              </button>
+            </div>
+          )}
         </motion.div>
       </main>
     </div>

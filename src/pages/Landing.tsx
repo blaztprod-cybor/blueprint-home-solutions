@@ -498,16 +498,14 @@ export default function Landing() {
               <h4 className="font-bold mb-6 uppercase tracking-widest text-xs text-slate-500">Company</h4>
               <ul className="space-y-4 text-sm font-bold text-slate-300">
                 <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
-                <li><a href="#" className="hover:text-white transition-colors">Safety</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
               </ul>
             </div>
           </div>
           <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">© 2024 Blueprint Home Solutions. All rights reserved.</p>
             <div className="flex gap-6 text-xs font-bold text-slate-500 uppercase tracking-widest">
-              <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-              <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+              <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
             </div>
           </div>
         </div>

@@ -382,7 +382,7 @@ export default function SignUp() {
                 <CheckCircle2 size={12} className="text-emerald-600" />
               </div>
               <p className="text-xs font-medium text-slate-500 leading-relaxed">
-                By creating an account, you agree to our <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>.
+                By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
               </p>
             </div>
 

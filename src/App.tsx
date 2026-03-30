@@ -41,6 +41,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Services from './pages/Services';
 import HowItWorks from './pages/HowItWorks';
 import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import ThankYou from './pages/ThankYou';
 import StartProject from './pages/StartProject';
 import MessagingWindow from './components/MessagingWindow';
@@ -284,6 +285,7 @@ export default function App() {
         <Route path="/thank-you" element={<ThankYou />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/contractor-paywall" element={<ContractorPaywall />} />
         <Route path="/home-pro-trial" element={<HomeProTrial />} />
         <Route path="/about" element={<AboutUs />} />
