@@ -99,4 +99,7 @@ export interface User {
   licenseStatus?: 'Active' | 'Pending' | 'Expired' | 'Invalid';
   isTradesman?: boolean;
   trade?: string;
+  accountPlan?: 'trial' | 'standard';
+  trialStartedAt?: string;
+  trialEndsAt?: string;
 }

@@ -94,6 +94,19 @@ const getInitialsAvatar = (name: string) => {
   </svg>`;
 };
 
+const TRIAL_DURATION_DAYS = 14;
+
+function getTrialWindow(startIso = new Date().toISOString()) {
+  const trialStartedAt = new Date(startIso);
+  const trialEndsAt = new Date(trialStartedAt);
+  trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DURATION_DAYS);
+
+  return {
+    trialStartedAt: trialStartedAt.toISOString(),
+    trialEndsAt: trialEndsAt.toISOString(),
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -127,7 +140,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: role,
               avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
-              isVerified: data.isVerified ?? false
+              isVerified: data.isVerified ?? false,
+              accountPlan: data.accountPlan,
+              trialStartedAt: data.trialStartedAt,
+              trialEndsAt: data.trialEndsAt,
             };
             setUser(userData);
             localStorage.setItem('blueprint_user', JSON.stringify(userData));
@@ -180,6 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
         const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
+        const trialData = role === 'Contractor' ? getTrialWindow() : {};
         await setDoc(doc(db, 'users', firebaseUser.uid), {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -187,7 +204,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: role,
           avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
           isVerified: false,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          accountPlan: role === 'Contractor' ? 'trial' : 'standard',
+          trialStartedAt: role === 'Contractor' ? trialData.trialStartedAt : null,
+          trialEndsAt: role === 'Contractor' ? trialData.trialEndsAt : null,
         });
         
         const userData: User = {
@@ -196,7 +216,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: firebaseUser.email || '',
           role: role,
           avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
-          isVerified: false
+          isVerified: false,
+          accountPlan: role === 'Contractor' ? 'trial' : 'standard',
+          trialStartedAt: role === 'Contractor' ? trialData.trialStartedAt : undefined,
+          trialEndsAt: role === 'Contractor' ? trialData.trialEndsAt : undefined,
         };
         setUser(userData);
 
@@ -233,6 +256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const isAdminEmail = email.toLowerCase() === 'blaztprod@gmail.com';
       const finalRole = isAdminEmail ? 'admin' : role;
+      const trialData = finalRole === 'Contractor' ? getTrialWindow() : {};
       
       const userData: User = {
         id: firebaseUser.uid,
@@ -245,7 +269,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseNumber: finalRole === 'Contractor' ? licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? isTradesman : undefined,
-        trade: finalRole === 'Contractor' ? trade : undefined
+        trade: finalRole === 'Contractor' ? trade : undefined,
+        accountPlan: finalRole === 'Contractor' ? 'trial' : 'standard',
+        trialStartedAt: finalRole === 'Contractor' ? trialData.trialStartedAt : undefined,
+        trialEndsAt: finalRole === 'Contractor' ? trialData.trialEndsAt : undefined,
       };
 
       // Set user in state first to avoid fallback issues in onAuthStateChanged
@@ -263,7 +290,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? isTradesman : undefined,
         trade: finalRole === 'Contractor' ? trade : undefined,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        accountPlan: finalRole === 'Contractor' ? 'trial' : 'standard',
+        trialStartedAt: finalRole === 'Contractor' ? trialData.trialStartedAt : null,
+        trialEndsAt: finalRole === 'Contractor' ? trialData.trialEndsAt : null,
       });
 
       // Send welcome email

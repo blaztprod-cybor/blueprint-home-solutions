@@ -181,6 +181,16 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const showStartNew = user?.role === 'Homeowner' && 
     location.pathname !== '/start-project' && 
     location.pathname !== '/invoices';
+  const trialBadgeLabel = (() => {
+    if (user?.role !== 'Contractor' || user.accountPlan !== 'trial' || !user.trialEndsAt) return '';
+
+    const now = Date.now();
+    const trialEndsAt = new Date(user.trialEndsAt).getTime();
+    const diffMs = trialEndsAt - now;
+    const daysLeft = Math.max(0, Math.ceil(diffMs / 86400000));
+
+    return daysLeft > 0 ? `TRIAL ${daysLeft}D LEFT` : 'TRIAL ENDED';
+  })();
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50">
@@ -201,6 +211,11 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
             <div className="hidden xs:block">
               <div className="flex items-center gap-2">
                 <p className="text-xs md:text-sm font-bold leading-none">{user?.name}</p>
+                {trialBadgeLabel && (
+                  <div className="flex items-center gap-0.5 rounded bg-gradient-to-r from-blue-600 to-purple-600 px-1.5 py-0.5 text-[9px] font-bold text-white md:text-[10px]">
+                    {trialBadgeLabel}
+                  </div>
+                )}
                 {user?.role === 'Contractor' && user?.isVerified && (
                   <div className="flex items-center gap-0.5 text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded text-[9px] md:text-[10px] font-bold">
                     <ShieldCheck size={10} className="fill-blue-500" />
