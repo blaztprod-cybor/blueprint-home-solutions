@@ -120,12 +120,11 @@ export default function DOBLeads() {
       : paginatedPermits;
 
     const lines = [
-      ['Borough', 'Address', 'ZIP', 'Street', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License', 'Contact Name', 'Phone'].join('\t'),
+      ['Borough', 'Address', 'ZIP', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License', 'Contact Name', 'Phone'].join('\t'),
       ...permitsToCopy.map((permit) => ([
         permit.borough,
         permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' '),
         permit.zip_code || 'Unavailable',
-        permit.street_name,
         permit.job_type,
         permit.permit_status,
         formatPermitDate(permit.issuance_date),
@@ -299,7 +298,7 @@ export default function DOBLeads() {
         </div>
 
         <div className="overflow-x-scroll pb-3">
-          <table className="w-full text-left border-collapse min-w-[2200px]">
+          <table className="w-full text-left border-collapse min-w-[2050px]">
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -314,7 +313,6 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Borough</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ZIP</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Street</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type / Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</th>
                 <th className="w-[195px] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
@@ -327,7 +325,7 @@ export default function DOBLeads() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-20 text-center">
+                  <td colSpan={11} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB Data...</p>
@@ -336,7 +334,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-20 text-center">
+                  <td colSpan={11} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No permits match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -373,9 +371,6 @@ export default function DOBLeads() {
                       <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
                         {permit.zip_code || 'Unavailable'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-slate-600">{permit.street_name || 'Unavailable'}</span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-2">
