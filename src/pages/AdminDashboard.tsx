@@ -303,7 +303,9 @@ const AdminDashboard = () => {
       onClick={() => setActiveTab(tab)}
       className={cn(
         'px-6 py-2.5 rounded-2xl text-sm font-bold transition-all',
-        activeTab === tab ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 border border-slate-200'
+        activeTab === tab
+          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
+          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
       )}
     >
       {label}
