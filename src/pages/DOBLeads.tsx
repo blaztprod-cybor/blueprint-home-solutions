@@ -286,7 +286,7 @@ export default function DOBLeads() {
             type="text"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder='Search "New C of O"'
+            placeholder="Search"
             className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary"
           />
         </label>
