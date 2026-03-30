@@ -249,7 +249,11 @@ async function main() {
 
   await mkdir(outputDir, { recursive: true });
   await writeFile(outputFile, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  await syncToSupabase(permits);
+  try {
+    await syncToSupabase(permits);
+  } catch (error) {
+    console.warn(`[PERMIT SYNC WARNING] ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   console.log(`Wrote ${permits.length} permits to ${outputFile}`);
 }

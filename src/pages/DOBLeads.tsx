@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 
 export default function DOBLeads() {
   const ITEMS_PER_PAGE = 100;
+  const PERMIT_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
   const [permits, setPermits] = useState<DOBPermit[]>([]);
   const [loading, setLoading] = useState(true);
   const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
@@ -24,7 +25,14 @@ export default function DOBLeads() {
       setPermits(data);
       setLoading(false);
     };
-    loadData();
+    void loadData();
+    const intervalId = window.setInterval(() => {
+      void loadData();
+    }, PERMIT_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const boroughOptions = ['All Boroughs', ...Array.from(new Set(

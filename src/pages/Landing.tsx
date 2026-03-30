@@ -10,6 +10,7 @@ import { projectCategories } from '../data/projectCategories';
 
 export default function Landing() {
   const PREVIEW_ITEMS_PER_PAGE = 20;
+  const PERMIT_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
   const featuredCategoryIds = ['roofs', 'bathrooms', 'kitchens', 'basements', 'windows', 'fencing', 'brickwork', 'floors'];
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +29,14 @@ export default function Landing() {
         setLoading(false);
       }
     };
-    loadData();
+    void loadData();
+    const intervalId = window.setInterval(() => {
+      void loadData();
+    }, PERMIT_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const previewTotalPages = Math.max(1, Math.ceil(permitData.length / PREVIEW_ITEMS_PER_PAGE));

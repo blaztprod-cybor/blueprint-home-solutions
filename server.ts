@@ -3,8 +3,32 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 dotenv.config();
+
+const execFileAsync = promisify(execFile);
+const PERMIT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+
+async function syncPermitFeed() {
+  try {
+    const { stdout, stderr } = await execFileAsync("node", ["scripts/fetch-permits.mjs"], {
+      cwd: process.cwd(),
+      env: process.env,
+    });
+
+    if (stdout.trim()) {
+      console.log(`[PERMIT SYNC] ${stdout.trim()}`);
+    }
+
+    if (stderr.trim()) {
+      console.warn(`[PERMIT SYNC WARNING] ${stderr.trim()}`);
+    }
+  } catch (error) {
+    console.error("[PERMIT SYNC ERROR]", error);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -230,6 +254,11 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  void syncPermitFeed();
+  setInterval(() => {
+    void syncPermitFeed();
+  }, PERMIT_SYNC_INTERVAL_MS);
 }
 
 startServer();
