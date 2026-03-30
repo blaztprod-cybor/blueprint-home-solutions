@@ -290,7 +290,6 @@ export default function StartProject() {
               {selectedService ? (
                 <div>
                   <h2 className="text-2xl font-black tracking-tight text-slate-950">{selectedService.title}</h2>
-                  <p className="text-sm font-medium text-slate-600">This project request is locked to the improvement you selected.</p>
                 </div>
               ) : (
                 <div>
