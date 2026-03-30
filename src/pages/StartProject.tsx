@@ -305,17 +305,12 @@ export default function StartProject() {
         <section className="space-y-6">
           <div className="rounded-[1.75rem] border border-primary/15 bg-primary/5 p-5 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-primary">Selected Improvement</p>
-            <div className="mt-3 flex items-center gap-4">
+            <div className="mt-3">
               {selectedService ? (
-                <>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
-                    <selectedService.icon size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black tracking-tight text-slate-950">{selectedService.title}</h2>
-                    <p className="text-sm font-medium text-slate-600">This project request is locked to the improvement you selected.</p>
-                  </div>
-                </>
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight text-slate-950">{selectedService.title}</h2>
+                  <p className="text-sm font-medium text-slate-600">This project request is locked to the improvement you selected.</p>
+                </div>
               ) : (
                 <div>
                   <h2 className="text-2xl font-black tracking-tight text-slate-950">Select an improvement first</h2>
