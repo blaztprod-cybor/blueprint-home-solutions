@@ -22,7 +22,6 @@ import { projectCategories as services } from '../data/projectCategories';
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/;
 const DIGIT_WORDS = new Set(['zero', 'oh', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']);
-const SQUARE_FOOTAGE_SERVICE_IDS = new Set(['bathrooms', 'kitchens', 'basements', 'floors']);
 
 const containsBlockedContactInfo = (value: string) => {
   if (!value) return false;
@@ -66,8 +65,6 @@ export default function StartProject() {
     email: user?.email || '',
     startDate: '',
     description: '',
-    lengthFt: '',
-    widthFt: '',
   });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,10 +75,6 @@ export default function StartProject() {
 
   const selectedService = services.find((service) => service.id === selectedCategoryId) ?? null;
   const selectedServiceTitles = selectedService ? [selectedService.title] : [];
-  const needsSquareFootage = SQUARE_FOOTAGE_SERVICE_IDS.has(selectedCategoryId);
-  const estimatedSquareFootage = needsSquareFootage
-    ? (Number(formData.lengthFt) || 0) * (Number(formData.widthFt) || 0)
-    : 0;
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -446,52 +439,6 @@ export default function StartProject() {
             </div>
           </div>
         </section>
-
-        {needsSquareFootage && (
-          <section className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
-                <Home size={20} />
-              </div>
-              <h2 className="text-xl font-bold tracking-tight">Estimated Room Size</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Length (ft)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  disabled={isSubmitted}
-                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-                  value={formData.lengthFt}
-                  onChange={e => setFormData({...formData, lengthFt: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Width (ft)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  disabled={isSubmitted}
-                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-                  value={formData.widthFt}
-                  onChange={e => setFormData({...formData, widthFt: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Estimated Square Footage</label>
-                <div className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-slate-900">
-                  {estimatedSquareFootage > 0 ? `${estimatedSquareFootage.toFixed(1)} sq ft` : 'Add room dimensions'}
-                </div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Calculator only. This estimate is not saved to the project.
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Media Upload */}
         <section className="space-y-6">
