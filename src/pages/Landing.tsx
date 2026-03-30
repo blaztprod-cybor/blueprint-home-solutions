@@ -156,11 +156,6 @@ export default function Landing() {
               </button>
             )}
           </div>
-          <div className="-mt-10 text-center md:-mt-16">
-            <p className="text-xl font-black leading-tight text-slate-900 md:text-3xl">
-              Home Improvement Marketplace
-            </p>
-          </div>
         </div>
       </nav>
 
@@ -175,8 +170,11 @@ export default function Landing() {
           >
             <div className="flex flex-col gap-4 items-center text-center">
               <div>
+                <p className="text-2xl font-black leading-tight text-slate-900 sm:text-3xl md:text-4xl">
+                  Home Improvement Marketplace
+                </p>
                 <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
-                  Select your improvement to start the process
+                  Select your improvement to start
                 </p>
               </div>
             </div>
@@ -278,7 +276,7 @@ export default function Landing() {
             className="relative order-1 mx-auto w-full max-w-full lg:order-2 lg:max-w-none lg:mx-0"
           >
             <p className="mx-auto mb-4 max-w-[18rem] text-center text-base font-black tracking-tight text-slate-700 sm:max-w-none sm:text-lg">
-              Hundreds of new residential and commercial leads updated daily
+              Hundreds of residential and commercial leads updated in real time.
             </p>
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
               <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
