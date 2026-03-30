@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Calendar,
@@ -54,10 +54,10 @@ export default function StartProject() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
-  const initialCategory = location.state?.category || searchParams.get('category') || '';
-  const [selectedServices, setSelectedServices] = useState<string[]>(
-    initialCategory ? [initialCategory] : []
-  );
+  const routeCategory = typeof location.state?.category === 'string'
+    ? location.state.category
+    : searchParams.get('category') || '';
+  const selectedCategoryId = services.some((service) => service.id === routeCategory) ? routeCategory : '';
   const [formData, setFormData] = useState({
     street: '',
     town: '',
@@ -76,13 +76,9 @@ export default function StartProject() {
   const [submittedProjectId, setSubmittedProjectId] = useState('');
   const redirectTimerRef = useRef<number | null>(null);
 
-  const selectedServiceTitles = useMemo(
-    () => services
-      .filter(service => selectedServices.includes(service.id))
-      .map(service => service.title),
-    [selectedServices]
-  );
-  const needsSquareFootage = selectedServices.some(service => SQUARE_FOOTAGE_SERVICE_IDS.has(service));
+  const selectedService = services.find((service) => service.id === selectedCategoryId) ?? null;
+  const selectedServiceTitles = selectedService ? [selectedService.title] : [];
+  const needsSquareFootage = SQUARE_FOOTAGE_SERVICE_IDS.has(selectedCategoryId);
   const estimatedSquareFootage = needsSquareFootage
     ? (Number(formData.lengthFt) || 0) * (Number(formData.widthFt) || 0)
     : 0;
@@ -106,14 +102,6 @@ export default function StartProject() {
     }
   }, [user?.email]);
 
-  useEffect(() => {
-    if (initialCategory) {
-      setSelectedServices([initialCategory]);
-    }
-  }, [initialCategory]);
-
-  const selectedService = services.find((service) => service.id === selectedServices[0]) ?? null;
-
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
@@ -128,7 +116,7 @@ export default function StartProject() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      const category = selectedServices[0] || initialCategory || '';
+      const category = selectedCategoryId;
       const signupParams = new URLSearchParams({
         role: 'homeowner',
         redirect: 'start-project',
@@ -150,8 +138,8 @@ export default function StartProject() {
     setIsSubmitting(true);
     
     try {
-      const projectTitle = selectedServices.length > 0 
-        ? `${services.find(s => s.id === selectedServices[0])?.title} Project`
+      const projectTitle = selectedService
+        ? `${selectedService.title} Project`
         : "New Home Project";
 
       // 1. Convert photos to base64 first (needed for both DB and Email)
@@ -172,7 +160,7 @@ export default function StartProject() {
         uid: user.id,
         title: projectTitle,
         description: formData.description,
-        category: selectedServices.length > 0 ? services.find(s => s.id === selectedServices[0])?.title : "General",
+        category: selectedService?.title || "General",
         status: 'New Open Project' as const,
         budget: 0,
         startDate: formData.startDate,
@@ -183,7 +171,7 @@ export default function StartProject() {
         },
         phone: formData.phone,
         email: formData.email || user.email,
-        services: selectedServices,
+        services: selectedCategoryId ? [selectedCategoryId] : [],
         photoCount: selectedPhotos.length,
         photos: photoBase64s.slice(0, 3), // Keep first 3 as preview
         createdAt: new Date().toISOString()
@@ -577,7 +565,7 @@ export default function StartProject() {
         <div className="pt-8">
           <button 
             type="submit"
-            disabled={isSubmitting || isSubmitted || selectedServices.length === 0}
+            disabled={isSubmitting || isSubmitted || !selectedCategoryId}
             className={cn(
               "w-full py-5 rounded-[2rem] font-black text-lg shadow-2xl transition-all flex items-center justify-center gap-3 disabled:cursor-not-allowed",
               isSubmitted 
