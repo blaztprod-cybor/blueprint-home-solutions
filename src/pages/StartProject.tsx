@@ -51,7 +51,7 @@ export default function StartProject() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, signup, resetPassword } = useAuth();
   
   const routeCategory = typeof location.state?.category === 'string'
     ? location.state.category
@@ -108,29 +108,45 @@ export default function StartProject() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      const category = selectedCategoryId;
-      const signupParams = new URLSearchParams({
-        role: 'homeowner',
-        redirect: 'start-project',
-      });
-
-      if (category) {
-        signupParams.set('category', category);
-      }
-
-      navigate(`/signup?${signupParams.toString()}`);
-      return;
-    }
 
     if (containsBlockedContactInfo(formData.description)) {
       setDescriptionError('Please remove phone numbers and email addresses from the project description.');
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      alert('Email is required to submit a project request.');
       return;
     }
     
     setIsSubmitting(true);
     
     try {
+      let activeUser = user;
+
+      if (!activeUser) {
+        const homeownerName = formData.email.trim().split('@')[0] || 'Homeowner';
+        const temporaryPassword = `Blueprint!${Math.random().toString(36).slice(-10)}A1`;
+
+        await signup(formData.email.trim(), temporaryPassword, homeownerName, 'Homeowner');
+        activeUser = {
+          id: auth.currentUser?.uid || '',
+          email: auth.currentUser?.email || formData.email.trim(),
+          name: homeownerName,
+          role: 'Homeowner',
+        };
+
+        if (!activeUser.id) {
+          throw new Error('Homeowner account creation did not complete.');
+        }
+
+        try {
+          await resetPassword(formData.email.trim());
+        } catch (resetError) {
+          console.error('Password reset email failed after auto-signup:', resetError);
+        }
+      }
+
       const projectTitle = selectedService
         ? `${selectedService.title} Project`
         : "New Home Project";
@@ -150,7 +166,7 @@ export default function StartProject() {
       // 2. Save to Firestore
       console.log("[StartProject] Attempting to save project to Firestore...");
       const projectData = {
-        uid: user.id,
+        uid: activeUser.id,
         title: projectTitle,
         description: formData.description,
         category: selectedService?.title || "General",
@@ -163,7 +179,7 @@ export default function StartProject() {
           zip: formData.zip
         },
         phone: formData.phone,
-        email: formData.email || user.email,
+        email: formData.email || activeUser.email,
         services: selectedCategoryId ? [selectedCategoryId] : [],
         photoCount: selectedPhotos.length,
         photos: photoBase64s.slice(0, 3), // Keep first 3 as preview
@@ -180,7 +196,7 @@ export default function StartProject() {
           addDoc(collection(db, 'projects', docRef.id, 'photos'), {
             url: base64,
             createdAt: new Date().toISOString(),
-            uid: user.id
+            uid: activeUser.id
           })
         )
       );
@@ -207,8 +223,8 @@ export default function StartProject() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              email: user.email,
-              name: user.name,
+              email: activeUser.email,
+              name: activeUser.name,
               projectTitle,
               startDate: formData.startDate,
               description: formData.description || `Project at ${formData.street}, ${formData.town} ${formData.zip}. Services: ${selectedServiceTitles.join(', ')}`,

@@ -19,6 +19,8 @@ import {
   getDocs,
   orderBy,
   query,
+  setDoc,
+  Timestamp,
   updateDoc,
 } from 'firebase/firestore';
 import { Project, User } from '../types';
@@ -47,6 +49,46 @@ type AdminProject = Project & {
 
 type AdminTab = 'users' | 'projects' | 'reviews';
 type AdminFilter = 'all' | 'verified' | 'unverified' | 'active' | 'completed' | 'flagged';
+type SubscriptionLevel = 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
+
+const SUBSCRIPTION_OPTIONS: SubscriptionLevel[] = ['none', 'trial', 'beginner', 'junior', 'pro'];
+
+function toIsoDateString(value: unknown) {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    try {
+      return ((value as { toDate: () => Date }).toDate()).toISOString();
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = {}) {
+  const nextUser = { ...user, ...overrides };
+
+  return Object.fromEntries(
+    Object.entries({
+      uid: nextUser.id || nextUser.uid,
+      email: nextUser.email,
+      role: nextUser.role,
+      name: nextUser.name,
+      avatar: nextUser.avatar,
+      isVerified: nextUser.isVerified ?? false,
+      licenseNumber: nextUser.licenseNumber,
+      licenseStatus: nextUser.licenseStatus,
+      isTradesman: nextUser.isTradesman,
+      trade: nextUser.trade,
+      subscriptionLevel: nextUser.subscriptionLevel || 'none',
+      createdAt: toIsoDateString((nextUser as unknown as { createdAt?: unknown }).createdAt),
+      updatedAt: new Date().toISOString(),
+    }).filter(([, value]) => value !== undefined)
+  );
+}
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/g;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -157,13 +199,17 @@ const AdminDashboard = () => {
   const toggleVerification = async (userId: string, currentStatus: boolean) => {
     setUpdatingId(userId);
     try {
-      const userRef = doc(db, 'users', userId);
+      const targetUser = users.find((entry) => entry.id === userId);
+      if (!targetUser) return;
+
       const nextStatus = !currentStatus;
-      await updateDoc(userRef, {
-        isVerified: nextStatus,
-        licenseStatus: nextStatus ? 'Active' : 'Pending',
-        updatedAt: new Date().toISOString(),
-      });
+      await setDoc(
+        doc(db, 'users', userId),
+        buildUserWritePayload(targetUser, {
+          isVerified: nextStatus,
+          licenseStatus: nextStatus ? 'Active' : 'Pending',
+        })
+      );
       setUsers((current) =>
         current.map((user) =>
           user.id === userId
@@ -187,15 +233,36 @@ const AdminDashboard = () => {
 
     setUpdatingId(user.id);
     try {
-      await updateDoc(doc(db, 'users', user.id), {
-        isDisabled: nextValue,
-        updatedAt: new Date().toISOString(),
-      });
+      await setDoc(
+        doc(db, 'users', user.id),
+        buildUserWritePayload(user, {
+          isDisabled: nextValue,
+        } as Partial<AdminUser>)
+      );
       setUsers((current) =>
         current.map((entry) => (entry.id === user.id ? { ...entry, isDisabled: nextValue } : entry))
       );
     } catch (error) {
       console.error('Error toggling user disabled state:', error);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const updateSubscriptionLevel = async (user: AdminUser, subscriptionLevel: SubscriptionLevel) => {
+    setUpdatingId(user.id);
+    try {
+      await setDoc(
+        doc(db, 'users', user.id),
+        buildUserWritePayload(user, {
+          subscriptionLevel,
+        })
+      );
+      setUsers((current) =>
+        current.map((entry) => (entry.id === user.id ? { ...entry, subscriptionLevel } : entry))
+      );
+    } catch (error) {
+      console.error('Error updating subscription level:', error);
     } finally {
       setUpdatingId(null);
     }
@@ -328,7 +395,7 @@ const AdminDashboard = () => {
             Moderate users, projects, and reviews from one place.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           {tabButton('users', 'Users')}
           {tabButton('projects', 'Projects')}
           {tabButton('reviews', 'Reviews')}
@@ -419,6 +486,7 @@ const AdminDashboard = () => {
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">User</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Role / License</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Verification</th>
+                    <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subscription</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
@@ -459,6 +527,23 @@ const AdminDashboard = () => {
                               Disabled
                             </div>
                           )}
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Level</p>
+                          <select
+                            value={user.subscriptionLevel || 'none'}
+                            onChange={(event) => updateSubscriptionLevel(user, event.target.value as SubscriptionLevel)}
+                            disabled={updatingId === user.id}
+                            className="h-10 min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary disabled:opacity-50"
+                          >
+                            {SUBSCRIPTION_OPTIONS.map((option) => (
+                              <option key={option} value={option}>
+                                {option.toUpperCase()}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </td>
                       <td className="px-8 py-5 text-right">

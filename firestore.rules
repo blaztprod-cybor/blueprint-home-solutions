@@ -104,13 +104,18 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'email', 'role', 'name', 'avatar', 'isVerified', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'email', 'role', 'name', 'avatar', 'isVerified', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
         data.email is string && isValidEmail(data.email) &&
         data.role in ['admin', 'Contractor', 'Homeowner'] &&
         (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
         (!('avatar' in data) || (data.avatar is string && data.avatar.size() < 1048576)) &&
         (!('isVerified' in data) || data.isVerified is bool) &&
+        (!('licenseNumber' in data) || data.licenseNumber is string) &&
+        (!('licenseStatus' in data) || data.licenseStatus in ['Active', 'Pending', 'Expired', 'Invalid']) &&
+        (!('isTradesman' in data) || data.isTradesman is bool) &&
+        (!('trade' in data) || data.trade is string) &&
+        (!('subscriptionLevel' in data) || data.subscriptionLevel in ['none', 'trial', 'beginner', 'junior', 'pro']) &&
         (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
     }

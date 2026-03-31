@@ -126,6 +126,15 @@ function getDerivedTrialFields(role: UserRole, createdAt?: string) {
   };
 }
 
+function getDerivedSubscriptionLevel(role: UserRole, createdAt?: string) {
+  if (role !== 'Contractor') return 'none' as const;
+
+  if (!createdAt) return 'trial' as const;
+
+  const trialEndsAt = new Date(getTrialWindow(createdAt).trialEndsAt).getTime();
+  return trialEndsAt > Date.now() ? ('trial' as const) : ('none' as const);
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -160,6 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
               isVerified: data.isVerified ?? false,
+              subscriptionLevel: data.subscriptionLevel || getDerivedSubscriptionLevel(role, data.createdAt),
               ...getDerivedTrialFields(role, data.createdAt),
             };
             setUser(userData);
@@ -177,6 +187,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
               isVerified: false,
+              subscriptionLevel: getDerivedSubscriptionLevel(role),
               ...getDerivedTrialFields(role),
             };
             setUser(userData);
@@ -221,6 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: role,
           avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
           isVerified: false,
+          subscriptionLevel: getDerivedSubscriptionLevel(role),
           createdAt: new Date().toISOString(),
         });
         
@@ -231,6 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: role,
           avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
           isVerified: false,
+          subscriptionLevel: getDerivedSubscriptionLevel(role),
           ...getDerivedTrialFields(role),
         };
         setUser(userData);
@@ -281,6 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? isTradesman : undefined,
         trade: finalRole === 'Contractor' ? trade : undefined,
+        subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         ...getDerivedTrialFields(finalRole),
       };
 
@@ -299,6 +313,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? isTradesman : undefined,
         trade: finalRole === 'Contractor' ? trade : undefined,
+        subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         createdAt: new Date().toISOString(),
       });
 

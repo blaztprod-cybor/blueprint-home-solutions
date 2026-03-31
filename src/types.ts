@@ -104,4 +104,5 @@ export interface User {
   accountPlan?: 'trial' | 'standard';
   trialStartedAt?: string;
   trialEndsAt?: string;
+  subscriptionLevel?: 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
 }
