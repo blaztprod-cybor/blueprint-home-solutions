@@ -177,6 +177,29 @@ service cloud.firestore {
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
+    function isValidLead(data) {
+      return hasRequiredFields(['name', 'email', 'phone', 'category', 'description', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['name', 'email', 'phone', 'category', 'description', 'startDate', 'status', 'location', 'photoCount', 'photos', 'createdAt', 'updatedAt']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 120 &&
+        data.email is string && isValidEmail(data.email) &&
+        data.phone is string && data.phone.size() > 0 && data.phone.size() < 40 &&
+        data.category is string && data.category.size() > 0 && data.category.size() < 120 &&
+        data.description is string && data.description.size() > 0 && data.description.size() < 5000 &&
+        data.status in ['New Lead', 'Contacted', 'Converted', 'Closed'] &&
+        (!('startDate' in data) || data.startDate is string) &&
+        (!('location' in data) || (
+          data.location is map &&
+          data.location.keys().hasOnly(['street', 'town', 'zip']) &&
+          (!('street' in data.location) || data.location.street is string) &&
+          (!('town' in data.location) || data.location.town is string) &&
+          (!('zip' in data.location) || data.location.zip is string)
+        )) &&
+        (!('photoCount' in data) || data.photoCount is number) &&
+        (!('photos' in data) || data.photos is list) &&
+        data.createdAt is string && isValidDateString(data.createdAt) &&
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -219,6 +242,11 @@ service cloud.firestore {
       allow update: if isAuthenticated() && isValidReview(request.resource.data) && 
                       (resource.data.authorId == request.auth.uid || isAdmin());
       allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin());
+    }
+
+    match /leads/{leadId} {
+      allow create: if isValidLead(request.resource.data);
+      allow read, update, delete: if isAdmin();
     }
     
     match /{path=**} {
