@@ -347,14 +347,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     try {
       const updatedUser = { ...user, ...data };
+      const { id: _ignoredId, ...firestoreUserData } = updatedUser;
       
       // If name changed but no avatar provided, update initials avatar if it was using initials
       if (data.name && !data.avatar && user.avatar?.startsWith('data:image/svg+xml')) {
         updatedUser.avatar = getInitialsAvatar(data.name);
+        firestoreUserData.avatar = updatedUser.avatar;
       }
 
       await setDoc(doc(db, 'users', user.id), {
-        ...updatedUser,
+        ...firestoreUserData,
         uid: user.id, // Ensure uid is present
         updatedAt: new Date().toISOString()
       }, { merge: true });

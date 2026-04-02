@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, Hammer, Eye, EyeOff, Camera } from 'lucide-react';
+import { Building2, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, Hammer, Eye, EyeOff, Camera, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { cn } from '../lib/utils';
 import { UserRole } from '../types';

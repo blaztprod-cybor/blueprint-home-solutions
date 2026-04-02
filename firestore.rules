@@ -80,6 +80,10 @@ service cloud.firestore {
           (request.auth.token.email == "blaztprod@gmail.com" && request.auth.token.email_verified == true));
     }
 
+    function isContractor() {
+      return isAuthenticated() && currentUserData().role == 'Contractor';
+    }
+
     function currentUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -91,6 +95,27 @@ service cloud.firestore {
         currentUserData().isVerified == true &&
         currentUserData().subscriptionLevel in ['trial', 'beginner', 'junior', 'pro']
       );
+    }
+
+    function isAllowedProjectWriter() {
+      return isAdmin() ||
+        (isAuthenticated() && resource.data.uid == request.auth.uid) ||
+        (
+          isContractor() &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.title == resource.data.title &&
+          request.resource.data.description == resource.data.description &&
+          request.resource.data.category == resource.data.category &&
+          request.resource.data.budget == resource.data.budget &&
+          request.resource.data.startDate == resource.data.startDate &&
+          request.resource.data.location == resource.data.location &&
+          request.resource.data.phone == resource.data.phone &&
+          request.resource.data.services == resource.data.services &&
+          request.resource.data.squareFootage == resource.data.squareFootage &&
+          request.resource.data.dimensions == resource.data.dimensions &&
+          request.resource.data.selectedContractorId == resource.data.selectedContractorId &&
+          request.resource.data.createdAt == resource.data.createdAt
+        );
     }
     
     function hasRequiredFields(fields) {
@@ -117,17 +142,23 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'email', 'role', 'name', 'avatar', 'isVerified', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'avatar', 'rating', 'isVerified', 'isDisabled', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
+        (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
         data.role in ['admin', 'Contractor', 'Homeowner'] &&
         (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
         (!('avatar' in data) || (data.avatar is string && data.avatar.size() < 1048576)) &&
+        (!('rating' in data) || data.rating is number) &&
         (!('isVerified' in data) || data.isVerified is bool) &&
+        (!('isDisabled' in data) || data.isDisabled is bool) &&
         (!('licenseNumber' in data) || data.licenseNumber is string) &&
         (!('licenseStatus' in data) || data.licenseStatus in ['Active', 'Pending', 'Expired', 'Invalid']) &&
         (!('isTradesman' in data) || data.isTradesman is bool) &&
         (!('trade' in data) || data.trade is string) &&
+        (!('accountPlan' in data) || data.accountPlan in ['trial', 'standard']) &&
+        (!('trialStartedAt' in data) || isValidDateString(data.trialStartedAt)) &&
+        (!('trialEndsAt' in data) || isValidDateString(data.trialEndsAt)) &&
         (!('subscriptionLevel' in data) || data.subscriptionLevel in ['none', 'trial', 'beginner', 'junior', 'pro']) &&
         (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
@@ -250,7 +281,8 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow get: if isAuthenticated();
+      allow list: if isAdmin();
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
                       (isOwner(userId) && request.resource.data.role != 'admin' || isAdmin());
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
@@ -262,7 +294,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidProject(request.resource.data) && 
                       (request.resource.data.uid == request.auth.uid || isAdmin());
-      allow update: if isAuthenticated() && isValidProject(request.resource.data);
+      allow update: if isAuthenticated() && isValidProject(request.resource.data) && isAllowedProjectWriter();
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
 
       match /photos/{photoId} {

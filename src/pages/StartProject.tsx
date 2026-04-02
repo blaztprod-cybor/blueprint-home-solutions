@@ -15,7 +15,7 @@ import {
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import { projectCategories as services } from '../data/projectCategories';
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
@@ -44,6 +44,24 @@ const containsBlockedContactInfo = (value: string) => {
   return false;
 };
 
+const SUBMIT_TIMEOUT_MS = 15000;
+
+function getSubmissionErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message.includes('permission-denied')) {
+      return 'Submission was blocked by Firestore permissions. Refresh the app and try again.';
+    }
+    if (error.message.includes('unavailable') || error.message.includes('network')) {
+      return 'Network issue while submitting. Check your connection and try again.';
+    }
+    if (error.message.includes('deadline-exceeded') || error.message.includes('timed out')) {
+      return 'Submission took too long. Please try again without photos first.';
+    }
+  }
+
+  return 'Failed to submit request. Please try again without photos first.';
+}
+
 export default function StartProject() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,6 +88,7 @@ export default function StartProject() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [descriptionError, setDescriptionError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -97,6 +116,7 @@ export default function StartProject() {
       return;
     }
 
+    setSubmitError('');
     setIsSubmitting(true);
 
     try {
@@ -113,8 +133,10 @@ export default function StartProject() {
 
       const createdAt = new Date().toISOString();
       const leadRef = doc(collection(db, 'leads'));
+      const marketplaceRef = doc(db, 'lead_marketplace', leadRef.id);
+      const batch = writeBatch(db);
 
-      await setDoc(leadRef, {
+      batch.set(leadRef, {
         name: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
@@ -132,7 +154,7 @@ export default function StartProject() {
         createdAt,
       });
 
-      await setDoc(doc(db, 'lead_marketplace', leadRef.id), {
+      batch.set(marketplaceRef, {
         leadId: leadRef.id,
         category: selectedService?.title || 'General',
         description: formData.description.trim(),
@@ -146,12 +168,23 @@ export default function StartProject() {
         createdAt,
       });
 
+      await Promise.race([
+        batch.commit(),
+        new Promise((_, reject) => {
+          window.setTimeout(() => reject(new Error('timed out')), SUBMIT_TIMEOUT_MS);
+        }),
+      ]);
+
       setIsSubmitted(true);
       navigate('/thank-you');
     } catch (error) {
       console.error('Error creating lead:', error);
-      handleFirestoreError(error, OperationType.WRITE, 'leads');
-      alert('Failed to submit request. Please try again.');
+      try {
+        handleFirestoreError(error, OperationType.WRITE, 'leads');
+      } catch (loggedError) {
+        console.error('Lead submission logging error:', loggedError);
+      }
+      setSubmitError(getSubmissionErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -215,6 +248,7 @@ export default function StartProject() {
               Please do not include phone numbers or email addresses in the project description.
             </p>
             {descriptionError && <p className="text-sm font-bold text-red-600">{descriptionError}</p>}
+            {submitError && <p className="text-sm font-bold text-red-600">{submitError}</p>}
           </div>
         </section>
 
