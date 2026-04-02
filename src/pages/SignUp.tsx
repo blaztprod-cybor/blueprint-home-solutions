@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Building2, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, ShieldCheck, Hammer, Eye, EyeOff, Camera } from 'lucide-react';
+import { Building2, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, Hammer, Eye, EyeOff, Camera } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { cn } from '../lib/utils';
 import { UserRole } from '../types';
 
 export default function SignUp() {
   const [searchParams] = useSearchParams();
-  const requestedRole = searchParams.get('role');
   const redirectTarget = searchParams.get('redirect');
   const category = searchParams.get('category');
-  const initialRole: UserRole = requestedRole === 'homeowner' ? 'Homeowner' : 'Contractor';
-  const [role, setRole] = useState<UserRole>(initialRole);
+  const [role] = useState<UserRole>('Contractor');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
@@ -187,49 +185,16 @@ export default function SignUp() {
             </a>
           </Link>
           <h2 className="text-3xl font-black tracking-tight mb-2">Create Account</h2>
-          <p className="text-slate-500 font-medium">Join the network and start building your vision</p>
+          <p className="text-slate-500 font-medium">Join the Home Pro network</p>
         </div>
 
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50">
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <button 
-              type="button"
-              onClick={() => setRole('Contractor')}
-              className={cn(
-                "p-4 rounded-2xl border-2 transition-all text-left group",
-                role === 'Contractor' ? "border-primary bg-primary/5 shadow-lg shadow-primary/5" : "border-slate-100 bg-slate-50 hover:border-slate-200 hover:bg-white"
-              )}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-all duration-300", 
-                role === 'Contractor' 
-                  ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                  : "bg-white text-slate-400 group-hover:text-primary group-hover:scale-110 group-hover:shadow-md"
-              )}>
-                <Hammer size={20} />
-              </div>
-              <p className={cn("font-bold text-sm transition-colors", role === 'Contractor' ? "text-primary" : "text-slate-600 group-hover:text-primary")}>Contractor</p>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Grow your business</p>
-            </button>
-            <button 
-              type="button"
-              onClick={() => setRole('Homeowner')}
-              className={cn(
-                "p-4 rounded-2xl border-2 transition-all text-left group",
-                role === 'Homeowner' ? "border-primary bg-primary/5 shadow-lg shadow-primary/5" : "border-slate-100 bg-slate-50 hover:border-slate-200 hover:bg-white"
-              )}
-            >
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-all duration-300", 
-                role === 'Homeowner' 
-                  ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                  : "bg-white text-slate-400 group-hover:text-primary group-hover:scale-110 group-hover:shadow-md"
-              )}>
-                <ShieldCheck size={20} />
-              </div>
-              <p className={cn("font-bold text-sm transition-colors", role === 'Homeowner' ? "text-primary" : "text-slate-600 group-hover:text-primary")}>Homeowner</p>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Hire a professional</p>
-            </button>
+          <div className="mb-8 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-left">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/20">
+              <Hammer size={20} />
+            </div>
+            <p className="font-bold text-sm text-primary">Contractor / Tradesman</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Grow your business</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

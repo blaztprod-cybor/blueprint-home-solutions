@@ -3,11 +3,11 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldCheck, 
-  Users, 
+  ClipboardList, 
   Zap, 
   Leaf, 
   Home, 
-  Thermometer,
+  PlugZap,
   ChevronRight,
   ArrowRight,
   ArrowLeft
@@ -23,11 +23,11 @@ const services = [
     details: "Ensure your home meets all local building codes and safety regulations. We specialize in resolving DOB and HPD violations."
   },
   {
-    title: "Senior Services",
-    description: "Special assistance programs, such as for senior home repairs.",
-    icon: Users,
+    title: "Project Management",
+    description: "Coordinating inspections, scopes, schedules, and contractors from start to finish.",
+    icon: ClipboardList,
     color: "bg-purple-50 text-purple-600 border-purple-100",
-    details: "Dedicated support for aging-in-place modifications and essential maintenance for senior homeowners."
+    details: "Keep a project organized with a single point of coordination for planning, scheduling, and execution."
   },
   {
     title: "Energy Efficiency",
@@ -51,11 +51,11 @@ const services = [
     details: "Enhance your home's curb appeal and outdoor living space with professional exterior renovations."
   },
   {
-    title: "HVAC",
-    description: "Installing or repairing air conditioning and heating systems.",
-    icon: Thermometer,
+    title: "Electrical",
+    description: "Installing, repairing, and upgrading wiring, panels, fixtures, and service connections.",
+    icon: PlugZap,
     color: "bg-cyan-50 text-cyan-600 border-cyan-100",
-    details: "Maintain year-round comfort with expert installation and maintenance of heating and cooling systems."
+    details: "Handle service upgrades, rewiring, troubleshooting, and code-compliant electrical improvements."
   }
 ];
 

@@ -6,7 +6,6 @@ import {
   Briefcase, 
   CheckSquare, 
   FileText, 
-  Search, 
   Settings, 
   Bell, 
   Menu, 
@@ -33,11 +32,10 @@ import ForgotPassword from './pages/ForgotPassword';
 import Clients from './pages/Clients';
 import Projects from './pages/Projects';
 import Invoices from './pages/Invoices';
-import Marketplace from './pages/Marketplace';
 import ProfileSettings from './pages/ProfileSettings';
 import Reviews from './pages/Reviews';
-import HomeownerDashboard from './pages/HomeownerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminLeads from './pages/AdminLeads';
 import Services from './pages/Services';
 import HowItWorks from './pages/HowItWorks';
 import TermsOfService from './pages/TermsOfService';
@@ -51,6 +49,7 @@ import AboutUs from './pages/AboutUs';
 import DOBLeads from './pages/DOBLeads';
 import HomeProTrial from './pages/HomeProTrial';
 import PermitMap from './pages/PermitMap';
+import ContractorLeads from './pages/ContractorLeads';
 
 const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   <Link
@@ -84,25 +83,26 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
 
   const contractorLinks = [
     { to: "/projects", icon: Briefcase, label: "Projects" },
+    { to: "/lead-marketplace", icon: MessageSquare, label: "Lead Marketplace" },
     { to: "/permit-feed", icon: Building2, label: "Permit Feed" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
     { to: "/invoices", icon: FileText, label: "Invoices" },
   ];
 
-  const homeownerLinks = [
-    { to: "/marketplace", icon: Search, label: "Marketplace" },
+  const generalLinks = [
     { to: "/projects", icon: Briefcase, label: "My Projects" },
     { to: "/invoices", icon: FileText, label: "Invoices" },
   ];
 
   const adminLinks = [
     { to: "/admin", icon: ShieldCheck, label: "Admin Dashboard" },
+    { to: "/admin/leads", icon: MessageSquare, label: "Lead Intake" },
     { to: "/projects", icon: Briefcase, label: "All Projects" },
     { to: "/clients", icon: Users, label: "All Users" },
   ];
 
-  const links = user?.role === 'admin' ? adminLinks : (user?.role === 'Contractor' ? contractorLinks : homeownerLinks);
+  const links = user?.role === 'admin' ? adminLinks : (user?.role === 'Contractor' ? contractorLinks : generalLinks);
 
   return (
     <>
@@ -140,7 +140,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
 
           <nav className="flex-1 px-6 space-y-1 overflow-y-auto">
             <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">
-              {user?.role === 'admin' ? 'System Admin' : (user?.role === 'Contractor' ? 'Home Pro Portal' : 'Homeowner Portal')}
+              {user?.role === 'admin' ? 'System Admin' : (user?.role === 'Contractor' ? 'Home Pro Portal' : 'Blueprint Account')}
             </p>
             {links.map((link) => (
               <SidebarLink 
@@ -179,9 +179,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     navigate('/thank-you');
   };
 
-  const showStartNew = user?.role === 'Homeowner' && 
-    location.pathname !== '/start-project' && 
-    location.pathname !== '/invoices';
+  const showStartNew = false;
   const trialBadgeLabel = (() => {
     if (user?.role !== 'Contractor' || user.accountPlan !== 'trial' || !user.trialEndsAt) return '';
 
@@ -231,7 +229,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
                 )}
               </div>
               <p className="text-[9px] md:text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider">
-                {user?.role === 'admin' ? 'System Administrator' : (user?.role === 'Contractor' ? 'Pro Contractor' : 'Homeowner')}
+                {user?.role === 'admin' ? 'System Administrator' : (user?.role === 'Contractor' ? 'Pro Contractor' : 'Blueprint Account')}
               </p>
             </div>
           </div>
@@ -303,7 +301,7 @@ export default function App() {
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/contractor-paywall" element={<ContractorPaywall />} />
-        <Route path="/home-pro-trial" element={<HomeProTrial />} />
+        <Route path="/home-pro-trial" element={<Navigate to="/contractor-paywall" replace />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/start-project" element={<PublicStartProjectPage />} />
 
@@ -312,8 +310,8 @@ export default function App() {
           <ProtectedRoute>
             <DashboardLayout>
               <Routes>
-                {user?.role === 'Homeowner' && <Route path="/marketplace" element={<Marketplace />} />}
                 <Route path="/projects" element={<Projects />} />
+                <Route path="/lead-marketplace" element={<ContractorLeads />} />
                 <Route path="/permit-feed" element={<DOBLeads />} />
                 <Route path="/permit-map" element={<PermitMap />} />
                 <Route path="/clients" element={<Clients />} />
@@ -323,9 +321,15 @@ export default function App() {
                 <Route path="/services" element={<Services />} />
                 <Route path="/start-project" element={<StartProject />} />
                 <Route path="/homeowner-dashboard" element={<Navigate to="/projects" replace />} />
+                <Route path="/marketplace" element={<Navigate to="/" replace />} />
                 <Route path="/admin" element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <AdminDashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/admin/leads" element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminLeads />
                   </ProtectedRoute>
                 } />
                 {/* Default redirects based on role */}

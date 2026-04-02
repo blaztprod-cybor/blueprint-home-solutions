@@ -79,6 +79,19 @@ service cloud.firestore {
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
           (request.auth.token.email == "blaztprod@gmail.com" && request.auth.token.email_verified == true));
     }
+
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function canAccessLeadMarketplace() {
+      return isAdmin() || (
+        isAuthenticated() &&
+        currentUserData().role == 'Contractor' &&
+        currentUserData().isVerified == true &&
+        currentUserData().subscriptionLevel in ['trial', 'beginner', 'junior', 'pro']
+      );
+    }
     
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
@@ -200,6 +213,38 @@ service cloud.firestore {
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
     }
 
+    function isValidLeadMarketplace(data, leadId) {
+      return hasRequiredFields(['leadId', 'category', 'description', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['leadId', 'category', 'description', 'status', 'location', 'photoCount', 'photos', 'createdAt', 'updatedAt']) &&
+        data.leadId is string && data.leadId == leadId &&
+        data.category is string && data.category.size() > 0 && data.category.size() < 120 &&
+        data.description is string && data.description.size() > 0 && data.description.size() < 5000 &&
+        data.status in ['Open', 'Requested', 'Assigned', 'Closed'] &&
+        (!('location' in data) || (
+          data.location is map &&
+          data.location.keys().hasOnly(['town', 'zip']) &&
+          (!('town' in data.location) || data.location.town is string) &&
+          (!('zip' in data.location) || data.location.zip is string)
+        )) &&
+        (!('photoCount' in data) || data.photoCount is number) &&
+        (!('photos' in data) || data.photos is list) &&
+        data.createdAt is string && isValidDateString(data.createdAt) &&
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+    }
+
+    function isValidLeadInquiry(data) {
+      return hasRequiredFields(['leadId', 'contractorId', 'contractorName', 'contractorEmail', 'message', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['leadId', 'contractorId', 'contractorName', 'contractorEmail', 'message', 'status', 'createdAt', 'updatedAt']) &&
+        data.leadId is string && data.leadId.size() > 0 &&
+        data.contractorId is string && data.contractorId == request.auth.uid &&
+        data.contractorName is string && data.contractorName.size() > 0 && data.contractorName.size() < 120 &&
+        data.contractorEmail is string && isValidEmail(data.contractorEmail) &&
+        data.message is string && data.message.size() > 0 && data.message.size() < 4000 &&
+        data.status in ['Requested', 'Reviewed', 'Matched', 'Closed'] &&
+        data.createdAt is string && isValidDateString(data.createdAt) &&
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -247,6 +292,18 @@ service cloud.firestore {
     match /leads/{leadId} {
       allow create: if isValidLead(request.resource.data);
       allow read, update, delete: if isAdmin();
+    }
+
+    match /lead_marketplace/{leadId} {
+      allow create: if isValidLeadMarketplace(request.resource.data, leadId);
+      allow read: if canAccessLeadMarketplace();
+      allow update, delete: if isAdmin() && isValidLeadMarketplace(request.resource.data, leadId);
+    }
+
+    match /lead_inquiries/{inquiryId} {
+      allow create: if canAccessLeadMarketplace() && isValidLeadInquiry(request.resource.data);
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.contractorId == request.auth.uid);
+      allow update, delete: if isAdmin() && isValidLeadInquiry(request.resource.data);
     }
     
     match /{path=**} {

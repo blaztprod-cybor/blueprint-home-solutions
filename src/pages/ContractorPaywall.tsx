@@ -6,25 +6,34 @@ const plans = [
     name: 'Two Weeks Free',
     price: 'Free',
     term: '14 days',
-    description: 'One borough with email alerts included during the trial period.'
+    description: 'One borough with email alerts included during the trial period.',
+    ctaLabel: 'Start Free Trial',
+    ctaLink: '/signup?role=contractor',
+    isActive: true,
   },
   {
     name: 'Beginner',
     price: '$149',
     term: 'per month',
-    description: 'One borough with email alerts.'
+    description: 'One borough with email alerts.',
+    ctaLabel: 'Coming Soon',
+    isActive: false,
   },
   {
     name: 'Junior',
     price: '$249',
     term: 'per month',
-    description: 'Two boroughs with email alerts.'
+    description: 'Two boroughs with email alerts.',
+    ctaLabel: 'Coming Soon',
+    isActive: false,
   },
   {
     name: 'Pro',
     price: '$449',
     term: 'per month',
-    description: 'Five boroughs with email alerts.'
+    description: 'Five boroughs with email alerts.',
+    ctaLabel: 'Coming Soon',
+    isActive: false,
   }
 ];
 
@@ -74,9 +83,18 @@ export default function ContractorPaywall() {
                 <span className="pb-1 text-sm font-bold text-slate-400">{plan.term}</span>
               </div>
               <p className="mt-4 text-sm font-medium leading-6 text-slate-600">{plan.description}</p>
-              <button className="mt-8 w-full rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                Choose Plan
-              </button>
+              {plan.isActive ? (
+                <Link
+                  to={plan.ctaLink}
+                  className="mt-8 block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 text-center text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {plan.ctaLabel}
+                </Link>
+              ) : (
+                <div className="mt-8 w-full rounded-2xl border border-slate-200 bg-slate-100 px-6 py-4 text-center text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                  {plan.ctaLabel}
+                </div>
+              )}
             </div>
           ))}
         </div>

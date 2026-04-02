@@ -87,6 +87,54 @@ export interface DOBPermit {
   phone?: string;
 }
 
+export interface Lead {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  category: string;
+  description: string;
+  startDate?: string;
+  status: 'New Lead' | 'Contacted' | 'Converted' | 'Closed';
+  location?: {
+    street?: string;
+    town?: string;
+    zip?: string;
+  };
+  photoCount?: number;
+  photos?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface LeadMarketplaceItem {
+  id: string;
+  leadId: string;
+  category: string;
+  description: string;
+  status: 'Open' | 'Requested' | 'Assigned' | 'Closed';
+  location?: {
+    town?: string;
+    zip?: string;
+  };
+  photoCount?: number;
+  photos?: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface LeadInquiry {
+  id: string;
+  leadId: string;
+  contractorId: string;
+  contractorName: string;
+  contractorEmail: string;
+  message: string;
+  status: 'Requested' | 'Reviewed' | 'Matched' | 'Closed';
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export type UserRole = 'Homeowner' | 'Contractor' | 'admin';
 
 export interface User {

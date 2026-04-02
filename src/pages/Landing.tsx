@@ -11,17 +11,17 @@ import { projectCategories } from '../data/projectCategories';
 export default function Landing() {
   const PREVIEW_ITEMS_PER_PAGE = 20;
   const PERMIT_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
-  const featuredCategoryIds = ['roofs', 'bathrooms', 'kitchens', 'basements', 'windows', 'fencing', 'brickwork', 'floors'];
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [permitData, setPermitData] = useState<DOBPermit[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewPage, setPreviewPage] = useState(1);
+  const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const data = await fetchDOBPermits(1000);
+        const data = await fetchDOBPermits(5000);
         setPermitData(data);
       } catch (error) {
         console.error('Error loading permit data:', error);
@@ -40,21 +40,36 @@ export default function Landing() {
   }, []);
 
   const previewTotalPages = Math.max(1, Math.ceil(permitData.length / PREVIEW_ITEMS_PER_PAGE));
-  const previewRows = permitData.slice(
+  const boroughOptions = ['All Boroughs', ...Array.from(new Set(
+    permitData
+      .map((permit) => permit.borough)
+      .filter(Boolean)
+  )).sort()];
+
+  const filteredPermitData = permitData.filter((permit) => (
+    boroughFilter === 'All Boroughs' || permit.borough === boroughFilter
+  ));
+
+  const filteredPreviewTotalPages = Math.max(1, Math.ceil(filteredPermitData.length / PREVIEW_ITEMS_PER_PAGE));
+  const previewRows = filteredPermitData.slice(
     (previewPage - 1) * PREVIEW_ITEMS_PER_PAGE,
     previewPage * PREVIEW_ITEMS_PER_PAGE
   );
 
   const previewPages = Array.from(
-    { length: Math.min(5, previewTotalPages) },
+    { length: Math.min(5, filteredPreviewTotalPages) },
     (_, index) => {
       const startPage = Math.min(
         Math.max(1, previewPage - 2),
-        Math.max(1, previewTotalPages - 4)
+        Math.max(1, filteredPreviewTotalPages - 4)
       );
       return startPage + index;
     }
   );
+
+  useEffect(() => {
+    setPreviewPage(1);
+  }, [boroughFilter]);
 
   const formatPermitDate = (value: string) => {
     if (!value) return 'N/A';
@@ -65,16 +80,16 @@ export default function Landing() {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/');
+    navigate('/thank-you');
   };
 
-  const footerMarketplaceLink = user?.role === 'Contractor' ? '/contractor-paywall' : '/contractor-paywall';
-  const featuredCategories = projectCategories.filter((category) => featuredCategoryIds.includes(category.id));
-  const homeProCta = user?.role === 'Contractor'
-    ? { to: '/projects', label: 'Home Pro Portal' }
-    : user?.role === 'Homeowner'
-      ? { to: '/projects', label: 'Homeowner Portal' }
-      : { to: '/home-pro-trial', label: 'Sign Up as a Home Professional' };
+  const homeProCta = user?.role === 'admin'
+    ? { to: '/admin', label: 'Admin Dashboard' }
+    : user?.role === 'Contractor'
+      ? { to: '/projects', label: 'Home Pro Portal' }
+      : { to: '/contractor-paywall', label: 'Sign Up as a Home Professional' };
+  const topRowCategories = projectCategories.slice(0, 8);
+  const bottomRowCategories = projectCategories.slice(8, 16);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-slate-50">
@@ -174,57 +189,75 @@ export default function Landing() {
                   Home Improvement Marketplace
                 </p>
                 <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
-                  Select your improvement to start
+                  Select a Category to Start
                 </p>
               </div>
             </div>
 
-            <div className="overflow-x-auto pb-3">
-              <div className="flex min-w-max justify-center gap-3 px-4">
-                {featuredCategories.map((category) => {
-                  const cardContent = (
-                    <div className="space-y-3">
-                      <div className="relative h-32 overflow-hidden rounded-[1.2rem]">
+            <div className="rounded-[2rem] border border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur-sm">
+              <div className="space-y-4">
+                {[topRowCategories, bottomRowCategories].map((row, rowIndex) => (
+                  <div
+                    key={rowIndex}
+                    className={cn(
+                      "grid justify-center gap-3",
+                      rowIndex === 0
+                        ? "grid-cols-2 sm:grid-cols-4 lg:grid-cols-8"
+                        : "grid-cols-2 sm:grid-cols-4 lg:grid-cols-8"
+                    )}
+                  >
+                    {row.map((category) => {
+                      const cardContent = (
+                        <div className="space-y-3">
+                          <Link
+                            to={`/start-project?category=${encodeURIComponent(category.id)}`}
+                            className="group block"
+                            aria-label={`Select ${category.title}`}
+                          >
+                            <div className="relative h-24 overflow-hidden rounded-[1.2rem]">
+                              <div
+                                className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04]"
+                                style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
+                              />
+                              <div className={cn(
+                                "absolute inset-0 transition-colors",
+                                user?.role === 'Contractor'
+                                  ? "bg-slate-950/30"
+                                  : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)] group-hover:bg-[linear-gradient(180deg,rgba(37,99,235,0.04)_0%,rgba(124,58,237,0.08)_45%,rgba(15,23,42,0.22)_100%)]"
+                              )} />
+                              {!user || user.role !== 'Contractor' ? (
+                                <div className="absolute inset-0 rounded-[1.2rem] border border-white/20" />
+                              ) : null}
+                            </div>
+                          </Link>
+                          <p className="truncate text-center text-[10px] font-black uppercase tracking-[0.12em] text-slate-700">
+                            {category.title}
+                          </p>
+                        </div>
+                      );
+
+                      if (user?.role === 'Contractor') {
+                        return (
+                          <div
+                            key={category.id}
+                            className="group w-[108px] cursor-not-allowed text-left text-slate-400"
+                          >
+                            {cardContent}
+                          </div>
+                        );
+                      }
+
+                      return (
                         <div
-                          className="absolute inset-0 bg-cover bg-center brightness-[1.14] saturate-[1.18] contrast-[1.04]"
-                          style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
-                        />
-                        <div className={cn(
-                          "absolute inset-0",
-                          user?.role === 'Contractor'
-                            ? "bg-slate-950/30"
-                            : "bg-[linear-gradient(180deg,rgba(255,255,255,0.02)_0%,rgba(15,23,42,0.06)_40%,rgba(15,23,42,0.18)_100%)]"
-                        )} />
-                      </div>
-                      <Link
-                        to={`/start-project?category=${encodeURIComponent(category.id)}`}
-                        className="block w-full rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
-                      >
-                        Select
-                      </Link>
-                    </div>
-                  );
-
-                  if (user?.role === 'Contractor') {
-                    return (
-                      <div
-                        key={category.id}
-                        className="group w-[122px] cursor-not-allowed text-left text-slate-400"
-                      >
-                        {cardContent}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={category.id}
-                      className="group w-[122px] text-left"
-                    >
-                      {cardContent}
-                    </div>
-                  );
-                })}
+                          key={category.id}
+                          className="group w-[108px] text-left"
+                        >
+                          {cardContent}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -241,52 +274,22 @@ export default function Landing() {
             </div>
           </motion.div>
 
-          <div className="grid gap-6 pt-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:pt-8">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-            className="order-2 w-full lg:order-1"
-          >
-            <div className="w-full overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200 bg-white p-2 sm:p-3 shadow-xl shadow-slate-200/40">
-              <div className="relative aspect-video overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem] bg-slate-950">
-                <iframe
-                  className="h-full w-full"
-                  src="https://www.youtube.com/embed/2d0qOtWXNyQ"
-                  title="Blueprint Home Solutions Video"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allowFullScreen
-                />
-              </div>
-            </div>
-            <div className="relative z-10 mt-4 rounded-[1.5rem] border border-slate-100 bg-white p-3 shadow-2xl sm:mt-6 sm:rounded-3xl sm:p-4">
-              <img 
-                src="/hero-image-v2.jpg" 
-                alt="Blueprint Home Solutions - Free Estimates" 
-                className="rounded-[1.125rem] sm:rounded-2xl w-full h-auto object-cover"
-              />
-            </div>
-          </motion.div>
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="relative order-1 mx-auto w-full max-w-full lg:order-2 lg:max-w-none lg:mx-0"
+            className="relative mx-auto w-full max-w-full pt-6 lg:pt-8"
           >
-            <p className="mx-auto mb-4 max-w-[18rem] text-center text-base font-black tracking-tight text-slate-700 sm:max-w-none sm:text-lg">
+            <p className="mx-auto mb-4 max-w-4xl text-center text-2xl font-black tracking-tight text-slate-700 sm:max-w-none sm:text-3xl">
               Hundreds of residential and commercial leads updated in real time.
             </p>
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
               <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-black tracking-tight">Recently Issued Permits</h2>
+                  <h2 className="text-base font-black tracking-tight">Recently Issued Permits Preview</h2>
                   <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-widest">NYC DOB</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Updated Daily</span>
-                </div>
+                <div />
                 </div>
               <div className="border-b border-slate-100 px-4 py-4">
                 <p className="text-xs font-bold text-rose-600">
@@ -295,9 +298,25 @@ export default function Landing() {
               </div>
               {!loading && permitData.length > 0 && (
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs font-semibold text-slate-500">
-                    Preview Pages {previewPage}-{previewTotalPages}
-                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    <p className="text-xs font-semibold text-slate-500">
+                      {filteredPermitData.length.toLocaleString()} permits in live feed
+                    </p>
+                    <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+                      <span>Filter By Borough</span>
+                      <select
+                        value={boroughFilter}
+                        onChange={(event) => setBoroughFilter(event.target.value)}
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none transition-colors focus:border-primary"
+                      >
+                        {boroughOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -325,8 +344,8 @@ export default function Landing() {
                     ))}
                     <button
                       type="button"
-                      onClick={() => setPreviewPage((page) => Math.min(previewTotalPages, page + 1))}
-                      disabled={previewPage === previewTotalPages}
+                      onClick={() => setPreviewPage((page) => Math.min(filteredPreviewTotalPages, page + 1))}
+                      disabled={previewPage === filteredPreviewTotalPages}
                       className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Next preview page"
                     >
@@ -388,7 +407,7 @@ export default function Landing() {
               {!loading && permitData.length > 0 && (
                 <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-semibold text-slate-500">
-                    Preview Pages {previewPage}-{previewTotalPages}
+                    {filteredPermitData.length.toLocaleString()} permits in live feed
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -417,8 +436,8 @@ export default function Landing() {
                     ))}
                     <button
                       type="button"
-                      onClick={() => setPreviewPage((page) => Math.min(previewTotalPages, page + 1))}
-                      disabled={previewPage === previewTotalPages}
+                      onClick={() => setPreviewPage((page) => Math.min(filteredPreviewTotalPages, page + 1))}
+                      disabled={previewPage === filteredPreviewTotalPages}
                       className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label="Next preview page"
                     >
@@ -430,6 +449,42 @@ export default function Landing() {
             </div>
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-primary/5 rounded-full blur-3xl -z-10" />
           </motion.div>
+
+          <div className="grid gap-6 pt-6 lg:grid-cols-2 lg:gap-8">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 0.15 }}
+              className="w-full"
+            >
+              <div className="relative z-10 rounded-[1.5rem] border border-slate-100 bg-white p-3 shadow-2xl sm:rounded-3xl sm:p-4">
+                <img 
+                  src="/hero-image-v2.jpg" 
+                  alt="Blueprint Home Solutions - Free Estimates" 
+                  className="rounded-[1.125rem] sm:rounded-2xl w-full h-auto object-cover"
+                />
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 0.18 }}
+              className="w-full"
+            >
+              <div className="w-full overflow-hidden rounded-[1.5rem] sm:rounded-[2rem] border border-slate-200 bg-white p-2 sm:p-3 shadow-xl shadow-slate-200/40">
+                <div className="relative aspect-video overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem] bg-slate-950">
+                  <iframe
+                    className="h-full w-full"
+                    src="https://www.youtube.com/embed/2d0qOtWXNyQ"
+                    title="Blueprint Home Solutions Video"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -489,9 +544,6 @@ export default function Landing() {
               <h4 className="font-bold mb-6 uppercase tracking-widest text-xs text-slate-500">Platform</h4>
               <ul className="space-y-4 text-sm font-bold text-slate-300">
                 <li><Link to="/how-it-works" className="hover:text-white transition-colors">How it Works</Link></li>
-                <li><Link to={footerMarketplaceLink} className="hover:text-white transition-colors">Marketplace</Link></li>
-                {!user && <li><Link to="/signup?role=contractor" className="hover:text-white transition-colors">Join as Contractor</Link></li>}
-                {!user && <li><Link to="/signup?role=homeowner" className="hover:text-white transition-colors">Hire a Pro</Link></li>}
               </ul>
             </div>
             <div>
