@@ -142,7 +142,7 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdNumber', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
         (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
@@ -156,6 +156,7 @@ service cloud.firestore {
         (!('rating' in data) || data.rating is number) &&
         (!('isVerified' in data) || data.isVerified is bool) &&
         (!('isDisabled' in data) || data.isDisabled is bool) &&
+        (!('governmentIdNumber' in data) || data.governmentIdNumber is string) &&
         (!('licenseNumber' in data) || data.licenseNumber is string) &&
         (!('licenseStatus' in data) || data.licenseStatus in ['Active', 'Pending', 'Expired', 'Invalid']) &&
         (!('isTradesman' in data) || data.isTradesman is bool) &&

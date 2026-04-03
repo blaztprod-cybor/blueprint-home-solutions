@@ -16,6 +16,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
+  const contractorProfileComplete =
+    user?.role !== 'Contractor' ||
+    (
+      !!user.phone?.trim() &&
+      !!user.street?.trim() &&
+      !!user.town?.trim() &&
+      !!user.zip?.trim() &&
+      !!user.governmentIdNumber?.trim() &&
+      (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
+    );
 
   if (isLoading) {
     return (
@@ -37,7 +47,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     const defaultPath = user.role === 'admin'
       ? '/admin'
       : user.role === 'Contractor'
-        ? (contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+        ? (!contractorProfileComplete ? '/settings' : contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
         : '/homeowner-dashboard';
     return <Navigate to={defaultPath} replace />;
   }
