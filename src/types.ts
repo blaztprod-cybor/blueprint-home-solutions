@@ -135,6 +135,18 @@ export interface LeadInquiry {
   updatedAt?: string;
 }
 
+export interface LeadActivity {
+  id: string;
+  leadId: string;
+  inquiryId?: string;
+  eventType: 'status_changed' | 'admin_message_sent';
+  recipientType?: 'homeowner' | 'home-pro';
+  message: string;
+  actorId?: string;
+  actorName?: string;
+  createdAt: string;
+}
+
 export type UserRole = 'Homeowner' | 'Contractor' | 'admin';
 
 export interface User {
@@ -142,6 +154,10 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  phone?: string;
+  street?: string;
+  town?: string;
+  zip?: string;
   avatar?: string;
   rating?: number;
   isVerified?: boolean;

@@ -69,6 +69,22 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+function stripUndefinedFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUndefinedFields(entry)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, stripUndefinedFields(entry)])
+    ) as T;
+  }
+
+  return value;
+}
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
@@ -81,6 +97,26 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const MISSING_ACCOUNT_NOTICE =
+  'This account is no longer active in Blueprint Home Solutions. Contact admin if you need access restored.';
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function getUserDocWithRetry(userId: string, attempts = 8, delayMs = 250) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      return userDoc;
+    }
+
+    if (attempt < attempts - 1) {
+      await wait(delayMs);
+    }
+  }
+
+  return null;
+}
 
 const getInitialsAvatar = (name: string) => {
   const names = name.split(' ');
@@ -155,8 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
+          const userDoc = await getUserDocWithRetry(firebaseUser.uid);
+          if (userDoc) {
             const data = userDoc.data();
             const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
             const role = isAdminEmail ? 'admin' : (data.role as UserRole);
@@ -166,6 +202,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: data.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
               email: firebaseUser.email || '',
               role: role,
+              phone: data.phone,
+              street: data.street,
+              town: data.town,
+              zip: data.zip,
               avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
               isVerified: data.isVerified ?? false,
@@ -175,22 +215,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(userData);
             localStorage.setItem('blueprint_user', JSON.stringify(userData));
           } else {
-            // Fallback if doc doesn't exist yet (e.g. during signup process)
-            const cachedUser = localStorage.getItem('blueprint_user');
-            const role: UserRole = cachedUser ? JSON.parse(cachedUser).role : (firebaseUser.email?.includes('homeowner') ? 'Homeowner' : 'Contractor');
-            
-            const userData: User = {
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: firebaseUser.email || '',
-              role: role,
-              avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
-              rating: role === 'Contractor' ? 4.9 : undefined,
-              isVerified: false,
-              subscriptionLevel: getDerivedSubscriptionLevel(role),
-              ...getDerivedTrialFields(role),
-            };
-            setUser(userData);
+            sessionStorage.setItem('blueprint_auth_notice', MISSING_ACCOUNT_NOTICE);
+            localStorage.removeItem('blueprint_user');
+            setUser(null);
+            await signOut(auth);
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
@@ -207,7 +235,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getUserDocWithRetry(userCredential.user.uid, 2, 150);
+
+      if (!userDoc) {
+        sessionStorage.setItem('blueprint_auth_notice', MISSING_ACCOUNT_NOTICE);
+        await signOut(auth);
+        const error = new Error(MISSING_ACCOUNT_NOTICE) as Error & { code?: string };
+        error.code = 'auth/account-record-not-found';
+        throw error;
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       throw error;
@@ -225,7 +262,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
         const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
-        await setDoc(doc(db, 'users', firebaseUser.uid), {
+        await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           name: firebaseUser.displayName || 'User',
@@ -234,7 +271,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isVerified: false,
           subscriptionLevel: getDerivedSubscriptionLevel(role),
           createdAt: new Date().toISOString(),
-        });
+        }));
         
         const userData: User = {
           id: firebaseUser.uid,
@@ -302,7 +339,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       localStorage.setItem('blueprint_user', JSON.stringify(userData));
 
-      await setDoc(doc(db, 'users', firebaseUser.uid), {
+      await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
         uid: firebaseUser.uid,
         email: email,
         name: name,
@@ -315,7 +352,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         trade: finalRole === 'Contractor' ? trade : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         createdAt: new Date().toISOString(),
-      });
+      }));
 
       // Send welcome email
       try {
@@ -355,11 +392,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firestoreUserData.avatar = updatedUser.avatar;
       }
 
-      await setDoc(doc(db, 'users', user.id), {
+      await setDoc(doc(db, 'users', user.id), stripUndefinedFields({
         ...firestoreUserData,
         uid: user.id, // Ensure uid is present
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      }), { merge: true });
 
       setUser(updatedUser);
       localStorage.setItem('blueprint_user', JSON.stringify(updatedUser));

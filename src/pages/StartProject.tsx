@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Calendar,
   MapPin,
@@ -14,9 +14,10 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
-import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
+import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { projectCategories as services } from '../data/projectCategories';
+import { useAuth } from '../AuthContext';
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/;
@@ -48,6 +49,9 @@ const SUBMIT_TIMEOUT_MS = 15000;
 
 function getSubmissionErrorMessage(error: unknown) {
   if (error instanceof Error) {
+    if (error.message.includes('timed out')) {
+      return 'Photo upload timed out. Try one photo first or submit without photos, then add them after the project is created.';
+    }
     if (error.message.includes('permission-denied')) {
       return 'Submission was blocked by Firestore permissions. Refresh the app and try again.';
     }
@@ -66,6 +70,7 @@ export default function StartProject() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { user, updateProfile } = useAuth();
 
   const routeCategory =
     typeof location.state?.category === 'string'
@@ -73,24 +78,117 @@ export default function StartProject() {
       : searchParams.get('category') || '';
   const selectedCategoryId = services.some((service) => service.id === routeCategory) ? routeCategory : '';
   const selectedService = services.find((service) => service.id === selectedCategoryId) ?? null;
+  const isLoggedInHomeowner = user?.role === 'Homeowner';
+  const backTarget = isLoggedInHomeowner ? '/homeowner-dashboard' : '/select-improvement';
 
   const [formData, setFormData] = useState({
-    name: '',
+    name: user?.name || '',
     street: '',
     town: '',
     zip: '',
     phone: '',
-    email: '',
+    email: user?.email || '',
     startDate: '',
     description: '',
   });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
   const [descriptionError, setDescriptionError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [isLoadingSavedDetails, setIsLoadingSavedDetails] = useState(false);
+  const [hasPrefilledHomeownerDetails, setHasPrefilledHomeownerDetails] = useState(false);
+  const [isEditingSavedDetails, setIsEditingSavedDetails] = useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const hasSavedHomeownerDetails =
+    !!formData.name.trim() &&
+    !!formData.email.trim() &&
+    !!formData.phone.trim() &&
+    !!formData.town.trim() &&
+    !!formData.zip.trim();
+  const shouldUseSavedDetails = isLoggedInHomeowner && hasPrefilledHomeownerDetails;
+  const showContactEditor = !shouldUseSavedDetails || isEditingSavedDetails;
+
+  useEffect(() => {
+    if (!user || user.role !== 'Homeowner') return;
+
+    const nextData = {
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      street: user.street || '',
+      town: user.town || '',
+      zip: user.zip || '',
+    };
+
+    setFormData((current) => ({
+      ...current,
+      name: current.name || nextData.name,
+      email: current.email || nextData.email,
+      phone: current.phone || nextData.phone,
+      street: current.street || nextData.street,
+      town: current.town || nextData.town,
+      zip: current.zip || nextData.zip,
+    }));
+
+    if (nextData.name && nextData.email && nextData.phone && nextData.town && nextData.zip) {
+      setHasPrefilledHomeownerDetails(true);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'Homeowner') return;
+
+    let isMounted = true;
+
+    const loadSavedDetails = async () => {
+      setIsLoadingSavedDetails(true);
+      try {
+        const snapshot = await getDocs(query(collection(db, 'projects'), where('uid', '==', user.id)));
+        const latestProject = snapshot.docs
+          .map((entry) => ({ id: entry.id, ...entry.data() }))
+          .sort((a, b) => new Date(String(b.createdAt || '')).getTime() - new Date(String(a.createdAt || '')).getTime())[0] as
+          | {
+              phone?: string;
+              location?: { street?: string; town?: string; zip?: string };
+            }
+          | undefined;
+
+        if (!isMounted || !latestProject) return;
+
+        const nextData = {
+          phone: latestProject.phone || user.phone || '',
+          street: latestProject.location?.street || user.street || '',
+          town: latestProject.location?.town || user.town || '',
+          zip: latestProject.location?.zip || user.zip || '',
+        };
+
+        setFormData((current) => ({
+          ...current,
+          phone: current.phone || nextData.phone,
+          street: current.street || nextData.street,
+          town: current.town || nextData.town,
+          zip: current.zip || nextData.zip,
+        }));
+
+        if ((user.name || '') && (user.email || '') && nextData.phone && nextData.town && nextData.zip) {
+          setHasPrefilledHomeownerDetails(true);
+        }
+      } catch (error) {
+        console.error('[StartProject] Failed to load saved homeowner details:', error);
+      } finally {
+        if (isMounted) {
+          setIsLoadingSavedDetails(false);
+        }
+      }
+    };
+
+    void loadSavedDetails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -116,32 +214,41 @@ export default function StartProject() {
       return;
     }
 
+    if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.town.trim() || !formData.zip.trim()) {
+      setSubmitError('Please complete your saved contact details once before submitting.');
+      return;
+    }
+
     setSubmitError('');
     setIsSubmitting(true);
 
     try {
-      const photoBase64s = await Promise.all(
-        selectedPhotos.map(
-          (file) =>
-            new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(file);
-            })
-        )
-      );
-
       const createdAt = new Date().toISOString();
+      const description = formData.description.trim();
       const leadRef = doc(collection(db, 'leads'));
       const marketplaceRef = doc(db, 'lead_marketplace', leadRef.id);
+      const projectRef = user ? doc(db, 'projects', leadRef.id) : null;
       const batch = writeBatch(db);
+      const photoStoragePath = projectRef ? `projects/${leadRef.id}/photos` : `leads/${leadRef.id}`;
+      let uploadedPhotoUrls: string[] = [];
+      let photoUploadIssue = false;
+
+      if (selectedPhotos.length) {
+        try {
+          uploadedPhotoUrls = await uploadFilesToStorage(selectedPhotos, photoStoragePath);
+        } catch (error) {
+          photoUploadIssue = true;
+          console.error('[StartProject] Photo upload failed, continuing without photos:', error);
+        }
+      }
+      const projectPhotosPreview = uploadedPhotoUrls.slice(0, 3);
 
       batch.set(leadRef, {
         name: formData.name.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         category: selectedService?.title || 'General',
-        description: formData.description.trim(),
+        description,
         startDate: formData.startDate,
         status: 'New Lead',
         location: {
@@ -149,24 +256,56 @@ export default function StartProject() {
           town: formData.town.trim(),
           zip: formData.zip.trim(),
         },
-        photoCount: selectedPhotos.length,
-        photos: photoBase64s.slice(0, 3),
+        photoCount: uploadedPhotoUrls.length,
+        photos: projectPhotosPreview,
         createdAt,
       });
 
       batch.set(marketplaceRef, {
         leadId: leadRef.id,
         category: selectedService?.title || 'General',
-        description: formData.description.trim(),
+        description,
         status: 'Open',
         location: {
           town: formData.town.trim(),
           zip: formData.zip.trim(),
         },
-        photoCount: selectedPhotos.length,
-        photos: photoBase64s.slice(0, 3),
+        photoCount: uploadedPhotoUrls.length,
+        photos: projectPhotosPreview,
         createdAt,
       });
+
+      if (projectRef) {
+        batch.set(projectRef, {
+          uid: user.id,
+          title: selectedService?.title || 'General Project',
+          description,
+          status: 'New Open Project',
+          budget: 0,
+          startDate: formData.startDate,
+          category: selectedService?.title || 'General',
+          phone: formData.phone.trim(),
+          location: {
+            street: formData.street.trim(),
+            town: formData.town.trim(),
+            zip: formData.zip.trim(),
+          },
+          photoCount: uploadedPhotoUrls.length,
+          photos: projectPhotosPreview,
+          services: selectedService ? [selectedService.title] : ['General'],
+          createdAt,
+          updatedAt: createdAt,
+        });
+
+        uploadedPhotoUrls.forEach((url, index) => {
+          const photoRef = doc(collection(db, 'projects', projectRef.id, 'photos'));
+          batch.set(photoRef, {
+            url,
+            createdAt: new Date(Date.now() + index).toISOString(),
+            uid: user.id,
+          });
+        });
+      }
 
       await Promise.race([
         batch.commit(),
@@ -175,8 +314,52 @@ export default function StartProject() {
         }),
       ]);
 
-      setIsSubmitted(true);
-      navigate('/thank-you');
+      if (user?.role === 'Homeowner') {
+        try {
+          await updateProfile({
+            phone: formData.phone.trim(),
+            street: formData.street.trim(),
+            town: formData.town.trim(),
+            zip: formData.zip.trim(),
+          });
+        } catch (error) {
+          console.error('[StartProject] Failed to save homeowner details:', error);
+        }
+      }
+
+      navigate('/thank-you', {
+        state: projectRef
+          ? {
+              projectId: projectRef.id,
+              projectSubmitted: true,
+              photoUploadIssue,
+            }
+          : { photoUploadIssue },
+      });
+
+      void (async () => {
+        try {
+          const confirmationResponse = await fetch('/api/send-project-confirmation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email.trim(),
+            name: formData.name.trim(),
+            projectTitle: selectedService?.title || 'General',
+            startDate: formData.startDate,
+            description,
+            photos: projectPhotosPreview,
+          }),
+          });
+
+          if (!confirmationResponse.ok) {
+            const payload = await confirmationResponse.json().catch(() => null);
+            console.error('Project confirmation email failed:', payload?.error || confirmationResponse.statusText);
+          }
+        } catch (emailError) {
+          console.error('Project confirmation email request failed:', emailError);
+        }
+      })();
     } catch (error) {
       console.error('Error creating lead:', error);
       try {
@@ -194,7 +377,7 @@ export default function StartProject() {
     <div className="max-w-4xl mx-auto space-y-12 pb-20">
       <div className="flex items-center justify-between gap-4">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(backTarget)}
           className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl transition-colors"
         >
           <ChevronLeft size={24} />
@@ -218,6 +401,7 @@ export default function StartProject() {
               )}
             </div>
           </div>
+          {submitError && <p className="text-sm font-bold text-red-600">{submitError}</p>}
         </section>
 
         <section className="space-y-6">
@@ -248,7 +432,6 @@ export default function StartProject() {
               Please do not include phone numbers or email addresses in the project description.
             </p>
             {descriptionError && <p className="text-sm font-bold text-red-600">{descriptionError}</p>}
-            {submitError && <p className="text-sm font-bold text-red-600">{submitError}</p>}
           </div>
         </section>
 
@@ -259,7 +442,34 @@ export default function StartProject() {
             </div>
             <h2 className="text-xl font-bold tracking-tight">Contact Information</h2>
           </div>
+          {shouldUseSavedDetails && !isEditingSavedDetails ? (
+            <div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-2">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Saved Account Details</p>
+                  <p className="text-lg font-black text-slate-900">{formData.name}</p>
+                  <p className="text-sm font-medium text-slate-600">{formData.email}</p>
+                  <p className="text-sm font-medium text-slate-600">{formData.phone}</p>
+                  <p className="text-sm font-medium text-slate-600">
+                    {[formData.street, formData.town, formData.zip].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingSavedDetails(true)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Change Contact Information
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {isLoadingSavedDetails && isLoggedInHomeowner && (
+              <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+                Loading your saved homeowner details...
+              </div>
+            )}
             <div className="space-y-2 md:col-span-2">
               <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Name</label>
               <input
@@ -294,48 +504,61 @@ export default function StartProject() {
               />
             </div>
           </div>
+          )}
         </section>
 
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
-              <MapPin size={20} />
+        {showContactEditor && (
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                <MapPin size={20} />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight">Project Location</h2>
             </div>
-            <h2 className="text-xl font-bold tracking-tight">Project Location</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Street Address</label>
-              <input
-                required
-                type="text"
-                value={formData.street}
-                onChange={(e) => setFormData({ ...formData, street: e.target.value })}
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-              />
+            {shouldUseSavedDetails && isEditingSavedDetails && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingSavedDetails(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Use Saved Details
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Street Address</label>
+                <input
+                  type="text"
+                  value={formData.street}
+                  onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Town / City</label>
+                <input
+                  required
+                  type="text"
+                  value={formData.town}
+                  onChange={(e) => setFormData({ ...formData, town: e.target.value })}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Zip Code</label>
+                <input
+                  required
+                  type="text"
+                  value={formData.zip}
+                  onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
+                  className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Town / City</label>
-              <input
-                required
-                type="text"
-                value={formData.town}
-                onChange={(e) => setFormData({ ...formData, town: e.target.value })}
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Zip Code</label>
-              <input
-                required
-                type="text"
-                value={formData.zip}
-                onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
-                className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
-              />
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="space-y-6">
           <div className="flex items-center gap-3">
@@ -415,23 +638,16 @@ export default function StartProject() {
         <div className="pt-8">
           <button
             type="submit"
-            disabled={isSubmitting || isSubmitted || !selectedCategoryId}
+            disabled={isSubmitting || !selectedCategoryId}
             className={cn(
               'w-full py-5 rounded-[2rem] font-black text-lg shadow-2xl transition-all flex items-center justify-center gap-3 disabled:cursor-not-allowed',
-              isSubmitted
-                ? 'bg-slate-900 text-white shadow-slate-900/30'
-                : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-purple-900/30 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70'
+              'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-purple-900/30 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70'
             )}
           >
             {isSubmitting ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="animate-spin" size={24} />
                 <span>Submitting...</span>
-              </div>
-            ) : isSubmitted ? (
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={24} />
-                <span>Request Submitted</span>
               </div>
             ) : (
               <>

@@ -142,12 +142,16 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'avatar', 'rating', 'isVerified', 'isDisabled', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
         (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
         data.role in ['admin', 'Contractor', 'Homeowner'] &&
         (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+        (!('phone' in data) || data.phone is string) &&
+        (!('street' in data) || data.street is string) &&
+        (!('town' in data) || data.town is string) &&
+        (!('zip' in data) || data.zip is string) &&
         (!('avatar' in data) || (data.avatar is string && data.avatar.size() < 1048576)) &&
         (!('rating' in data) || data.rating is number) &&
         (!('isVerified' in data) || data.isVerified is bool) &&
@@ -276,6 +280,19 @@ service cloud.firestore {
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
     }
 
+    function isValidLeadActivity(data) {
+      return hasRequiredFields(['leadId', 'eventType', 'message', 'createdAt']) &&
+        hasOnlyAllowedFields(['leadId', 'inquiryId', 'eventType', 'recipientType', 'message', 'actorId', 'actorName', 'createdAt']) &&
+        data.leadId is string && data.leadId.size() > 0 &&
+        (!('inquiryId' in data) || data.inquiryId is string) &&
+        data.eventType in ['status_changed', 'admin_message_sent'] &&
+        (!('recipientType' in data) || data.recipientType in ['homeowner', 'home-pro']) &&
+        data.message is string && data.message.size() > 0 && data.message.size() < 4000 &&
+        (!('actorId' in data) || data.actorId is string) &&
+        (!('actorName' in data) || data.actorName is string) &&
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -336,6 +353,11 @@ service cloud.firestore {
       allow create: if canAccessLeadMarketplace() && isValidLeadInquiry(request.resource.data);
       allow read: if isAdmin() || (isAuthenticated() && resource.data.contractorId == request.auth.uid);
       allow update, delete: if isAdmin() && isValidLeadInquiry(request.resource.data);
+    }
+
+    match /lead_activity/{activityId} {
+      allow read, create: if isAdmin() && isValidLeadActivity(request.resource.data);
+      allow update, delete: if false;
     }
     
     match /{path=**} {

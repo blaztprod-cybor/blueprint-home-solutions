@@ -1,9 +1,13 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Building2, Heart, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Heart, ArrowRight } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function ThankYou() {
+  const location = useLocation();
+  const hasProject = Boolean(location.state?.projectId);
+  const photoUploadIssue = Boolean(location.state?.photoUploadIssue);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <motion.div
@@ -15,19 +19,53 @@ export default function ThankYou() {
           <Heart size={40} className="text-primary fill-primary/20" />
         </div>
         
-        <h1 className="text-3xl font-black tracking-tight mb-4">Thank You!</h1>
-        <p className="text-slate-500 leading-relaxed mb-10">
-          You have been successfully logged out. We appreciate you choosing Blueprint Home Solutions for your home improvement journey.
-        </p>
+        <h1 className="text-3xl font-black tracking-tight mb-4">Project Submitted</h1>
+        <div className="space-y-4 mb-10">
+          <p className="text-slate-500 leading-relaxed">
+            Blueprint Home Solutions has received your home improvement request. Home Pros are now reviewing your project and may request the opportunity to provide a rough estimate.
+          </p>
+          {photoUploadIssue && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Photo Upload Failed</p>
+              <p className="mt-2 text-sm font-medium leading-6 text-amber-900">
+                Your request was submitted, but the photo upload failed. Please try uploading the photos again from your project.
+              </p>
+            </div>
+          )}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Need To Add More Photos?</p>
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+              Email additional project photos from the same email address you used on your request to{' '}
+              <a href="mailto:info@blueprinthomesolutions.com" className="font-black text-primary hover:underline">
+                info@blueprinthomesolutions.com
+              </a>{' '}
+              and Blueprint will attach them to your submission.
+            </p>
+          </div>
+        </div>
 
         <div className="space-y-4">
-          <Link 
-            to="/" 
-            className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform"
-          >
-            Back to Home
-            <ArrowRight size={18} />
-          </Link>
+          {hasProject ? (
+            <Link
+              to="/projects"
+              state={{
+                highlightProjectId: location.state.projectId,
+                projectSubmitted: location.state.projectSubmitted,
+              }}
+              className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform"
+            >
+              View My Project
+              <ArrowRight size={18} />
+            </Link>
+          ) : (
+            <Link
+              to="/"
+              className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform"
+            >
+              Back to Home
+              <ArrowRight size={18} />
+            </Link>
+          )}
         </div>
       </motion.div>
     </div>

@@ -25,6 +25,19 @@ export default function Login() {
     : portalRole === 'contractor' 
       ? 'Welcome Home Pro' 
       : 'Welcome Back';
+  const contractorHasPaidAccess =
+    user?.role === 'Contractor' &&
+    !!user.isVerified &&
+    !!user.subscriptionLevel &&
+    user.subscriptionLevel !== 'none';
+
+  React.useEffect(() => {
+    const authNotice = sessionStorage.getItem('blueprint_auth_notice');
+    if (authNotice) {
+      setError(authNotice);
+      sessionStorage.removeItem('blueprint_auth_notice');
+    }
+  }, []);
 
   React.useEffect(() => {
     if (user) {
@@ -33,9 +46,15 @@ export default function Login() {
         return;
       }
 
-      navigate(user.role === 'admin' ? '/admin' : '/projects');
+      navigate(
+        user.role === 'admin'
+          ? '/admin'
+          : user.role === 'Contractor'
+            ? (contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+            : '/homeowner-dashboard'
+      );
     }
-  }, [user, navigate, redirectTarget, category]);
+  }, [user, navigate, redirectTarget, category, contractorHasPaidAccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +88,8 @@ export default function Login() {
         setError('Invalid email or password. Please try again.');
       } else if (err.code === 'auth/invalid-credential') {
         setError('Invalid email or password. Please try again.');
+      } else if (err.code === 'auth/account-record-not-found') {
+        setError(err.message || 'This account is no longer active.');
       } else if (err.code === 'auth/operation-not-allowed') {
         setError(`The selected authentication method is not enabled in your Firebase project (blueprint-home-solutions). Please double-check that "Email/Password" is toggled to "Enabled" AND you clicked "Save" in the Firebase Console. If it is already enabled, try disabling and re-enabling it.`);
       } else {

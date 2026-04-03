@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  Image as ImageIcon,
   Loader2,
   Search,
   ShieldCheck,
@@ -17,6 +18,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  limit,
   orderBy,
   query,
   setDoc,
@@ -77,6 +79,10 @@ function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = 
       email: nextUser.email,
       role: nextUser.role,
       name: nextUser.name,
+      phone: nextUser.phone,
+      street: nextUser.street,
+      town: nextUser.town,
+      zip: nextUser.zip,
       avatar: nextUser.avatar,
       isVerified: nextUser.isVerified ?? false,
       licenseNumber: nextUser.licenseNumber,
@@ -137,13 +143,41 @@ const AdminDashboard = () => {
         };
       }) as AdminProject[];
 
+      const hydratedProjectDocs = await Promise.all(
+        projectDocs.map(async (project) => {
+          if ((project.photos?.length || 0) > 0 || (project.photoCount || 0) === 0) {
+            return project;
+          }
+
+          try {
+            const photosSnapshot = await getDocs(
+              query(collection(db, 'projects', project.id, 'photos'), orderBy('createdAt', 'asc'), limit(3))
+            );
+            const fallbackPhotos = photosSnapshot.docs.map((entry) => entry.data().url).filter(Boolean);
+            if (fallbackPhotos.length === 0) {
+              return project;
+            }
+
+            await updateDoc(doc(db, 'projects', project.id), {
+              photos: fallbackPhotos,
+              updatedAt: new Date().toISOString(),
+            });
+
+            return { ...project, photos: fallbackPhotos };
+          } catch (syncError) {
+            console.error('Error hydrating admin project photos:', syncError);
+            return project;
+          }
+        })
+      );
+
       const reviewDocs = reviewsSnapshot.docs.map((entry) => ({
         id: entry.id,
         ...entry.data(),
       })) as Review[];
 
       setUsers(userDocs.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
-      setProjects(projectDocs);
+      setProjects(hydratedProjectDocs);
       setReviews(reviewDocs);
     } catch (error) {
       console.error('Error fetching admin data:', error);
@@ -587,6 +621,7 @@ const AdminDashboard = () => {
                 <thead>
                   <tr className="border-bottom border-slate-100 bg-slate-50/50">
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Project</th>
+                    <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Photo</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contact Fields</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</th>
@@ -601,6 +636,25 @@ const AdminDashboard = () => {
                           <p className="font-bold text-slate-900">{project.title}</p>
                           <p className="text-xs text-slate-500 font-medium">{project.category}</p>
                           <p className="mt-2 text-xs text-slate-500 max-w-xl line-clamp-2">{project.description || 'No description'}</p>
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="space-y-2">
+                            <div className="h-16 w-16 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center">
+                              {project.photos?.[0] ? (
+                                <img
+                                  src={project.photos[0]}
+                                  alt={project.title}
+                                  className="h-full w-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <ImageIcon size={18} className="text-slate-400" />
+                              )}
+                            </div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                              {project.photoCount || 0} photos
+                            </p>
+                          </div>
                         </td>
                         <td className="px-8 py-5">
                           <p className="text-sm font-medium text-slate-700">{project.phone || 'No phone'}</p>

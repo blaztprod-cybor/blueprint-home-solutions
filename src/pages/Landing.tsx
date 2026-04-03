@@ -80,14 +80,16 @@ export default function Landing() {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/thank-you');
+    navigate('/session-ended');
   };
 
-  const homeProCta = user?.role === 'admin'
+  const primaryAccountCta = user?.role === 'admin'
     ? { to: '/admin', label: 'Admin Dashboard' }
     : user?.role === 'Contractor'
-      ? { to: '/projects', label: 'Home Pro Portal' }
-      : { to: '/contractor-paywall', label: 'Sign Up as a Home Professional' };
+      ? { to: '/lead-marketplace', label: 'Home Pro Portal' }
+      : user?.role === 'Homeowner'
+        ? { to: '/homeowner-dashboard', label: 'My Account' }
+        : { to: '/contractor-paywall', label: 'Sign Up as a Home Professional' };
   const topRowCategories = projectCategories.slice(0, 8);
   const bottomRowCategories = projectCategories.slice(8, 16);
 
@@ -119,7 +121,7 @@ export default function Landing() {
             </div>
             <div className="hidden md:flex items-center gap-8">
               <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
-              <Link to={homeProCta.to} className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">{homeProCta.label}</Link>
+              <Link to={primaryAccountCta.to} className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">{primaryAccountCta.label}</Link>
               <div className="flex items-center gap-4">
                 {!user && (
                   <Link
@@ -149,10 +151,10 @@ export default function Landing() {
               How it Works
             </Link>
             <Link
-              to={homeProCta.to}
+              to={primaryAccountCta.to}
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-600 transition-colors hover:bg-slate-50"
             >
-              {homeProCta.label}
+              {primaryAccountCta.label}
             </Link>
             {!user && (
               <Link
@@ -266,10 +268,10 @@ export default function Landing() {
             </p>
             <div className="flex justify-center">
               <Link
-                to={homeProCta.to}
+                to={primaryAccountCta.to}
                 className="rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-black uppercase tracking-[0.18em] text-white shadow-xl shadow-blue-500/25 transition-transform hover:scale-[1.02]"
               >
-                {homeProCta.label}
+                {primaryAccountCta.label}
               </Link>
             </div>
           </motion.div>

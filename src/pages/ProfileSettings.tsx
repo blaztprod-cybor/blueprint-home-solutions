@@ -25,9 +25,10 @@ export default function ProfileSettings() {
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    phone: '',
-    company: '',
-    address: '',
+    phone: user?.phone || '',
+    street: user?.street || '',
+    town: user?.town || '',
+    zip: user?.zip || '',
     licenseNumber: user?.licenseNumber || '',
     isTradesman: user?.isTradesman || false,
     trade: user?.trade || ''
@@ -39,6 +40,10 @@ export default function ProfileSettings() {
     try {
       await updateProfile({
         name: formData.name,
+        phone: formData.phone,
+        street: formData.street,
+        town: formData.town,
+        zip: formData.zip,
         licenseNumber: formData.licenseNumber,
         isTradesman: formData.isTradesman,
         trade: formData.trade
@@ -200,22 +205,39 @@ export default function ProfileSettings() {
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Company Name (Optional)</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phone Number</label>
                 <input 
-                  type="text" 
-                  value={formData.company} 
-                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  placeholder="Your Business Name"
+                  type="tel" 
+                  value={formData.phone} 
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full bg-slate-50 border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" 
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Business Address (Optional)</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Street Address (Optional)</label>
                 <input 
                   type="text" 
-                  value={formData.address} 
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  value={formData.street} 
+                  onChange={(e) => setFormData({ ...formData, street: e.target.value })}
                   placeholder=""
+                  className="w-full bg-slate-50 border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Town / City</label>
+                <input 
+                  type="text" 
+                  value={formData.town} 
+                  onChange={(e) => setFormData({ ...formData, town: e.target.value })}
+                  className="w-full bg-slate-50 border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Zip Code</label>
+                <input 
+                  type="text" 
+                  value={formData.zip} 
+                  onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
                   className="w-full bg-slate-50 border-none rounded-xl py-3 px-4 text-sm font-medium focus:ring-2 focus:ring-primary/20" 
                 />
               </div>

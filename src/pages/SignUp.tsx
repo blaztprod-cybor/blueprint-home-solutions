@@ -22,6 +22,11 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const contractorHasPaidAccess =
+    user?.role === 'Contractor' &&
+    !!user.isVerified &&
+    !!user.subscriptionLevel &&
+    user.subscriptionLevel !== 'none';
   
     const { user, signup, loginWithGoogle } = useAuth();
     const navigate = useNavigate();
@@ -33,9 +38,15 @@ export default function SignUp() {
           return;
         }
 
-        navigate(user.role === 'admin' ? '/admin' : '/projects');
+        navigate(
+          user.role === 'admin'
+            ? '/admin'
+            : user.role === 'Contractor'
+              ? (contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+              : '/homeowner-dashboard'
+        );
       }
-    }, [user, navigate, redirectTarget, category]);
+    }, [user, navigate, redirectTarget, category, contractorHasPaidAccess]);
 
     const compressImage = (base64Str: string): Promise<string> => {
       return new Promise((resolve) => {

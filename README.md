@@ -21,4 +21,7 @@ View your app in AI Studio: https://ai.studio/apps/0535c480-1012-4655-a793-62fed
 
 ## Internal Docs
 
+- System blueprint: [`docs/system-blueprint.md`](docs/system-blueprint.md)
+- Homeowner portal requirements: [`docs/homeowner-portal-requirements.md`](docs/homeowner-portal-requirements.md)
 - Vendor onboarding policy: [`docs/vendor-onboarding-policy.md`](docs/vendor-onboarding-policy.md)
+- Lead introduction product requirements: [`docs/lead-introduction-product-requirements.md`](docs/lead-introduction-product-requirements.md)

@@ -1,12 +1,14 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 
 // Import the Firebase configuration
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 // Respect the named database if it's provided in the config
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId || '(default)');
@@ -60,6 +62,62 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+function sanitizeStorageName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out`));
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+const STORAGE_UPLOAD_TIMEOUT_MS = 20000;
+
+export async function uploadFilesToStorage(
+  files: File[],
+  basePath: string
+) {
+  const uploadedUrls: string[] = [];
+
+  for (const [index, file] of files.entries()) {
+    const storageRef = ref(
+      storage,
+      `${basePath}/${Date.now()}-${index}-${sanitizeStorageName(file.name)}`
+    );
+
+    await withTimeout(
+      uploadBytes(storageRef, file, {
+        contentType: file.type || 'application/octet-stream',
+      }),
+      STORAGE_UPLOAD_TIMEOUT_MS,
+      `Upload for ${file.name}`
+    );
+
+    uploadedUrls.push(
+      await withTimeout(
+        getDownloadURL(storageRef),
+        STORAGE_UPLOAD_TIMEOUT_MS,
+        `Download URL fetch for ${file.name}`
+      )
+    );
+  }
+
+  return uploadedUrls;
 }
 
 export default app;

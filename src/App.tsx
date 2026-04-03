@@ -41,6 +41,7 @@ import HowItWorks from './pages/HowItWorks';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import ThankYou from './pages/ThankYou';
+import SessionEnded from './pages/SessionEnded';
 import StartProject from './pages/StartProject';
 import MessagingWindow from './components/MessagingWindow';
 import ScrollToTop from './components/ScrollToTop';
@@ -50,6 +51,8 @@ import DOBLeads from './pages/DOBLeads';
 import HomeProTrial from './pages/HomeProTrial';
 import PermitMap from './pages/PermitMap';
 import ContractorLeads from './pages/ContractorLeads';
+import HomeownerDashboard from './pages/HomeownerDashboard';
+import SelectImprovement from './pages/SelectImprovement';
 
 const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   <Link
@@ -72,9 +75,26 @@ const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   </Link>
 );
 
+const contractorHasPaidAccess = (user: ReturnType<typeof useAuth>['user']) =>
+  user?.role === 'Contractor' &&
+  !!user.isVerified &&
+  !!user.subscriptionLevel &&
+  user.subscriptionLevel !== 'none';
+
+const ContractorSubscriptionRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+
+  if (user?.role === 'Contractor' && !contractorHasPaidAccess(user)) {
+    return <Navigate to="/contractor-paywall" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpen: boolean, setIsMobileMenuOpen: (open: boolean) => void }) => {
   const location = useLocation();
   const { user } = useAuth();
+  const hasPaidContractorAccess = contractorHasPaidAccess(user);
 
   // Close mobile menu when location changes
   useEffect(() => {
@@ -83,15 +103,15 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
 
   const contractorLinks = [
     { to: "/projects", icon: Briefcase, label: "Projects" },
-    { to: "/lead-marketplace", icon: MessageSquare, label: "Lead Marketplace" },
-    { to: "/permit-feed", icon: Building2, label: "Permit Feed" },
+    { to: hasPaidContractorAccess ? "/lead-marketplace" : "/contractor-paywall", icon: MessageSquare, label: hasPaidContractorAccess ? "Lead Marketplace" : "Billing & Subscriptions" },
+    { to: hasPaidContractorAccess ? "/permit-feed" : "/contractor-paywall", icon: Building2, label: hasPaidContractorAccess ? "Permit Feed" : "Permit Feed Locked" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
     { to: "/invoices", icon: FileText, label: "Invoices" },
   ];
 
   const generalLinks = [
-    { to: "/projects", icon: Briefcase, label: "My Projects" },
+    { to: "/homeowner-dashboard", icon: Home, label: "My Account" },
     { to: "/invoices", icon: FileText, label: "Invoices" },
   ];
 
@@ -99,7 +119,6 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
     { to: "/admin", icon: ShieldCheck, label: "Admin Dashboard" },
     { to: "/admin/leads", icon: MessageSquare, label: "Lead Intake" },
     { to: "/projects", icon: Briefcase, label: "All Projects" },
-    { to: "/clients", icon: Users, label: "All Users" },
   ];
 
   const links = user?.role === 'admin' ? adminLinks : (user?.role === 'Contractor' ? contractorLinks : generalLinks);
@@ -176,7 +195,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/thank-you');
+    navigate('/session-ended');
   };
 
   const showStartNew = false;
@@ -287,6 +306,12 @@ const PublicStartProjectPage = () => (
 
 export default function App() {
   const { user } = useAuth();
+  const defaultPortalPath =
+    user?.role === 'admin'
+      ? '/admin'
+      : user?.role === 'Contractor'
+        ? (contractorHasPaidAccess(user) ? '/lead-marketplace' : '/contractor-paywall')
+        : '/homeowner-dashboard';
   return (
     <Router>
       <ScrollToTop />
@@ -297,12 +322,14 @@ export default function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/thank-you" element={<ThankYou />} />
+        <Route path="/session-ended" element={<SessionEnded />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/contractor-paywall" element={<ContractorPaywall />} />
         <Route path="/home-pro-trial" element={<Navigate to="/contractor-paywall" replace />} />
         <Route path="/about" element={<AboutUs />} />
+        <Route path="/select-improvement" element={<SelectImprovement />} />
         <Route path="/start-project" element={<PublicStartProjectPage />} />
 
         {/* Protected Portal Routes */}
@@ -311,16 +338,16 @@ export default function App() {
             <DashboardLayout>
               <Routes>
                 <Route path="/projects" element={<Projects />} />
-                <Route path="/lead-marketplace" element={<ContractorLeads />} />
-                <Route path="/permit-feed" element={<DOBLeads />} />
-                <Route path="/permit-map" element={<PermitMap />} />
+                <Route path="/lead-marketplace" element={<ContractorSubscriptionRoute><ContractorLeads /></ContractorSubscriptionRoute>} />
+                <Route path="/permit-feed" element={<ContractorSubscriptionRoute><DOBLeads /></ContractorSubscriptionRoute>} />
+                <Route path="/permit-map" element={<ContractorSubscriptionRoute><PermitMap /></ContractorSubscriptionRoute>} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/reviews" element={<Reviews />} />
                 <Route path="/invoices" element={<Invoices />} />
                 <Route path="/settings" element={<ProfileSettings />} />
                 <Route path="/services" element={<Services />} />
                 <Route path="/start-project" element={<StartProject />} />
-                <Route path="/homeowner-dashboard" element={<Navigate to="/projects" replace />} />
+                <Route path="/homeowner-dashboard" element={<HomeownerDashboard />} />
                 <Route path="/marketplace" element={<Navigate to="/" replace />} />
                 <Route path="/admin" element={
                   <ProtectedRoute allowedRoles={['admin']}>
@@ -333,7 +360,7 @@ export default function App() {
                   </ProtectedRoute>
                 } />
                 {/* Default redirects based on role */}
-                <Route path="*" element={<Navigate to={user?.role === 'admin' ? "/admin" : "/projects"} replace />} />
+                <Route path="*" element={<Navigate to={defaultPortalPath} replace />} />
               </Routes>
             </DashboardLayout>
           </ProtectedRoute>

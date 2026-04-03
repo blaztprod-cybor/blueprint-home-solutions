@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, deleteDoc, orderBy, limit, getDoc } from 'firebase/firestore';
 import { Project, Estimate } from '../types';
 import { Toaster, toast } from 'sonner';
@@ -265,6 +265,15 @@ export default function Projects() {
         id: doc.id,
         url: doc.data().url
       }));
+      if (photosData.length === 0 && selectedProject.photos?.length) {
+        setProjectPhotos(
+          selectedProject.photos.map((url, index) => ({
+            id: `preview-${index}`,
+            url,
+          }))
+        );
+        return;
+      }
       setProjectPhotos(photosData);
     }, (error) => {
       console.error("[Projects] Error fetching project photos:", error);
@@ -358,28 +367,29 @@ export default function Projects() {
 
     setIsUploading(true);
     const projectRef = doc(db, 'projects', selectedProject.id);
+    const leadRef = doc(db, 'leads', selectedProject.id);
+    const marketplaceRef = doc(db, 'lead_marketplace', selectedProject.id);
 
     try {
-      const newPhotoBase64s: string[] = [];
+      const acceptedFiles: File[] = [];
       for (const file of files) {
         if (file.size > 10 * 1024 * 1024) {
           toast.error(`File ${file.name} is too large (max 10MB)`);
           continue;
         }
-
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        newPhotoBase64s.push(base64);
+        acceptedFiles.push(file);
       }
+
+      const uploadedPhotoUrls = await uploadFilesToStorage(
+        acceptedFiles,
+        `projects/${selectedProject.id}/photos`
+      );
 
       // Save to subcollection
       await Promise.all(
-        newPhotoBase64s.map(base64 => 
+        uploadedPhotoUrls.map(url => 
           addDoc(collection(db, 'projects', selectedProject.id, 'photos'), {
-            url: base64,
+            url,
             createdAt: new Date().toISOString(),
             uid: user.id
           })
@@ -388,8 +398,8 @@ export default function Projects() {
 
       // Update project document's photoCount and preview photos
       const currentPhotos = selectedProject.photos || [];
-      const updatedPreviewPhotos = [...currentPhotos, ...newPhotoBase64s].slice(0, 3);
-      const newPhotoCount = (selectedProject.photoCount || 0) + newPhotoBase64s.length;
+      const updatedPreviewPhotos = [...currentPhotos, ...uploadedPhotoUrls].slice(0, 3);
+      const newPhotoCount = (selectedProject.photoCount || 0) + uploadedPhotoUrls.length;
 
       await updateDoc(projectRef, {
         photos: updatedPreviewPhotos,
@@ -397,10 +407,27 @@ export default function Projects() {
         updatedAt: new Date().toISOString()
       });
 
+      await Promise.allSettled([
+        updateDoc(leadRef, {
+          photos: updatedPreviewPhotos,
+          photoCount: newPhotoCount,
+          updatedAt: new Date().toISOString(),
+        }),
+        updateDoc(marketplaceRef, {
+          photos: updatedPreviewPhotos,
+          photoCount: newPhotoCount,
+          updatedAt: new Date().toISOString(),
+        }),
+      ]);
+
       toast.success("Photos added successfully!");
     } catch (error) {
       console.error("Error adding photos:", error);
-      toast.error("Failed to add photos");
+      const message =
+        error instanceof Error && error.message.includes('timed out')
+          ? 'Photo upload timed out. Check Firebase Storage rules and try again.'
+          : 'Failed to add photos. Check Firebase Storage rules and try again.';
+      toast.error(message);
     } finally {
       setIsUploading(false);
     }
@@ -412,6 +439,8 @@ export default function Projects() {
     setIsUpdating(true);
     const photoRef = doc(db, 'projects', selectedProject.id, 'photos', photoId);
     const projectRef = doc(db, 'projects', selectedProject.id);
+    const leadRef = doc(db, 'leads', selectedProject.id);
+    const marketplaceRef = doc(db, 'lead_marketplace', selectedProject.id);
 
     try {
       await deleteDoc(photoRef);
@@ -430,6 +459,19 @@ export default function Projects() {
         photos: newPreviews,
         updatedAt: new Date().toISOString()
       });
+
+      await Promise.allSettled([
+        updateDoc(leadRef, {
+          photoCount: newPhotoCount,
+          photos: newPreviews,
+          updatedAt: new Date().toISOString(),
+        }),
+        updateDoc(marketplaceRef, {
+          photoCount: newPhotoCount,
+          photos: newPreviews,
+          updatedAt: new Date().toISOString(),
+        }),
+      ]);
 
       toast.success("Photo removed");
     } catch (error) {
@@ -991,7 +1033,7 @@ export default function Projects() {
                           className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
                           referrerPolicy="no-referrer"
                         />
-                        {!isContractor && (
+                        {!isContractor && !photo.id.startsWith('preview-') && (
                           <button 
                             onClick={() => handleDeletePhoto(photo.id)}
                             className="absolute top-4 right-4 w-10 h-10 bg-red-500 text-white rounded-2xl opacity-0 group-hover/img:opacity-100 transition-all shadow-xl flex items-center justify-center hover:scale-110 active:scale-90"

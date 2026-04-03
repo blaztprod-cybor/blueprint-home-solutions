@@ -5,8 +5,11 @@
       "rules": "firestore.rules"
     },
     {
-      "database": "ai-studio-0535c480-1012-4655-a793-62fed6b056e5",
+      "database": "blueprinthomesolutionsdata",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
 }

@@ -11,10 +11,13 @@ import {
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
   where,
+  limit,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
@@ -49,12 +52,37 @@ export default function ContractorLeads() {
             : Promise.resolve({ docs: [] } as Awaited<ReturnType<typeof getDocs>>),
         ]);
 
-        setLeads(
-          leadSnapshot.docs.map((entry) => ({
-            id: entry.id,
-            ...(entry.data() as Omit<LeadMarketplaceItem, 'id'>),
-          }))
+        const rawLeads = leadSnapshot.docs.map((entry) => ({
+          id: entry.id,
+          ...(entry.data() as Omit<LeadMarketplaceItem, 'id'>),
+        })) as LeadMarketplaceItem[];
+
+        const hydratedLeads = await Promise.all(
+          rawLeads.map(async (lead) => {
+            if ((lead.photos?.length || 0) > 0 || (lead.photoCount || 0) === 0) {
+              return lead;
+            }
+
+            try {
+              const projectPhotosSnapshot = await getDocs(
+                query(collection(db, 'projects', lead.leadId, 'photos'), orderBy('createdAt', 'asc'), limit(3))
+              );
+              const fallbackPhotos = projectPhotosSnapshot.docs.map((entry) => entry.data().url).filter(Boolean);
+              if (fallbackPhotos.length > 0) {
+                return { ...lead, photos: fallbackPhotos };
+              }
+
+              const projectSnapshot = await getDoc(doc(db, 'projects', lead.leadId));
+              const projectPhotos = projectSnapshot.exists() ? ((projectSnapshot.data().photos as string[] | undefined) || []) : [];
+              return projectPhotos.length > 0 ? { ...lead, photos: projectPhotos } : lead;
+            } catch (syncError) {
+              console.error('Error hydrating lead preview photos:', syncError);
+              return lead;
+            }
+          })
         );
+
+        setLeads(hydratedLeads);
         setInquiries(
           inquirySnapshot.docs.map((entry) => ({
             id: entry.id,

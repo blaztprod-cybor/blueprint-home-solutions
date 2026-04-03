@@ -11,6 +11,11 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+  const contractorHasPaidAccess =
+    user?.role === 'Contractor' &&
+    !!user.isVerified &&
+    !!user.subscriptionLevel &&
+    user.subscriptionLevel !== 'none';
 
   if (isLoading) {
     return (
@@ -29,7 +34,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // Redirect to their own dashboard if they try to access the wrong one
-    const defaultPath = user.role === 'admin' ? '/admin' : '/projects';
+    const defaultPath = user.role === 'admin'
+      ? '/admin'
+      : user.role === 'Contractor'
+        ? (contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+        : '/homeowner-dashboard';
     return <Navigate to={defaultPath} replace />;
   }
 
