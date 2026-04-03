@@ -17,6 +17,9 @@ export default function TermsOfService() {
     if (role) {
       nextParams.set('role', role);
     }
+    if (signupFlow) {
+      nextParams.set('tos', 'accepted');
+    }
 
     navigate(`/signup${nextParams.toString() ? `?${nextParams.toString()}` : ''}`);
   };

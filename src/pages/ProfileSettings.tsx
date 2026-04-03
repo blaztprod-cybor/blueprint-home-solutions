@@ -29,19 +29,24 @@ export default function ProfileSettings() {
     street: user?.street || '',
     town: user?.town || '',
     zip: user?.zip || '',
-    governmentIdNumber: user?.governmentIdNumber || '',
+    governmentIdImage: user?.governmentIdImage || '',
     licenseNumber: user?.licenseNumber || '',
     isTradesman: user?.isTradesman || false,
     trade: user?.trade || ''
   });
+  const governmentIdInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
     setIsSaving(true);
     setError('');
     try {
       if (user.role === 'Contractor') {
-        if (!formData.phone.trim() || !formData.street.trim() || !formData.town.trim() || !formData.zip.trim() || !formData.governmentIdNumber.trim()) {
-          throw new Error('Phone, full address, town, zip code, and government ID are required for contractor accounts.');
+        if (!user.avatar || user.avatar.startsWith('data:image/svg+xml')) {
+          throw new Error('A real profile photo is required for contractor accounts.');
+        }
+
+        if (!formData.phone.trim() || !formData.street.trim() || !formData.town.trim() || !formData.zip.trim() || !formData.governmentIdImage.trim()) {
+          throw new Error('Phone, full address, town, zip code, and a government ID photo are required for contractor accounts.');
         }
 
         if (formData.isTradesman && !formData.trade.trim()) {
@@ -59,7 +64,7 @@ export default function ProfileSettings() {
         street: formData.street,
         town: formData.town,
         zip: formData.zip,
-        governmentIdNumber: formData.governmentIdNumber,
+        governmentIdImage: formData.governmentIdImage,
         licenseNumber: formData.licenseNumber,
         isTradesman: formData.isTradesman,
         trade: formData.trade
@@ -132,12 +137,31 @@ export default function ProfileSettings() {
     }
   };
 
+  const handleGovernmentIdChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      const compressed = await compressImage(base64);
+      setFormData((current) => ({ ...current, governmentIdImage: compressed }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile Info', icon: User },
     ...(user?.role === 'Contractor' ? [{ id: 'billing', label: 'Billing & Plans', icon: CreditCard }] : []),
   ];
 
   if (!user) return null;
+
+  const requiredMark = <span className="ml-1 text-red-500">*</span>;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -192,6 +216,11 @@ export default function ProfileSettings() {
                   accept="image/*" 
                   onChange={handleFileChange} 
                 />
+                {user.role === 'Contractor' && (
+                  <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Profile Photo {requiredMark}
+                  </p>
+                )}
               </div>
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2">
@@ -221,7 +250,7 @@ export default function ProfileSettings() {
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phone Number</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phone Number {user.role === 'Contractor' ? requiredMark : null}</label>
                 <input 
                   type="tel" 
                   value={formData.phone} 
@@ -231,7 +260,7 @@ export default function ProfileSettings() {
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                  {user.role === 'Contractor' ? 'Permanent / Business Address' : 'Street Address (Optional)'}
+                  {user.role === 'Contractor' ? <>Permanent / Business Address {requiredMark}</> : 'Street Address (Optional)'}
                 </label>
                 <input 
                   type="text" 
@@ -242,7 +271,7 @@ export default function ProfileSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Town / City</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Town / City {user.role === 'Contractor' ? requiredMark : null}</label>
                 <input 
                   type="text" 
                   value={formData.town} 
@@ -251,7 +280,7 @@ export default function ProfileSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Zip Code</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Zip Code {user.role === 'Contractor' ? requiredMark : null}</label>
                 <input 
                   type="text" 
                   value={formData.zip} 
@@ -263,16 +292,24 @@ export default function ProfileSettings() {
               {user.role === 'Contractor' && (
                 <div className="md:col-span-2 space-y-6 pt-4 border-t border-slate-100">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Government ID / Driver's License</label>
-                    <div className="relative group">
-                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
-                      <input 
-                        type="text" 
-                        value={formData.governmentIdNumber}
-                        onChange={(e) => setFormData({ ...formData, governmentIdNumber: e.target.value })}
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all"
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Upload Government ID / Driver's License {requiredMark}</label>
+                    <label className="flex min-h-[72px] cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition-colors hover:border-primary/40 hover:bg-slate-100/70">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                        <Camera size={20} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-slate-700">
+                          {formData.governmentIdImage ? 'Government ID uploaded' : 'Upload ID'}
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        ref={governmentIdInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleGovernmentIdChange}
                       />
-                    </div>
+                    </label>
                   </div>
 
                   <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -284,13 +321,13 @@ export default function ProfileSettings() {
                       className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
                     />
                     <label htmlFor="isTradesman" className="text-sm font-bold text-slate-600 cursor-pointer select-none">
-                      I am a Tradesman (No License Required)
+                      I am an Unlicensed Tradesman
                     </label>
                   </div>
 
                   {formData.isTradesman ? (
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Trade</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Trade {requiredMark}</label>
                       <div className="relative group">
                         <Hammer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                         <input 
@@ -304,7 +341,7 @@ export default function ProfileSettings() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contractor License Number</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contractor Or Trade License Number {requiredMark}</label>
                       <div className="relative group">
                         <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                         <input 

@@ -83,7 +83,7 @@ function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = 
       street: nextUser.street,
       town: nextUser.town,
       zip: nextUser.zip,
-      governmentIdNumber: nextUser.governmentIdNumber,
+      governmentIdImage: nextUser.governmentIdImage,
       avatar: nextUser.avatar,
       isVerified: nextUser.isVerified ?? false,
       licenseNumber: nextUser.licenseNumber,

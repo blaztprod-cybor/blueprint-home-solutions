@@ -10,6 +10,7 @@ export default function SignUp() {
   const [searchParams] = useSearchParams();
   const redirectTarget = searchParams.get('redirect');
   const category = searchParams.get('category');
+  const termsAcceptedFromLink = searchParams.get('tos') === 'accepted';
   const [role] = useState<UserRole>('Contractor');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -19,13 +20,12 @@ export default function SignUp() {
   const [street, setStreet] = useState('');
   const [town, setTown] = useState('');
   const [zip, setZip] = useState('');
-  const [governmentIdNumber, setGovernmentIdNumber] = useState('');
+  const [governmentIdImage, setGovernmentIdImage] = useState<string | undefined>(undefined);
   const [licenseNumber, setLicenseNumber] = useState('');
   const [isTradesman, setIsTradesman] = useState(false);
   const [trade, setTrade] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
   const [showPassword, setShowPassword] = useState(false);
-  const [acceptedContractorTerms, setAcceptedContractorTerms] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user, signup, loginWithGoogle } = useAuth();
@@ -38,11 +38,13 @@ export default function SignUp() {
   const contractorProfileComplete =
     user?.role !== 'Contractor' ||
     (
+      !!user.avatar &&
+      !user.avatar.startsWith('data:image/svg+xml') &&
       !!user.phone?.trim() &&
       !!user.street?.trim() &&
       !!user.town?.trim() &&
       !!user.zip?.trim() &&
-      !!user.governmentIdNumber?.trim() &&
+      !!user.governmentIdImage?.trim() &&
       (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
     );
   
@@ -129,8 +131,13 @@ export default function SignUp() {
         return;
       }
 
-      if (role === 'Contractor' && (!phone || !street || !town || !zip || !governmentIdNumber)) {
-        setError('Phone, address, town, zip code, and government ID are required for contractor onboarding.');
+      if (role === 'Contractor' && (!phone || !street || !town || !zip || !governmentIdImage)) {
+        setError('Phone, address, town, zip code, and a government ID photo are required for contractor onboarding.');
+        return;
+      }
+
+      if (role === 'Contractor' && !avatar) {
+        setError('A real profile photo is required for contractor onboarding.');
         return;
       }
   
@@ -159,8 +166,8 @@ export default function SignUp() {
         return;
       }
 
-      if (role === 'Contractor' && !acceptedContractorTerms) {
-        setError('Please confirm that you have read and understand the Terms of Service before joining.');
+      if (role === 'Contractor' && !termsAcceptedFromLink) {
+        setError('Please read the Terms of Service and confirm your understanding before joining.');
         return;
       }
   
@@ -171,7 +178,7 @@ export default function SignUp() {
           street: street.trim(),
           town: town.trim(),
           zip: zip.trim(),
-          governmentIdNumber: governmentIdNumber.trim(),
+          governmentIdImage,
           licenseNumber: licenseNumber.trim(),
           avatar,
           isTradesman,
@@ -221,6 +228,25 @@ export default function SignUp() {
       }
     };
 
+    const requiredMark = <span className="ml-1 text-red-500">*</span>;
+
+    const handleGovernmentIdChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image size must be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        const compressed = await compressImage(base64);
+        setGovernmentIdImage(compressed);
+      };
+      reader.readAsDataURL(file);
+    };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <motion.div 
@@ -237,13 +263,20 @@ export default function SignUp() {
           </Link>
           <h2 className="text-3xl font-black tracking-tight mb-2">Create Account</h2>
           <p className="text-slate-500 font-medium">Join the Home Pro network</p>
+          {role === 'Contractor' && (
+            <div className="mt-5">
+              <Link
+                to={`/terms?flow=signup&role=${role.toLowerCase()}`}
+                className="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-red-600 shadow-sm transition-colors hover:bg-red-100"
+              >
+                Please Read The Terms Of Service
+              </Link>
+            </div>
+          )}
         </div>
 
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50">
           <div className="mb-8 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-left">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/20">
-              <Hammer size={20} />
-            </div>
             <p className="font-bold text-sm text-primary">Contractor / Tradesman</p>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Grow your business</p>
           </div>
@@ -275,11 +308,11 @@ export default function SignUp() {
                     <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                   </label>
                 </div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Upload Profile Photo (Optional)</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Upload Profile Photo {requiredMark}</p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name {requiredMark}</label>
                 <div className="relative group">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                   <input 
@@ -303,13 +336,13 @@ export default function SignUp() {
                       className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
                     />
                     <label htmlFor="isTradesman" className="text-sm font-bold text-slate-600 cursor-pointer select-none">
-                      I am a Tradesman (No License Required)
+                      I am an Unlicensed Tradesman
                     </label>
                   </div>
 
                   {isTradesman ? (
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Trade</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Trade {requiredMark}</label>
                       <div className="relative group">
                         <Hammer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                         <input 
@@ -324,7 +357,7 @@ export default function SignUp() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contractor License Number (Optional)</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contractor Or Trade License Number {requiredMark}</label>
                       <div className="relative group">
                         <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                         <input 
@@ -335,7 +368,7 @@ export default function SignUp() {
                           className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
                         />
                       </div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">We will verify your license status to prevent fraud</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Licensed contractors and licensed tradesmen must provide a valid license number</p>
                     </div>
                   )}
                 </div>
@@ -343,7 +376,7 @@ export default function SignUp() {
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number {requiredMark}</label>
                   <div className="relative group">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input
@@ -356,20 +389,27 @@ export default function SignUp() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Government ID / Driver's License</label>
-                  <div className="relative group">
-                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Upload Government ID / Driver's License {requiredMark}</label>
+                  <label className="flex min-h-[72px] cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition-colors hover:border-primary/40 hover:bg-slate-100/70">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                      <Camera size={20} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-slate-700">
+                        {governmentIdImage ? 'Government ID uploaded' : 'Upload ID'}
+                      </p>
+                    </div>
                     <input
-                      type="text"
-                      value={governmentIdNumber}
-                      onChange={(e) => setGovernmentIdNumber(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleGovernmentIdChange}
                     />
-                  </div>
+                  </label>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Permanent / Business Address</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Permanent / Business Address {requiredMark}</label>
                   <div className="relative group">
                     <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input
@@ -382,7 +422,7 @@ export default function SignUp() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Town / City</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Town / City {requiredMark}</label>
                   <div className="relative group">
                     <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input
@@ -395,7 +435,7 @@ export default function SignUp() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Zip Code</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Zip Code {requiredMark}</label>
                   <div className="relative group">
                     <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input
@@ -408,7 +448,7 @@ export default function SignUp() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address {requiredMark}</label>
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input 
@@ -422,7 +462,7 @@ export default function SignUp() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Email Address</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Email Address {requiredMark}</label>
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                     <input 
@@ -438,7 +478,7 @@ export default function SignUp() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password {requiredMark}</label>
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                 <input 
@@ -458,29 +498,13 @@ export default function SignUp() {
               </div>
             </div>
 
-            <div className="space-y-3 ml-1">
-              <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded bg-emerald-50 border border-emerald-100 flex items-center justify-center mt-0.5">
-                  <CheckCircle2 size={12} className="text-emerald-600" />
-                </div>
-                <p className="text-xs font-medium text-slate-500 leading-relaxed">
-                  By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
-                </p>
+            <div className="flex items-start gap-3 ml-1">
+              <div className="w-5 h-5 rounded bg-emerald-50 border border-emerald-100 flex items-center justify-center mt-0.5">
+                <CheckCircle2 size={12} className="text-emerald-600" />
               </div>
-
-              {role === 'Contractor' && (
-                <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={acceptedContractorTerms}
-                    onChange={(e) => setAcceptedContractorTerms(e.target.checked)}
-                    className="mt-0.5 h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary/20"
-                  />
-                  <span className="text-xs font-medium leading-relaxed text-slate-600">
-                    Please read the <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="font-bold text-primary hover:underline">Terms of Service</Link> and confirm that you understand Blueprint Home Solutions platform rules before joining as a contractor or tradesman.
-                  </span>
-                </label>
-              )}
+              <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+              </p>
             </div>
 
             <button 

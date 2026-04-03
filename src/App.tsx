@@ -84,12 +84,14 @@ const contractorHasPaidAccess = (user: ReturnType<typeof useAuth>['user']) =>
 const contractorProfileComplete = (user: ReturnType<typeof useAuth>['user']) => {
   if (user?.role !== 'Contractor') return true;
 
+  const hasRealProfilePhoto = !!user.avatar && !user.avatar.startsWith('data:image/svg+xml');
   const hasCoreDetails =
+    hasRealProfilePhoto &&
     !!user.phone?.trim() &&
     !!user.street?.trim() &&
     !!user.town?.trim() &&
     !!user.zip?.trim() &&
-    !!user.governmentIdNumber?.trim();
+    !!user.governmentIdImage?.trim();
 
   const hasTradeCredential = user.isTradesman
     ? !!user.trade?.trim()

@@ -99,7 +99,7 @@ interface AuthContextType {
       street?: string;
       town?: string;
       zip?: string;
-      governmentIdNumber?: string;
+      governmentIdImage?: string;
       licenseNumber?: string;
       avatar?: string;
       isTradesman?: boolean;
@@ -222,7 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               street: data.street,
               town: data.town,
               zip: data.zip,
-              governmentIdNumber: data.governmentIdNumber,
+              governmentIdImage: data.governmentIdImage,
               avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
               isVerified: data.isVerified ?? false,
@@ -336,7 +336,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       street?: string;
       town?: string;
       zip?: string;
-      governmentIdNumber?: string;
+      governmentIdImage?: string;
       licenseNumber?: string;
       avatar?: string;
       isTradesman?: boolean;
@@ -365,7 +365,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: finalAvatar,
         rating: finalRole === 'Contractor' ? 4.9 : undefined,
         isVerified: false,
-        governmentIdNumber: finalRole === 'Contractor' ? nextProfile.governmentIdNumber : undefined,
+        governmentIdImage: finalRole === 'Contractor' ? nextProfile.governmentIdImage : undefined,
         licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
@@ -389,7 +389,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         zip: nextProfile.zip,
         avatar: finalAvatar,
         isVerified: false,
-        governmentIdNumber: finalRole === 'Contractor' ? nextProfile.governmentIdNumber : undefined,
+        governmentIdImage: finalRole === 'Contractor' ? nextProfile.governmentIdImage : undefined,
         licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,

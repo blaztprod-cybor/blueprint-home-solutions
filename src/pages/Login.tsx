@@ -33,11 +33,13 @@ export default function Login() {
   const contractorProfileComplete =
     user?.role !== 'Contractor' ||
     (
+      !!user.avatar &&
+      !user.avatar.startsWith('data:image/svg+xml') &&
       !!user.phone?.trim() &&
       !!user.street?.trim() &&
       !!user.town?.trim() &&
       !!user.zip?.trim() &&
-      !!user.governmentIdNumber?.trim() &&
+      !!user.governmentIdImage?.trim() &&
       (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
     );
 

@@ -161,7 +161,7 @@ export interface User {
   avatar?: string;
   rating?: number;
   isVerified?: boolean;
-  governmentIdNumber?: string;
+  governmentIdImage?: string;
   licenseNumber?: string;
   licenseStatus?: 'Active' | 'Pending' | 'Expired' | 'Invalid';
   isTradesman?: boolean;
