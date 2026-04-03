@@ -15,11 +15,17 @@ export default function SignUp() {
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [street, setStreet] = useState('');
+  const [town, setTown] = useState('');
+  const [zip, setZip] = useState('');
+  const [governmentIdNumber, setGovernmentIdNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [isTradesman, setIsTradesman] = useState(false);
   const [trade, setTrade] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
   const [showPassword, setShowPassword] = useState(false);
+  const [acceptedContractorTerms, setAcceptedContractorTerms] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user, signup, loginWithGoogle } = useAuth();
@@ -29,6 +35,16 @@ export default function SignUp() {
     !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
+  const contractorProfileComplete =
+    user?.role !== 'Contractor' ||
+    (
+      !!user.phone?.trim() &&
+      !!user.street?.trim() &&
+      !!user.town?.trim() &&
+      !!user.zip?.trim() &&
+      !!user.governmentIdNumber?.trim() &&
+      (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
+    );
   
     React.useEffect(() => {
       if (user) {
@@ -41,11 +57,11 @@ export default function SignUp() {
           user.role === 'admin'
             ? '/admin'
             : user.role === 'Contractor'
-              ? (contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+              ? (!contractorProfileComplete ? '/settings' : contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
               : '/homeowner-dashboard'
         );
       }
-    }, [user, navigate, redirectTarget, category, contractorHasPaidAccess]);
+    }, [user, navigate, redirectTarget, category, contractorHasPaidAccess, contractorProfileComplete]);
 
     const compressImage = (base64Str: string): Promise<string> => {
       return new Promise((resolve) => {
@@ -112,6 +128,11 @@ export default function SignUp() {
         setError('Please fill in all fields');
         return;
       }
+
+      if (role === 'Contractor' && (!phone || !street || !town || !zip || !governmentIdNumber)) {
+        setError('Phone, address, town, zip code, and government ID are required for contractor onboarding.');
+        return;
+      }
   
       if (!email.includes('@')) {
         setError('Please enter a valid email address');
@@ -132,10 +153,30 @@ export default function SignUp() {
         setError('Please enter your trade');
         return;
       }
+
+      if (role === 'Contractor' && !isTradesman && !licenseNumber) {
+        setError('Please enter your contractor license number.');
+        return;
+      }
+
+      if (role === 'Contractor' && !acceptedContractorTerms) {
+        setError('Please confirm that you have read and understand the Terms of Service before joining.');
+        return;
+      }
   
       setIsSubmitting(true);
       try {
-        await signup(email.trim(), password, name, role, licenseNumber, avatar, isTradesman, trade);
+        await signup(email.trim(), password, name, role, {
+          phone: phone.trim(),
+          street: street.trim(),
+          town: town.trim(),
+          zip: zip.trim(),
+          governmentIdNumber: governmentIdNumber.trim(),
+          licenseNumber: licenseNumber.trim(),
+          avatar,
+          isTradesman,
+          trade: trade.trim(),
+        });
         // Navigation is handled by the useEffect watching the user state
       } catch (err: any) {
         console.error('Signup error:', err);
@@ -302,6 +343,71 @@ export default function SignUp() {
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                  <div className="relative group">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Government ID / Driver's License</label>
+                  <div className="relative group">
+                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input
+                      type="text"
+                      value={governmentIdNumber}
+                      onChange={(e) => setGovernmentIdNumber(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Permanent / Business Address</label>
+                  <div className="relative group">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input
+                      type="text"
+                      value={street}
+                      onChange={(e) => setStreet(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Town / City</label>
+                  <div className="relative group">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input
+                      type="text"
+                      value={town}
+                      onChange={(e) => setTown(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Zip Code</label>
+                  <div className="relative group">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                    <input
+                      type="text"
+                      value={zip}
+                      onChange={(e) => setZip(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all font-medium text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
@@ -352,13 +458,29 @@ export default function SignUp() {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 ml-1">
-              <div className="w-5 h-5 rounded bg-emerald-50 border border-emerald-100 flex items-center justify-center mt-0.5">
-                <CheckCircle2 size={12} className="text-emerald-600" />
+            <div className="space-y-3 ml-1">
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded bg-emerald-50 border border-emerald-100 flex items-center justify-center mt-0.5">
+                  <CheckCircle2 size={12} className="text-emerald-600" />
+                </div>
+                <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                  By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+                </p>
               </div>
-              <p className="text-xs font-medium text-slate-500 leading-relaxed">
-                By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
-              </p>
+
+              {role === 'Contractor' && (
+                <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptedContractorTerms}
+                    onChange={(e) => setAcceptedContractorTerms(e.target.checked)}
+                    className="mt-0.5 h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary/20"
+                  />
+                  <span className="text-xs font-medium leading-relaxed text-slate-600">
+                    Please read the <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="font-bold text-primary hover:underline">Terms of Service</Link> and confirm that you understand Blueprint Home Solutions platform rules before joining as a contractor or tradesman.
+                  </span>
+                </label>
+              )}
             </div>
 
             <button 

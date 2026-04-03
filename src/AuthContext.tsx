@@ -89,7 +89,23 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (role?: UserRole) => Promise<void>;
-  signup: (email: string, password: string, name: string, role: UserRole, licenseNumber?: string, avatar?: string, isTradesman?: boolean, trade?: string) => Promise<void>;
+  signup: (
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole,
+    profile?: {
+      phone?: string;
+      street?: string;
+      town?: string;
+      zip?: string;
+      governmentIdNumber?: string;
+      licenseNumber?: string;
+      avatar?: string;
+      isTradesman?: boolean;
+      trade?: string;
+    }
+  ) => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -206,6 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               street: data.street,
               town: data.town,
               zip: data.zip,
+              governmentIdNumber: data.governmentIdNumber,
               avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
               isVerified: data.isVerified ?? false,
@@ -309,12 +326,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, password: string, name: string, role: UserRole, licenseNumber?: string, avatar?: string, isTradesman?: boolean, trade?: string) => {
+  const signup = async (
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole,
+    profile?: {
+      phone?: string;
+      street?: string;
+      town?: string;
+      zip?: string;
+      governmentIdNumber?: string;
+      licenseNumber?: string;
+      avatar?: string;
+      isTradesman?: boolean;
+      trade?: string;
+    }
+  ) => {
+    const nextProfile = profile || {};
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
       
-      const finalAvatar = avatar || getInitialsAvatar(name);
+      const finalAvatar = nextProfile.avatar || getInitialsAvatar(name);
 
       const isAdminEmail = email.toLowerCase() === 'blaztprod@gmail.com';
       const finalRole = isAdminEmail ? 'admin' : role;
@@ -324,13 +358,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: name,
         email: email,
         role: finalRole,
+        phone: nextProfile.phone,
+        street: nextProfile.street,
+        town: nextProfile.town,
+        zip: nextProfile.zip,
         avatar: finalAvatar,
         rating: finalRole === 'Contractor' ? 4.9 : undefined,
         isVerified: false,
-        licenseNumber: finalRole === 'Contractor' ? licenseNumber : undefined,
+        governmentIdNumber: finalRole === 'Contractor' ? nextProfile.governmentIdNumber : undefined,
+        licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
-        isTradesman: finalRole === 'Contractor' ? isTradesman : undefined,
-        trade: finalRole === 'Contractor' ? trade : undefined,
+        isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
+        trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         ...getDerivedTrialFields(finalRole),
       };
@@ -344,12 +383,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: email,
         name: name,
         role: finalRole,
+        phone: nextProfile.phone,
+        street: nextProfile.street,
+        town: nextProfile.town,
+        zip: nextProfile.zip,
         avatar: finalAvatar,
         isVerified: false,
-        licenseNumber: finalRole === 'Contractor' ? licenseNumber : undefined,
+        governmentIdNumber: finalRole === 'Contractor' ? nextProfile.governmentIdNumber : undefined,
+        licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
-        isTradesman: finalRole === 'Contractor' ? isTradesman : undefined,
-        trade: finalRole === 'Contractor' ? trade : undefined,
+        isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
+        trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         createdAt: new Date().toISOString(),
       }));

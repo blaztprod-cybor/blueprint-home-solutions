@@ -29,6 +29,7 @@ export default function ProfileSettings() {
     street: user?.street || '',
     town: user?.town || '',
     zip: user?.zip || '',
+    governmentIdNumber: user?.governmentIdNumber || '',
     licenseNumber: user?.licenseNumber || '',
     isTradesman: user?.isTradesman || false,
     trade: user?.trade || ''
@@ -38,12 +39,27 @@ export default function ProfileSettings() {
     setIsSaving(true);
     setError('');
     try {
+      if (user.role === 'Contractor') {
+        if (!formData.phone.trim() || !formData.street.trim() || !formData.town.trim() || !formData.zip.trim() || !formData.governmentIdNumber.trim()) {
+          throw new Error('Phone, full address, town, zip code, and government ID are required for contractor accounts.');
+        }
+
+        if (formData.isTradesman && !formData.trade.trim()) {
+          throw new Error('Tradesmen must provide a trade or specialty.');
+        }
+
+        if (!formData.isTradesman && !formData.licenseNumber.trim()) {
+          throw new Error('Licensed contractors must provide a contractor license number.');
+        }
+      }
+
       await updateProfile({
         name: formData.name,
         phone: formData.phone,
         street: formData.street,
         town: formData.town,
         zip: formData.zip,
+        governmentIdNumber: formData.governmentIdNumber,
         licenseNumber: formData.licenseNumber,
         isTradesman: formData.isTradesman,
         trade: formData.trade
@@ -214,7 +230,9 @@ export default function ProfileSettings() {
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Street Address (Optional)</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  {user.role === 'Contractor' ? 'Permanent / Business Address' : 'Street Address (Optional)'}
+                </label>
                 <input 
                   type="text" 
                   value={formData.street} 
@@ -244,6 +262,19 @@ export default function ProfileSettings() {
 
               {user.role === 'Contractor' && (
                 <div className="md:col-span-2 space-y-6 pt-4 border-t border-slate-100">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Government ID / Driver's License</label>
+                    <div className="relative group">
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
+                      <input 
+                        type="text" 
+                        value={formData.governmentIdNumber}
+                        onChange={(e) => setFormData({ ...formData, governmentIdNumber: e.target.value })}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all"
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <input 
                       type="checkbox" 
@@ -273,7 +304,7 @@ export default function ProfileSettings() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contractor License Number (Optional)</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contractor License Number</label>
                       <div className="relative group">
                         <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                         <input 

@@ -81,8 +81,29 @@ const contractorHasPaidAccess = (user: ReturnType<typeof useAuth>['user']) =>
   !!user.subscriptionLevel &&
   user.subscriptionLevel !== 'none';
 
+const contractorProfileComplete = (user: ReturnType<typeof useAuth>['user']) => {
+  if (user?.role !== 'Contractor') return true;
+
+  const hasCoreDetails =
+    !!user.phone?.trim() &&
+    !!user.street?.trim() &&
+    !!user.town?.trim() &&
+    !!user.zip?.trim() &&
+    !!user.governmentIdNumber?.trim();
+
+  const hasTradeCredential = user.isTradesman
+    ? !!user.trade?.trim()
+    : !!user.licenseNumber?.trim();
+
+  return hasCoreDetails && hasTradeCredential;
+};
+
 const ContractorSubscriptionRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
+
+  if (user?.role === 'Contractor' && !contractorProfileComplete(user)) {
+    return <Navigate to="/settings" replace />;
+  }
 
   if (user?.role === 'Contractor' && !contractorHasPaidAccess(user)) {
     return <Navigate to="/contractor-paywall" replace />;
@@ -310,7 +331,7 @@ export default function App() {
     user?.role === 'admin'
       ? '/admin'
       : user?.role === 'Contractor'
-        ? (contractorHasPaidAccess(user) ? '/lead-marketplace' : '/contractor-paywall')
+        ? (!contractorProfileComplete(user) ? '/settings' : contractorHasPaidAccess(user) ? '/lead-marketplace' : '/contractor-paywall')
         : '/homeowner-dashboard';
   return (
     <Router>
