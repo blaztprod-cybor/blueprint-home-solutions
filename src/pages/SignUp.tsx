@@ -22,14 +22,13 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, signup, loginWithGoogle } = useAuth();
+  const navigate = useNavigate();
   const contractorHasPaidAccess =
     user?.role === 'Contractor' &&
     !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
-  
-    const { user, signup, loginWithGoogle } = useAuth();
-    const navigate = useNavigate();
   
     React.useEffect(() => {
       if (user) {
