@@ -191,7 +191,7 @@ export default function Landing() {
                   Home Improvement Marketplace
                 </p>
                 <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
-                  Select a Category to Start
+                  Select a Category to Start / Describe / Upload Photos / Get Estimates
                 </p>
               </div>
             </div>
