@@ -510,7 +510,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: role
             })
           });
-          const welcomeResult = await welcomeResponse.json();
+          const welcomeResult = await welcomeResponse.json().catch(() => null);
+          if (!welcomeResponse.ok) {
+            throw new Error(welcomeResult?.error || welcomeResponse.statusText || 'Welcome email request failed');
+          }
           console.log("[AuthContext] Welcome email API response:", welcomeResult);
         } catch (emailError) {
           console.error("[AuthContext] Failed to send welcome email:", emailError);
@@ -607,7 +610,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: finalRole
           })
         });
-        const welcomeResult = await welcomeResponse.json();
+        const welcomeResult = await welcomeResponse.json().catch(() => null);
+        if (!welcomeResponse.ok) {
+          throw new Error(welcomeResult?.error || welcomeResponse.statusText || 'Welcome email request failed');
+        }
         console.log("[AuthContext] Welcome email API response:", welcomeResult);
       } catch (emailError) {
         console.error("[AuthContext] Failed to send welcome email:", emailError);
