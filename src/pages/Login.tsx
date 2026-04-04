@@ -19,6 +19,7 @@ export default function Login() {
   const portalRole = searchParams.get('role');
   const redirectTarget = searchParams.get('redirect');
   const category = searchParams.get('category');
+  const leadId = searchParams.get('leadId');
 
   const welcomeText = portalRole === 'homeowner' 
     ? 'Welcome Homeowner' 
@@ -58,6 +59,11 @@ export default function Login() {
         return;
       }
 
+      if (redirectTarget === 'projects' && user.role === 'Homeowner' && leadId) {
+        navigate('/projects', { state: { highlightProjectId: leadId } });
+        return;
+      }
+
       navigate(
         user.role === 'admin'
           ? '/admin'
@@ -66,7 +72,7 @@ export default function Login() {
             : '/homeowner-dashboard'
       );
     }
-  }, [user, navigate, redirectTarget, category, contractorHasPaidAccess, contractorProfileComplete]);
+  }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorProfileComplete]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

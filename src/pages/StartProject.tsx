@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
-import { db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
+import { auth, db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
 import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { projectCategories as services } from '../data/projectCategories';
 import { useAuth } from '../AuthContext';
@@ -49,6 +49,15 @@ const SUBMIT_TIMEOUT_MS = 15000;
 
 function getSubmissionErrorMessage(error: unknown) {
   if (error instanceof Error) {
+    if ('code' in error && error.code === 'auth/email-already-in-use') {
+      return 'That email already has a Blueprint account. Log in first, then submit the project from your account.';
+    }
+    if ('code' in error && error.code === 'auth/invalid-email') {
+      return 'Enter a valid email address to create your homeowner account.';
+    }
+    if ('code' in error && error.code === 'auth/weak-password') {
+      return 'Create a stronger password with at least 6 characters.';
+    }
     if (error.message.includes('timed out')) {
       return 'Photo upload timed out. Try one photo first or submit without photos, then add them after the project is created.';
     }
@@ -70,7 +79,7 @@ export default function StartProject() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, signup } = useAuth();
 
   const routeCategory =
     typeof location.state?.category === 'string'
@@ -92,6 +101,8 @@ export default function StartProject() {
     description: '',
   });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [descriptionError, setDescriptionError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -219,17 +230,43 @@ export default function StartProject() {
       return;
     }
 
+    if (!user) {
+      if (!password || password.length < 6) {
+        setSubmitError('Create a password with at least 6 characters to set up your homeowner account.');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setSubmitError('Password confirmation does not match.');
+        return;
+      }
+    }
+
     setSubmitError('');
     setIsSubmitting(true);
 
     try {
+      if (!user) {
+        await signup(formData.email.trim(), password, formData.name.trim(), 'Homeowner', {
+          phone: formData.phone.trim(),
+          street: formData.street.trim(),
+          town: formData.town.trim(),
+          zip: formData.zip.trim(),
+        });
+      }
+
+      const accountOwnerId = user?.id || auth.currentUser?.uid;
+      if (!accountOwnerId) {
+        throw new Error('Homeowner account could not be created.');
+      }
+
       const createdAt = new Date().toISOString();
       const description = formData.description.trim();
       const leadRef = doc(collection(db, 'leads'));
       const marketplaceRef = doc(db, 'lead_marketplace', leadRef.id);
-      const projectRef = user ? doc(db, 'projects', leadRef.id) : null;
+      const projectRef = doc(db, 'projects', leadRef.id);
       const batch = writeBatch(db);
-      const photoStoragePath = projectRef ? `projects/${leadRef.id}/photos` : `leads/${leadRef.id}`;
+      const photoStoragePath = `projects/${leadRef.id}/photos`;
       let uploadedPhotoUrls: string[] = [];
       let photoUploadIssue = false;
 
@@ -275,37 +312,35 @@ export default function StartProject() {
         createdAt,
       });
 
-      if (projectRef) {
-        batch.set(projectRef, {
-          uid: user.id,
-          title: selectedService?.title || 'General Project',
-          description,
-          status: 'New Open Project',
-          budget: 0,
-          startDate: formData.startDate,
-          category: selectedService?.title || 'General',
-          phone: formData.phone.trim(),
-          location: {
-            street: formData.street.trim(),
-            town: formData.town.trim(),
-            zip: formData.zip.trim(),
-          },
-          photoCount: uploadedPhotoUrls.length,
-          photos: projectPhotosPreview,
-          services: selectedService ? [selectedService.title] : ['General'],
-          createdAt,
-          updatedAt: createdAt,
-        });
+      batch.set(projectRef, {
+        uid: accountOwnerId,
+        title: selectedService?.title || 'General Project',
+        description,
+        status: 'New Open Project',
+        budget: 0,
+        startDate: formData.startDate,
+        category: selectedService?.title || 'General',
+        phone: formData.phone.trim(),
+        location: {
+          street: formData.street.trim(),
+          town: formData.town.trim(),
+          zip: formData.zip.trim(),
+        },
+        photoCount: uploadedPhotoUrls.length,
+        photos: projectPhotosPreview,
+        services: selectedService ? [selectedService.title] : ['General'],
+        createdAt,
+        updatedAt: createdAt,
+      });
 
-        uploadedPhotoUrls.forEach((url, index) => {
-          const photoRef = doc(collection(db, 'projects', projectRef.id, 'photos'));
-          batch.set(photoRef, {
-            url,
-            createdAt: new Date(Date.now() + index).toISOString(),
-            uid: user.id,
-          });
+      uploadedPhotoUrls.forEach((url, index) => {
+        const photoRef = doc(collection(db, 'projects', projectRef.id, 'photos'));
+        batch.set(photoRef, {
+          url,
+          createdAt: new Date(Date.now() + index).toISOString(),
+          uid: accountOwnerId,
         });
-      }
+      });
 
       await Promise.race([
         batch.commit(),
@@ -314,27 +349,23 @@ export default function StartProject() {
         }),
       ]);
 
-      if (user?.role === 'Homeowner') {
-        try {
-          await updateProfile({
-            phone: formData.phone.trim(),
-            street: formData.street.trim(),
-            town: formData.town.trim(),
-            zip: formData.zip.trim(),
-          });
-        } catch (error) {
-          console.error('[StartProject] Failed to save homeowner details:', error);
-        }
+      try {
+        await updateProfile({
+          phone: formData.phone.trim(),
+          street: formData.street.trim(),
+          town: formData.town.trim(),
+          zip: formData.zip.trim(),
+        });
+      } catch (error) {
+        console.error('[StartProject] Failed to save homeowner details:', error);
       }
 
       navigate('/thank-you', {
-        state: projectRef
-          ? {
-              projectId: projectRef.id,
-              projectSubmitted: true,
-              photoUploadIssue,
-            }
-          : { photoUploadIssue },
+        state: {
+          projectId: projectRef.id,
+          projectSubmitted: true,
+          photoUploadIssue,
+        },
       });
 
       void (async () => {
@@ -503,6 +534,35 @@ export default function StartProject() {
                 className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
               />
             </div>
+            {!user && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Create Password</label>
+                  <input
+                    required
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Confirm Password</label>
+                  <input
+                    required
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                  />
+                </div>
+                <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+                  Submitting this request will also create your homeowner account so you can track estimates and project activity.
+                </div>
+              </>
+            )}
           </div>
           )}
         </section>

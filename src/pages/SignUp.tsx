@@ -6,10 +6,13 @@ import { useAuth } from '../AuthContext';
 import { cn } from '../lib/utils';
 import { UserRole } from '../types';
 
+const CONTRACTOR_SIGNUP_DRAFT_KEY = 'blueprint_contractor_signup_draft';
+
 export default function SignUp() {
   const [searchParams] = useSearchParams();
   const redirectTarget = searchParams.get('redirect');
   const category = searchParams.get('category');
+  const leadId = searchParams.get('leadId');
   const termsAcceptedFromLink = searchParams.get('tos') === 'accepted';
   const [role] = useState<UserRole>('Contractor');
   const [name, setName] = useState('');
@@ -47,11 +50,76 @@ export default function SignUp() {
       !!user.governmentIdImage?.trim() &&
       (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
     );
+
+    React.useEffect(() => {
+      try {
+        const rawDraft = sessionStorage.getItem(CONTRACTOR_SIGNUP_DRAFT_KEY);
+        if (!rawDraft) return;
+        const draft = JSON.parse(rawDraft) as Partial<{
+          name: string;
+          email: string;
+          confirmEmail: string;
+          phone: string;
+          street: string;
+          town: string;
+          zip: string;
+          governmentIdImage: string;
+          licenseNumber: string;
+          isTradesman: boolean;
+          trade: string;
+          avatar: string;
+        }>;
+
+        if (draft.name) setName(draft.name);
+        if (draft.email) setEmail(draft.email);
+        if (draft.confirmEmail) setConfirmEmail(draft.confirmEmail);
+        if (draft.phone) setPhone(draft.phone);
+        if (draft.street) setStreet(draft.street);
+        if (draft.town) setTown(draft.town);
+        if (draft.zip) setZip(draft.zip);
+        if (draft.governmentIdImage) setGovernmentIdImage(draft.governmentIdImage);
+        if (draft.licenseNumber) setLicenseNumber(draft.licenseNumber);
+        if (typeof draft.isTradesman === 'boolean') setIsTradesman(draft.isTradesman);
+        if (draft.trade) setTrade(draft.trade);
+        if (draft.avatar) setAvatar(draft.avatar);
+      } catch (draftError) {
+        console.error('[SignUp] Failed to restore contractor signup draft:', draftError);
+      }
+    }, []);
+
+    React.useEffect(() => {
+      try {
+        sessionStorage.setItem(
+          CONTRACTOR_SIGNUP_DRAFT_KEY,
+          JSON.stringify({
+            name,
+            email,
+            confirmEmail,
+            phone,
+            street,
+            town,
+            zip,
+            governmentIdImage,
+            licenseNumber,
+            isTradesman,
+            trade,
+            avatar,
+          })
+        );
+      } catch (draftError) {
+        console.error('[SignUp] Failed to save contractor signup draft:', draftError);
+      }
+    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar]);
   
     React.useEffect(() => {
       if (user) {
         if (redirectTarget === 'start-project' && user.role === 'Homeowner') {
           navigate('/start-project', { state: { category } });
+          return;
+        }
+
+        if (redirectTarget === 'projects' && user.role === 'Homeowner' && leadId) {
+          navigate('/projects', { state: { highlightProjectId: leadId } });
           return;
         }
 
@@ -63,7 +131,7 @@ export default function SignUp() {
               : '/homeowner-dashboard'
         );
       }
-    }, [user, navigate, redirectTarget, category, contractorHasPaidAccess, contractorProfileComplete]);
+    }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorProfileComplete]);
 
     const compressImage = (base64Str: string): Promise<string> => {
       return new Promise((resolve) => {
@@ -184,6 +252,7 @@ export default function SignUp() {
           isTradesman,
           trade: trade.trim(),
         });
+        sessionStorage.removeItem(CONTRACTOR_SIGNUP_DRAFT_KEY);
         // Navigation is handled by the useEffect watching the user state
       } catch (err: any) {
         console.error('Signup error:', err);

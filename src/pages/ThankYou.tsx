@@ -6,6 +6,7 @@ import { Link, useLocation } from 'react-router-dom';
 export default function ThankYou() {
   const location = useLocation();
   const hasProject = Boolean(location.state?.projectId);
+  const pendingLeadId = location.state?.pendingLeadId as string | undefined;
   const photoUploadIssue = Boolean(location.state?.photoUploadIssue);
 
   return (
@@ -59,10 +60,10 @@ export default function ThankYou() {
             </Link>
           ) : (
             <Link
-              to="/"
+              to={pendingLeadId ? `/login?role=homeowner&redirect=projects&leadId=${encodeURIComponent(pendingLeadId)}` : '/'}
               className="w-full flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform"
             >
-              Back to Home
+              {pendingLeadId ? 'Go To Project' : 'Back to Home'}
               <ArrowRight size={18} />
             </Link>
           )}

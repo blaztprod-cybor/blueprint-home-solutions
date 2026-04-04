@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Lock } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 const plans = [
   {
@@ -38,6 +39,24 @@ const plans = [
 ];
 
 export default function ContractorPaywall() {
+  const { user } = useAuth();
+  const contractorProfileComplete =
+    user?.role !== 'Contractor' ||
+    (
+      !!user.avatar &&
+      !user.avatar.startsWith('data:image/svg+xml') &&
+      !!user.phone?.trim() &&
+      !!user.street?.trim() &&
+      !!user.town?.trim() &&
+      !!user.zip?.trim() &&
+      !!user.governmentIdImage?.trim() &&
+      (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
+    );
+  const freeTrialLink =
+    user?.role === 'Contractor'
+      ? (contractorProfileComplete ? '/lead-marketplace' : '/settings')
+      : '/signup?role=contractor';
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
       <style>{`
@@ -85,7 +104,7 @@ export default function ContractorPaywall() {
               <p className="mt-4 text-sm font-medium leading-6 text-slate-600">{plan.description}</p>
               {plan.isActive ? (
                 <Link
-                  to={plan.ctaLink}
+                  to={plan.name === 'Two Weeks Free' ? freeTrialLink : plan.ctaLink}
                   className="mt-8 block w-full rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 text-center text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {plan.ctaLabel}

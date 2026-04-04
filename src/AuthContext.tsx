@@ -15,7 +15,9 @@ import {
   doc, 
   setDoc, 
   getDoc, 
-  getDocFromServer 
+  getDocFromServer,
+  collection,
+  writeBatch
 } from 'firebase/firestore';
 
 enum OperationType {
@@ -116,6 +118,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const MISSING_ACCOUNT_NOTICE =
   'This account is no longer active in Blueprint Home Solutions. Contact admin if you need access restored.';
+const PENDING_PUBLIC_SUBMISSIONS_KEY = 'blueprint_pending_public_submissions';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -132,6 +135,49 @@ async function getUserDocWithRetry(userId: string, attempts = 8, delayMs = 250) 
   }
 
   return null;
+}
+
+type PendingPublicSubmission = {
+  leadId: string;
+  email: string;
+  name: string;
+  phone: string;
+  category: string;
+  description: string;
+  startDate: string;
+  location: {
+    street: string;
+    town: string;
+    zip: string;
+  };
+  photoCount: number;
+  photos: string[];
+  createdAt: string;
+};
+
+function loadPendingPublicSubmissions() {
+  try {
+    const raw = localStorage.getItem(PENDING_PUBLIC_SUBMISSIONS_KEY);
+    if (!raw) return [] as PendingPublicSubmission[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as PendingPublicSubmission[] : [];
+  } catch {
+    return [] as PendingPublicSubmission[];
+  }
+}
+
+function savePendingPublicSubmissions(submissions: PendingPublicSubmission[]) {
+  localStorage.setItem(PENDING_PUBLIC_SUBMISSIONS_KEY, JSON.stringify(submissions));
+}
+
+function loadCachedBlueprintUser() {
+  try {
+    const raw = localStorage.getItem('blueprint_user');
+    if (!raw) return null;
+    return JSON.parse(raw) as Partial<User>;
+  } catch {
+    return null;
+  }
 }
 
 const getInitialsAvatar = (name: string) => {
@@ -187,9 +233,120 @@ function getDerivedSubscriptionLevel(role: UserRole, createdAt?: string) {
   return trialEndsAt > Date.now() ? ('trial' as const) : ('none' as const);
 }
 
+function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
+  const cachedUser = loadCachedBlueprintUser();
+  const cachedMatchesIdentity =
+    cachedUser?.id === firebaseUser.uid &&
+    cachedUser?.email &&
+    firebaseUser.email &&
+    cachedUser.email.trim().toLowerCase() === firebaseUser.email.trim().toLowerCase();
+
+  const role = cachedMatchesIdentity && cachedUser?.role ? cachedUser.role : 'Homeowner';
+  const createdAt = new Date().toISOString();
+  const avatar =
+    (cachedMatchesIdentity && cachedUser?.avatar && !cachedUser.avatar.startsWith('data:image/svg+xml')
+      ? cachedUser.avatar
+      : undefined) ||
+    firebaseUser.photoURL ||
+    getInitialsAvatar(cachedUser?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User');
+
+  const recoveredUser: User = {
+    id: firebaseUser.uid,
+    name: (cachedMatchesIdentity && cachedUser?.name) || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+    email: firebaseUser.email || '',
+    role,
+    phone: cachedMatchesIdentity ? cachedUser?.phone : undefined,
+    street: cachedMatchesIdentity ? cachedUser?.street : undefined,
+    town: cachedMatchesIdentity ? cachedUser?.town : undefined,
+    zip: cachedMatchesIdentity ? cachedUser?.zip : undefined,
+    governmentIdImage: cachedMatchesIdentity ? cachedUser?.governmentIdImage : undefined,
+    avatar,
+    rating: role === 'Contractor' ? 4.9 : undefined,
+    isVerified: cachedMatchesIdentity ? (cachedUser?.isVerified ?? false) : false,
+    licenseNumber: cachedMatchesIdentity ? cachedUser?.licenseNumber : undefined,
+    licenseStatus: cachedMatchesIdentity ? cachedUser?.licenseStatus : undefined,
+    isTradesman: cachedMatchesIdentity ? cachedUser?.isTradesman : undefined,
+    trade: cachedMatchesIdentity ? cachedUser?.trade : undefined,
+    subscriptionLevel: cachedMatchesIdentity && cachedUser?.subscriptionLevel
+      ? cachedUser.subscriptionLevel
+      : getDerivedSubscriptionLevel(role, createdAt),
+    ...getDerivedTrialFields(role, createdAt),
+  };
+
+  return { recoveredUser, createdAt };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const claimPendingPublicSubmissions = async (nextUser: User) => {
+    if (nextUser.role !== 'Homeowner') return;
+
+    const pendingSubmissions = loadPendingPublicSubmissions();
+    if (pendingSubmissions.length === 0) return;
+
+    const matchingSubmissions = pendingSubmissions.filter(
+      (submission) => submission.email.trim().toLowerCase() === nextUser.email.trim().toLowerCase()
+    );
+
+    if (matchingSubmissions.length === 0) return;
+
+    for (const submission of matchingSubmissions) {
+      const projectRef = doc(db, 'projects', submission.leadId);
+      const projectSnapshot = await getDoc(projectRef);
+      if (projectSnapshot.exists()) {
+        continue;
+      }
+
+      const batch = writeBatch(db);
+      batch.set(projectRef, {
+        uid: nextUser.id,
+        title: submission.category || 'General Project',
+        description: submission.description,
+        status: 'New Open Project',
+        budget: 0,
+        startDate: submission.startDate,
+        category: submission.category,
+        phone: submission.phone,
+        location: submission.location,
+        photoCount: submission.photoCount,
+        photos: submission.photos.slice(0, 3),
+        services: submission.category ? [submission.category] : ['General'],
+        createdAt: submission.createdAt,
+        updatedAt: new Date().toISOString(),
+      });
+
+      submission.photos.forEach((url, index) => {
+        const photoRef = doc(collection(db, 'projects', submission.leadId, 'photos'));
+        batch.set(photoRef, {
+          url,
+          createdAt: new Date(new Date(submission.createdAt).getTime() + index).toISOString(),
+          uid: nextUser.id,
+        });
+      });
+
+      batch.set(doc(db, 'users', nextUser.id), stripUndefinedFields({
+        uid: nextUser.id,
+        email: nextUser.email,
+        name: nextUser.name,
+        role: nextUser.role,
+        phone: nextUser.phone || submission.phone,
+        street: nextUser.street || submission.location.street,
+        town: nextUser.town || submission.location.town,
+        zip: nextUser.zip || submission.location.zip,
+        avatar: nextUser.avatar,
+        updatedAt: new Date().toISOString(),
+      }), { merge: true });
+
+      await batch.commit();
+    }
+
+    const remainingSubmissions = pendingSubmissions.filter(
+      (submission) => submission.email.trim().toLowerCase() !== nextUser.email.trim().toLowerCase()
+    );
+    savePendingPublicSubmissions(remainingSubmissions);
+  };
 
   useEffect(() => {
     // Validate connection to Firestore on boot
@@ -231,11 +388,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
             setUser(userData);
             localStorage.setItem('blueprint_user', JSON.stringify(userData));
+            await claimPendingPublicSubmissions(userData);
           } else {
-            sessionStorage.setItem('blueprint_auth_notice', MISSING_ACCOUNT_NOTICE);
-            localStorage.removeItem('blueprint_user');
-            setUser(null);
-            await signOut(auth);
+            const { recoveredUser, createdAt } = buildRecoveredUserFromAuth(firebaseUser);
+            await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
+              uid: firebaseUser.uid,
+              email: recoveredUser.email,
+              name: recoveredUser.name,
+              role: recoveredUser.role,
+              phone: recoveredUser.phone,
+              street: recoveredUser.street,
+              town: recoveredUser.town,
+              zip: recoveredUser.zip,
+              governmentIdImage: recoveredUser.governmentIdImage,
+              avatar: recoveredUser.avatar,
+              isVerified: recoveredUser.isVerified ?? false,
+              licenseNumber: recoveredUser.licenseNumber,
+              licenseStatus: recoveredUser.licenseStatus,
+              isTradesman: recoveredUser.isTradesman,
+              trade: recoveredUser.trade,
+              subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
+              createdAt,
+              updatedAt: new Date().toISOString(),
+            }));
+
+            setUser(recoveredUser);
+            localStorage.setItem('blueprint_user', JSON.stringify(recoveredUser));
+            await claimPendingPublicSubmissions(recoveredUser);
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
@@ -256,11 +435,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userDoc = await getUserDocWithRetry(userCredential.user.uid, 2, 150);
 
       if (!userDoc) {
-        sessionStorage.setItem('blueprint_auth_notice', MISSING_ACCOUNT_NOTICE);
-        await signOut(auth);
-        const error = new Error(MISSING_ACCOUNT_NOTICE) as Error & { code?: string };
-        error.code = 'auth/account-record-not-found';
-        throw error;
+        const { recoveredUser, createdAt } = buildRecoveredUserFromAuth(userCredential.user);
+        await setDoc(doc(db, 'users', userCredential.user.uid), stripUndefinedFields({
+          uid: userCredential.user.uid,
+          email: recoveredUser.email,
+          name: recoveredUser.name,
+          role: recoveredUser.role,
+          phone: recoveredUser.phone,
+          street: recoveredUser.street,
+          town: recoveredUser.town,
+          zip: recoveredUser.zip,
+          governmentIdImage: recoveredUser.governmentIdImage,
+          avatar: recoveredUser.avatar,
+          isVerified: recoveredUser.isVerified ?? false,
+          licenseNumber: recoveredUser.licenseNumber,
+          licenseStatus: recoveredUser.licenseStatus,
+          isTradesman: recoveredUser.isTradesman,
+          trade: recoveredUser.trade,
+          subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
+          createdAt,
+          updatedAt: new Date().toISOString(),
+        }));
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -301,6 +496,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...getDerivedTrialFields(role),
         };
         setUser(userData);
+        await claimPendingPublicSubmissions(userData);
 
         // Send welcome email
         try {
@@ -377,6 +573,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Set user in state first to avoid fallback issues in onAuthStateChanged
       setUser(userData);
       localStorage.setItem('blueprint_user', JSON.stringify(userData));
+      await claimPendingPublicSubmissions(userData);
 
       await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
         uid: firebaseUser.uid,
