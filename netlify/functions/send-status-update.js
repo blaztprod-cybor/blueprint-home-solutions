@@ -11,6 +11,24 @@ const getSmtpSecureSetting = () => {
   return parseInt(process.env.SMTP_PORT || '587', 10) === 465;
 };
 
+const getSmtpConfig = () => {
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass || user === 'mock_user' || pass === 'mock_pass') {
+    throw new Error('SMTP is not configured');
+  }
+
+  return {
+    host,
+    port,
+    secure: getSmtpSecureSetting(),
+    auth: { user, pass },
+  };
+};
+
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -23,15 +41,7 @@ export const handler = async (event) => {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: getSmtpSecureSetting(),
-      auth: {
-        user: process.env.SMTP_USER || 'mock_user',
-        pass: process.env.SMTP_PASS || 'mock_pass',
-      },
-    });
+    const transporter = nodemailer.createTransport(getSmtpConfig());
 
     const mailOptions = {
       from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
@@ -59,11 +69,7 @@ export const handler = async (event) => {
       `,
     };
 
-    if (process.env.SMTP_USER && process.env.SMTP_USER !== 'mock_user') {
-      await transporter.sendMail(mailOptions);
-    } else {
-      console.log(`[MOCK EMAIL SENT to ${email}]: Status update ${oldStatus} -> ${newStatus}`);
-    }
+    await transporter.sendMail(mailOptions);
 
     return {
       statusCode: 200,
@@ -74,7 +80,8 @@ export const handler = async (event) => {
     console.error('Error sending status update email:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to send email' }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to send email' }),
     };
   }
 };
