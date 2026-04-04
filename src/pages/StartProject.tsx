@@ -14,6 +14,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { auth, db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
@@ -413,12 +414,22 @@ export default function StartProject() {
   return (
     <div className="max-w-4xl mx-auto space-y-12 pb-20">
       <div className="flex items-center justify-between gap-4">
-        <button
-          onClick={() => navigate(backTarget)}
-          className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl transition-colors"
-        >
-          <ChevronLeft size={24} />
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            className="inline-flex items-center rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200 transition-transform hover:scale-[1.02]"
+            aria-label="Go to Blueprint Home Solutions home"
+          >
+            <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-12 w-auto rounded-xl object-contain" />
+          </Link>
+          <button
+            onClick={() => navigate(backTarget)}
+            className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl transition-colors"
+            aria-label="Go back"
+          >
+            <ChevronLeft size={24} />
+          </button>
+        </div>
         <h1 className="text-xl font-bold text-slate-900">Request Service</h1>
         <div className="w-10" />
       </div>
