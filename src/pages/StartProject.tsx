@@ -91,6 +91,7 @@ export default function StartProject() {
   const selectedService = services.find((service) => service.id === selectedCategoryId) ?? null;
   const isLoggedInHomeowner = user?.role === 'Homeowner';
   const backTarget = isLoggedInHomeowner ? '/homeowner-dashboard' : '/select-improvement';
+  const loginTarget = `/login?role=homeowner&redirect=start-project${selectedCategoryId ? `&category=${encodeURIComponent(selectedCategoryId)}` : ''}`;
 
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -110,6 +111,7 @@ export default function StartProject() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [descriptionError, setDescriptionError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const hasExistingAccountError = submitError.includes('already has a Blueprint account');
   const [isLoadingSavedDetails, setIsLoadingSavedDetails] = useState(false);
   const [hasPrefilledHomeownerDetails, setHasPrefilledHomeownerDetails] = useState(false);
   const [isEditingSavedDetails, setIsEditingSavedDetails] = useState(false);
@@ -436,7 +438,20 @@ export default function StartProject() {
               )}
             </div>
           </div>
-          {submitError && <p className="text-sm font-bold text-red-600">{submitError}</p>}
+          {submitError && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-bold text-red-600">{submitError}</p>
+              {hasExistingAccountError && (
+                <button
+                  type="button"
+                  onClick={() => navigate(loginTarget)}
+                  className="inline-flex w-fit items-center rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-slate-800"
+                >
+                  Log In To Continue
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="space-y-6">
