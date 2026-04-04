@@ -10,6 +10,16 @@ dotenv.config();
 
 const execFileAsync = promisify(execFile);
 const PERMIT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
+const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
+
+function getSmtpSecureSetting() {
+  if (process.env.SMTP_SECURE) {
+    return process.env.SMTP_SECURE.toLowerCase() === "true";
+  }
+
+  return parseInt(process.env.SMTP_PORT || "587", 10) === 465;
+}
 
 async function syncPermitFeed() {
   try {
@@ -39,8 +49,8 @@ async function startServer() {
   const createTransporter = () =>
     nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.ethereal.email",
-      port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: false,
+      port: parseInt(process.env.SMTP_PORT || "587", 10),
+      secure: getSmtpSecureSetting(),
       auth: {
         user: process.env.SMTP_USER || "mock_user",
         pass: process.env.SMTP_PASS || "mock_pass",
@@ -65,7 +75,7 @@ async function startServer() {
       ).join('');
 
       const mailOptions = {
-        from: '"Blueprint Home Solutions" <info@blueprinthomesolutions.com>',
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
         to: email,
         subject: `Project Request Submitted: ${projectTitle}`,
         html: `
@@ -137,7 +147,7 @@ async function startServer() {
       const transporter = createTransporter();
 
       const mailOptions = {
-        from: '"Blueprint Home Solutions" <info@blueprinthomesolutions.com>',
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
         to: email,
         subject: `Welcome to Blueprint Home Solutions!`,
         html: `
@@ -190,7 +200,7 @@ async function startServer() {
       const transporter = createTransporter();
 
       const mailOptions = {
-        from: '"Blueprint Home Solutions" <info@blueprinthomesolutions.com>',
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
         to: email,
         subject: `Project Status Updated: ${projectTitle}`,
         html: `

@@ -1,5 +1,16 @@
 import nodemailer from 'nodemailer';
 
+const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Blueprint Home Solutions';
+const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || 'info@blueprinthomesolutions.com';
+
+const getSmtpSecureSetting = () => {
+  if (process.env.SMTP_SECURE) {
+    return process.env.SMTP_SECURE.toLowerCase() === 'true';
+  }
+
+  return parseInt(process.env.SMTP_PORT || '587', 10) === 465;
+};
+
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -19,7 +30,7 @@ export const handler = async (event) => {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.ethereal.email',
       port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: false,
+      secure: getSmtpSecureSetting(),
       auth: {
         user: process.env.SMTP_USER || 'mock_user',
         pass: process.env.SMTP_PASS || 'mock_pass',
@@ -29,7 +40,7 @@ export const handler = async (event) => {
     const adminEmail = process.env.HOMEOWNER_CALLBACK_EMAIL || process.env.SMTP_USER;
 
     const mailOptions = {
-      from: '"Blueprint Home Solutions" <noreply@blueprinthomesolutions.com>',
+      from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
       to: adminEmail || email,
       replyTo: email,
       subject: `New homeowner callback request: ${category}`,
