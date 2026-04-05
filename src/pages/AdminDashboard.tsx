@@ -42,6 +42,7 @@ type Review = {
 };
 
 type AdminUser = User & {
+  createdAt?: string;
   isDisabled?: boolean;
 };
 
@@ -50,8 +51,18 @@ type AdminProject = Project & {
 };
 
 type AdminTab = 'users' | 'projects' | 'reviews';
-type AdminFilter = 'all' | 'verified' | 'unverified' | 'active' | 'completed' | 'flagged';
+type AdminFilter =
+  | 'all'
+  | 'verified'
+  | 'unverified'
+  | 'licensed'
+  | 'unlicensed'
+  | 'homeowner'
+  | 'active'
+  | 'completed'
+  | 'flagged';
 type SubscriptionLevel = 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
+type UserSort = 'name' | 'newest' | 'oldest';
 
 const SUBSCRIPTION_OPTIONS: SubscriptionLevel[] = ['none', 'trial', 'beginner', 'junior', 'pro'];
 
@@ -120,6 +131,7 @@ const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [userSort, setUserSort] = useState<UserSort>('name');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -130,10 +142,14 @@ const AdminDashboard = () => {
         getDocs(query(collection(db, 'reviews'), orderBy('createdAt', 'desc'))),
       ]);
 
-      const userDocs = usersSnapshot.docs.map((entry) => ({
-        id: entry.id,
-        ...entry.data(),
-      })) as AdminUser[];
+      const userDocs = usersSnapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          ...data,
+          createdAt: toIsoDateString((data as { createdAt?: unknown }).createdAt),
+        };
+      }) as AdminUser[];
 
       const projectDocs = projectsSnapshot.docs.map((entry) => {
         const data = entry.data() as AdminProject;
@@ -177,7 +193,7 @@ const AdminDashboard = () => {
         ...entry.data(),
       })) as Review[];
 
-      setUsers(userDocs.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+      setUsers(userDocs);
       setProjects(hydratedProjectDocs);
       setReviews(reviewDocs);
     } catch (error) {
@@ -196,17 +212,39 @@ const AdminDashboard = () => {
     setSearchQuery('');
   }, [activeTab]);
 
+  useEffect(() => {
+    if (activeTab === 'users') {
+      setUserSort('name');
+    }
+  }, [activeTab]);
+
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
+    const nextUsers = users.filter((user) => {
       const matchesSearch = [user.name, user.email, user.licenseNumber, user.role]
         .some((value) => String(value || '').toLowerCase().includes(searchQuery.toLowerCase()));
+      const hasLicense = !!user.licenseNumber?.trim();
       const matchesFilter =
         filter === 'all' ||
         (filter === 'verified' && !!user.isVerified) ||
-        (filter === 'unverified' && !user.isVerified);
+        (filter === 'unverified' && !user.isVerified) ||
+        (filter === 'licensed' && user.role === 'Contractor' && hasLicense) ||
+        (filter === 'unlicensed' && user.role === 'Contractor' && !hasLicense) ||
+        (filter === 'homeowner' && user.role === 'Homeowner');
       return matchesSearch && matchesFilter;
     });
-  }, [users, searchQuery, filter]);
+
+    nextUsers.sort((left, right) => {
+      if (userSort === 'newest') {
+        return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+      }
+      if (userSort === 'oldest') {
+        return new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime();
+      }
+      return (left.name || '').localeCompare(right.name || '');
+    });
+
+    return nextUsers;
+  }, [users, searchQuery, filter, userSort]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter((project) => {
@@ -416,7 +454,7 @@ const AdminDashboard = () => {
 
   const filterOptions: AdminFilter[] =
     activeTab === 'users'
-      ? ['all', 'verified', 'unverified']
+      ? ['all', 'verified', 'unverified', 'licensed', 'unlicensed', 'homeowner']
       : activeTab === 'projects'
         ? ['all', 'active', 'completed', 'flagged']
         : ['all', 'flagged'];
@@ -506,6 +544,23 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {activeTab === 'users' && (
+        <div className="flex items-center justify-end">
+          <label className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Sort Users</span>
+            <select
+              value={userSort}
+              onChange={(event) => setUserSort(event.target.value as UserSort)}
+              className="h-11 min-w-[160px] rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-primary"
+            >
+              <option value="name">Name</option>
+              <option value="newest">Newest Joined</option>
+              <option value="oldest">Oldest Joined</option>
+            </select>
+          </label>
+        </div>
+      )}
+
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
         {isLoading ? (
           <div className="p-20 flex flex-col items-center justify-center gap-4">
@@ -519,6 +574,7 @@ const AdminDashboard = () => {
                 <thead>
                   <tr className="border-bottom border-slate-100 bg-slate-50/50">
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">User</th>
+                    <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Joined</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Role / License</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Verification</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subscription</th>
@@ -541,6 +597,16 @@ const AdminDashboard = () => {
                             <p className="font-bold text-slate-900">{user.name || 'Unnamed User'}</p>
                             <p className="text-xs text-muted-foreground font-medium">{user.email || 'No email'}</p>
                           </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-slate-700">
+                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                          </p>
+                          <p className="text-xs text-slate-500 font-medium">
+                            {user.createdAt ? new Date(user.createdAt).toLocaleTimeString() : 'No timestamp'}
+                          </p>
                         </div>
                       </td>
                       <td className="px-8 py-5">
