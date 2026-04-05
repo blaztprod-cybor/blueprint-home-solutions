@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, getStorage, ref, uploadBytes, uploadString } from "firebase/storage";
 
 // Import the Firebase configuration
 import firebaseConfig from '../firebase-applet-config.json';
@@ -118,6 +118,25 @@ export async function uploadFilesToStorage(
   }
 
   return uploadedUrls;
+}
+
+export async function uploadDataUrlToStorage(
+  dataUrl: string,
+  storagePath: string
+) {
+  const storageRef = ref(storage, storagePath);
+
+  await withTimeout(
+    uploadString(storageRef, dataUrl, 'data_url'),
+    STORAGE_UPLOAD_TIMEOUT_MS,
+    `Upload for ${storagePath}`
+  );
+
+  return withTimeout(
+    getDownloadURL(storageRef),
+    STORAGE_UPLOAD_TIMEOUT_MS,
+    `Download URL fetch for ${storagePath}`
+  );
 }
 
 export default app;

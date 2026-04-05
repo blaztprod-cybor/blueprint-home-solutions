@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from './types';
-import { auth, db } from './firebase';
+import { auth, db, uploadDataUrlToStorage } from './firebase';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
@@ -431,6 +431,29 @@ async function sendSignupConfirmationEmail({
   throw (lastError || new Error('Signup email request failed'));
 }
 
+async function resolveProfileMediaUrls(
+  userId: string,
+  media: {
+    avatar?: string;
+    governmentIdImage?: string;
+  }
+) {
+  const nextMedia = { ...media };
+
+  if (nextMedia.avatar?.startsWith('data:image')) {
+    nextMedia.avatar = await uploadDataUrlToStorage(nextMedia.avatar, `profiles/${userId}/avatar.jpg`);
+  }
+
+  if (nextMedia.governmentIdImage?.startsWith('data:image')) {
+    nextMedia.governmentIdImage = await uploadDataUrlToStorage(
+      nextMedia.governmentIdImage,
+      `profiles/${userId}/government-id.jpg`
+    );
+  }
+
+  return nextMedia;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -719,8 +742,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveAuthRoleHint(email, role);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
-      
-      const finalAvatar = nextProfile.avatar || getInitialsAvatar(name);
+      const uploadedMedia = await resolveProfileMediaUrls(firebaseUser.uid, {
+        avatar: nextProfile.avatar,
+        governmentIdImage: nextProfile.governmentIdImage,
+      });
+      const finalAvatar = uploadedMedia.avatar || getInitialsAvatar(name);
 
       const isAdminEmail = email.toLowerCase() === 'blaztprod@gmail.com';
       const finalRole = isAdminEmail ? 'admin' : role;
@@ -737,7 +763,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: finalAvatar,
         rating: finalRole === 'Contractor' ? 4.9 : undefined,
         isVerified: false,
-        governmentIdImage: finalRole === 'Contractor' ? nextProfile.governmentIdImage : undefined,
+        governmentIdImage: finalRole === 'Contractor' ? uploadedMedia.governmentIdImage : undefined,
         licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
@@ -764,7 +790,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         zip: nextProfile.zip,
         avatar: finalAvatar,
         isVerified: false,
-        governmentIdImage: finalRole === 'Contractor' ? nextProfile.governmentIdImage : undefined,
+        governmentIdImage: finalRole === 'Contractor' ? uploadedMedia.governmentIdImage : undefined,
         licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
@@ -801,7 +827,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (data: Partial<User>) => {
     if (!user) return;
     try {
-      const updatedUser = { ...user, ...data };
+      const resolvedMedia = await resolveProfileMediaUrls(user.id, {
+        avatar: data.avatar,
+        governmentIdImage: data.governmentIdImage,
+      });
+      const updatedUser = { ...user, ...data, ...resolvedMedia };
       const { id: _ignoredId, ...firestoreUserData } = updatedUser;
       
       // If name changed but no avatar provided, update initials avatar if it was using initials
