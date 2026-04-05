@@ -130,6 +130,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const MISSING_ACCOUNT_NOTICE =
   'This account is no longer active in Blueprint Home Solutions. Contact admin if you need access restored.';
 const PENDING_PUBLIC_SUBMISSIONS_KEY = 'blueprint_pending_public_submissions';
+const AUTH_ROLE_HINTS_KEY = 'blueprint_auth_role_hints';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -191,6 +192,31 @@ function loadCachedBlueprintUser() {
   }
 }
 
+function loadAuthRoleHints() {
+  try {
+    const raw = localStorage.getItem(AUTH_ROLE_HINTS_KEY);
+    if (!raw) return {} as Record<string, UserRole>;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, UserRole>) : {};
+  } catch {
+    return {} as Record<string, UserRole>;
+  }
+}
+
+function getAuthRoleHint(email: string | null | undefined) {
+  if (!email) return undefined;
+  const hints = loadAuthRoleHints();
+  return hints[email.trim().toLowerCase()];
+}
+
+function saveAuthRoleHint(email: string | null | undefined, role: UserRole | undefined) {
+  if (!email || !role) return;
+  const normalizedEmail = email.trim().toLowerCase();
+  const hints = loadAuthRoleHints();
+  hints[normalizedEmail] = role;
+  localStorage.setItem(AUTH_ROLE_HINTS_KEY, JSON.stringify(hints));
+}
+
 const getInitialsAvatar = (name: string) => {
   const names = name.split(' ');
   const initials = names.map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -246,13 +272,14 @@ function getDerivedSubscriptionLevel(role: UserRole, createdAt?: string) {
 
 function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
   const cachedUser = loadCachedBlueprintUser();
+  const hintedRole = getAuthRoleHint(firebaseUser.email);
   const cachedMatchesIdentity =
     cachedUser?.id === firebaseUser.uid &&
     cachedUser?.email &&
     firebaseUser.email &&
     cachedUser.email.trim().toLowerCase() === firebaseUser.email.trim().toLowerCase();
 
-  const role = cachedMatchesIdentity && cachedUser?.role ? cachedUser.role : 'Homeowner';
+  const role = hintedRole || (cachedMatchesIdentity && cachedUser?.role ? cachedUser.role : 'Homeowner');
   const createdAt = new Date().toISOString();
   const avatar =
     (cachedMatchesIdentity && cachedUser?.avatar && !cachedUser.avatar.startsWith('data:image/svg+xml')
@@ -288,6 +315,8 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     subscriptionLevel: cachedMatchesIdentity && cachedUser?.subscriptionLevel
       ? cachedUser.subscriptionLevel
       : getDerivedSubscriptionLevel(role, createdAt),
+    notifyOnNewProjects: cachedMatchesIdentity ? (cachedUser?.notifyOnNewProjects ?? (role === 'Contractor')) : (role === 'Contractor'),
+    notifyOnRoughEstimates: cachedMatchesIdentity ? (cachedUser?.notifyOnRoughEstimates ?? (role === 'Homeowner')) : (role === 'Homeowner'),
     ...getDerivedTrialFields(role, createdAt),
   };
 
@@ -312,6 +341,8 @@ function buildFirestoreUserPayload(
     isTradesman?: boolean;
     trade?: string;
     subscriptionLevel?: User['subscriptionLevel'];
+    notifyOnNewProjects?: boolean;
+    notifyOnRoughEstimates?: boolean;
     accountPlan?: User['accountPlan'];
     trialStartedAt?: string;
     trialEndsAt?: string;
@@ -339,6 +370,8 @@ function buildFirestoreUserPayload(
     isTradesman: data.isTradesman,
     trade: data.trade,
     subscriptionLevel: data.subscriptionLevel,
+    notifyOnNewProjects: data.notifyOnNewProjects,
+    notifyOnRoughEstimates: data.notifyOnRoughEstimates,
     accountPlan: data.accountPlan,
     trialStartedAt: data.trialStartedAt,
     trialEndsAt: data.trialEndsAt,
@@ -372,20 +405,30 @@ async function sendSignupConfirmationEmail({
   name: string;
   role: UserRole;
 }) {
-  const endpoint =
+  const endpoints =
     role === 'Contractor'
-      ? '/api/send-contractor-signup-confirmation'
-      : '/api/send-welcome-email';
+      ? ['/api/send-contractor-signup-confirmation', '/api/send-welcome-email']
+      : ['/api/send-welcome-email'];
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, name, role }),
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error || response.statusText || 'Signup email request failed');
+  let lastError: Error | null = null;
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name, role }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (response.ok) {
+        return;
+      }
+      lastError = new Error(payload?.error || response.statusText || 'Signup email request failed');
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Signup email request failed');
+    }
   }
+
+  throw (lastError || new Error('Signup email request failed'));
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -503,10 +546,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               trialStartedAt: data.trialStartedAt,
               trialEndsAt: data.trialEndsAt,
               subscriptionLevel: data.subscriptionLevel || getDerivedSubscriptionLevel(role, data.createdAt),
+              notifyOnNewProjects: data.notifyOnNewProjects ?? (role === 'Contractor'),
+              notifyOnRoughEstimates: data.notifyOnRoughEstimates ?? (role === 'Homeowner'),
               ...getDerivedTrialFields(role, data.createdAt),
             };
             setUser(userData);
             localStorage.setItem('blueprint_user', JSON.stringify(userData));
+            saveAuthRoleHint(userData.email, userData.role);
             await claimPendingPublicSubmissions(userData);
           } else {
             const { recoveredUser, createdAt } = buildRecoveredUserFromAuth(firebaseUser);
@@ -526,6 +572,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               isTradesman: recoveredUser.isTradesman,
               trade: recoveredUser.trade,
               subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
+              notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
+              notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
               accountPlan: recoveredUser.accountPlan,
               trialStartedAt: recoveredUser.trialStartedAt,
               trialEndsAt: recoveredUser.trialEndsAt,
@@ -535,6 +583,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setUser(recoveredUser);
             localStorage.setItem('blueprint_user', JSON.stringify(recoveredUser));
+            saveAuthRoleHint(recoveredUser.email, recoveredUser.role);
             await claimPendingPublicSubmissions(recoveredUser);
           }
         } catch (error) {
@@ -573,6 +622,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isTradesman: recoveredUser.isTradesman,
           trade: recoveredUser.trade,
           subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
+          notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
+          notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
           accountPlan: recoveredUser.accountPlan,
           trialStartedAt: recoveredUser.trialStartedAt,
           trialEndsAt: recoveredUser.trialEndsAt,
@@ -597,6 +648,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
         const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
+      saveAuthRoleHint(firebaseUser.email, role);
       await writeUserDocWithRecovery(firebaseUser.uid, {
         email: firebaseUser.email || '',
         name: firebaseUser.displayName || 'User',
@@ -618,9 +670,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
           isVerified: false,
           subscriptionLevel: getDerivedSubscriptionLevel(role),
+          notifyOnNewProjects: role === 'Contractor',
+          notifyOnRoughEstimates: role === 'Homeowner',
           ...getDerivedTrialFields(role),
         };
         setUser(userData);
+        localStorage.setItem('blueprint_user', JSON.stringify(userData));
+        saveAuthRoleHint(userData.email, userData.role);
         await claimPendingPublicSubmissions(userData);
 
         // Send signup confirmation email
@@ -660,6 +716,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const nextProfile = profile || {};
     try {
+      saveAuthRoleHint(email, role);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
       
@@ -686,12 +743,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
         trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
+        notifyOnNewProjects: finalRole === 'Contractor',
+        notifyOnRoughEstimates: finalRole === 'Homeowner',
         ...getDerivedTrialFields(finalRole),
       };
 
       // Set user in state first to avoid fallback issues in onAuthStateChanged
       setUser(userData);
       localStorage.setItem('blueprint_user', JSON.stringify(userData));
+      saveAuthRoleHint(userData.email, userData.role);
       await claimPendingPublicSubmissions(userData);
 
       await writeUserDocWithRecovery(firebaseUser.uid, {
@@ -710,6 +770,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
         trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
+        notifyOnNewProjects: userData.notifyOnNewProjects,
+        notifyOnRoughEstimates: userData.notifyOnRoughEstimates,
         accountPlan: userData.accountPlan,
         trialStartedAt: userData.trialStartedAt,
         trialEndsAt: userData.trialEndsAt,

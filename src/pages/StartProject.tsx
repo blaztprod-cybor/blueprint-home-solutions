@@ -397,6 +397,27 @@ export default function StartProject() {
         } catch (emailError) {
           console.error('Project confirmation email request failed:', emailError);
         }
+
+        try {
+          const contractorAlertResponse = await fetch('/api/send-new-project-alerts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectTitle: selectedService?.title || 'General',
+              category: selectedService?.title || 'General',
+              town: formData.town.trim(),
+              startDate: formData.startDate,
+              description,
+            }),
+          });
+
+          if (!contractorAlertResponse.ok) {
+            const payload = await contractorAlertResponse.json().catch(() => null);
+            console.error('New project contractor alert failed:', payload?.error || contractorAlertResponse.statusText);
+          }
+        } catch (notificationError) {
+          console.error('New project contractor alert request failed:', notificationError);
+        }
       })();
     } catch (error) {
       console.error('Error creating lead:', error);

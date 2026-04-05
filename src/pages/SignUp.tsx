@@ -130,11 +130,11 @@ export default function SignUp() {
           user.role === 'admin'
             ? '/admin'
             : user.role === 'Contractor'
-              ? (contractorHasPaidAccess ? '/lead-marketplace' : contractorDefaultPath)
+              ? contractorDefaultPath
               : '/homeowner-dashboard'
         );
       }
-    }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorDefaultPath]);
+    }, [user, navigate, redirectTarget, category, leadId, contractorDefaultPath]);
 
     const compressImage = (base64Str: string): Promise<string> => {
       return new Promise((resolve) => {

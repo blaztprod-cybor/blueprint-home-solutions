@@ -141,7 +141,7 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
         (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
@@ -164,6 +164,8 @@ service cloud.firestore {
         (!('trialStartedAt' in data) || isValidDateString(data.trialStartedAt)) &&
         (!('trialEndsAt' in data) || isValidDateString(data.trialEndsAt)) &&
         (!('subscriptionLevel' in data) || data.subscriptionLevel in ['none', 'trial', 'beginner', 'junior', 'pro']) &&
+        (!('notifyOnNewProjects' in data) || data.notifyOnNewProjects is bool) &&
+        (!('notifyOnRoughEstimates' in data) || data.notifyOnRoughEstimates is bool) &&
         (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
     }

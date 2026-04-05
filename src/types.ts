@@ -216,4 +216,6 @@ export interface User {
   trialStartedAt?: string;
   trialEndsAt?: string;
   subscriptionLevel?: 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
+  notifyOnNewProjects?: boolean;
+  notifyOnRoughEstimates?: boolean;
 }

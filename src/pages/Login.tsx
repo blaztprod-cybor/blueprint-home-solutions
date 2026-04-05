@@ -72,11 +72,11 @@ export default function Login() {
         user.role === 'admin'
           ? '/admin'
           : user.role === 'Contractor'
-            ? (contractorHasPaidAccess ? '/lead-marketplace' : contractorDefaultPath)
+            ? contractorDefaultPath
             : '/homeowner-dashboard'
       );
     }
-  }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorDefaultPath]);
+  }, [user, navigate, redirectTarget, category, leadId, contractorDefaultPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -5,6 +5,8 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
 
@@ -58,6 +60,25 @@ async function startServer() {
     });
 
   const adminEmail = process.env.BLUEPRINT_ADMIN_EMAIL || process.env.SMTP_USER || SMTP_FROM_EMAIL;
+  const getAdminDb = () => {
+    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "blueprint-home-solutions";
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+    const app = getApps()[0] || initializeApp(
+      clientEmail && privateKey
+        ? {
+            credential: cert({ projectId, clientEmail, privateKey }),
+            projectId,
+          }
+        : {
+            credential: applicationDefault(),
+            projectId,
+          }
+    );
+
+    return getAdminFirestore(app, process.env.FIREBASE_FIRESTORE_DATABASE_ID || "blueprinthomesolutionsdata");
+  };
   const sendMail = async (options: nodemailer.SendMailOptions) => {
     const transporter = createTransporter();
     if (process.env.SMTP_USER && process.env.SMTP_USER !== "mock_user") {
@@ -491,6 +512,88 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending contractor signup confirmation:", error);
       res.status(500).json({ error: "Failed to send contractor signup confirmation" });
+    }
+  });
+
+  app.post("/api/send-rough-estimate-alert", async (req, res) => {
+    const { homeownerEmail, homeownerName, contractorName, projectTitle, amount } = req.body;
+    if (!homeownerEmail) {
+      return res.status(400).json({ error: "Homeowner email is required" });
+    }
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: homeownerEmail,
+        cc: adminEmail,
+        subject: `New rough estimate for ${projectTitle || "your project"}`,
+        html: renderIntroEmail({
+          heading: "New Rough Estimate Received",
+          greeting: `Hi ${homeownerName || "Homeowner"},`,
+          bodyLines: [
+            `${contractorName || "A contractor"} submitted a rough estimate through Blueprint.`,
+            "You can review the estimate in your homeowner portal and continue the process from there.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${projectTitle || "Project request"}`,
+            `<strong>Contractor:</strong> ${contractorName || "Contractor"}`,
+            `<strong>Rough estimate:</strong> $${Number(amount || 0).toLocaleString()}`,
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId });
+    } catch (error) {
+      console.error("Error sending rough estimate alert:", error);
+      res.status(500).json({ error: "Failed to send rough estimate alert" });
+    }
+  });
+
+  app.post("/api/send-new-project-alerts", async (req, res) => {
+    const { projectTitle, category, town, startDate, description } = req.body;
+
+    try {
+      const db = getAdminDb();
+      const snapshot = await db.collection("users")
+        .where("role", "==", "Contractor")
+        .where("notifyOnNewProjects", "==", true)
+        .where("subscriptionLevel", "in", ["trial", "beginner", "junior", "pro"])
+        .get();
+
+      const recipients = snapshot.docs
+        .map((entry) => entry.data())
+        .filter((user) => typeof user.email === "string" && user.email.length > 0);
+
+      await Promise.all(
+        recipients.map((recipient) =>
+          sendMail({
+            from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+            to: recipient.email,
+            cc: adminEmail,
+            subject: `New homeowner project: ${projectTitle || category || "Project request"}`,
+            html: renderIntroEmail({
+              heading: "New Homeowner Project Submitted",
+              greeting: `Hi ${recipient.name || "Home Pro"},`,
+              bodyLines: [
+                "A new homeowner project was submitted to Blueprint and matches the active project feed.",
+                "Open your Home Pro portal to review the project and decide whether to place a bid or request an introduction.",
+              ],
+              detailLines: [
+                `<strong>Project:</strong> ${projectTitle || category || "Project request"}`,
+                `<strong>Category:</strong> ${category || "General"}`,
+                `<strong>Area:</strong> ${town || "Local service area"}`,
+                `<strong>Requested start:</strong> ${startDate || "Not specified"}`,
+                `<strong>Description:</strong> ${description || "No description provided"}`,
+              ],
+            }),
+          })
+        )
+      );
+
+      res.json({ success: true, recipients: recipients.length });
+    } catch (error) {
+      console.error("Error sending new project alerts:", error);
+      res.status(500).json({ error: "Failed to send new project alerts" });
     }
   });
 

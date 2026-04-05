@@ -102,6 +102,8 @@ function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = 
       isTradesman: nextUser.isTradesman,
       trade: nextUser.trade,
       subscriptionLevel: nextUser.subscriptionLevel || 'none',
+      notifyOnNewProjects: nextUser.notifyOnNewProjects,
+      notifyOnRoughEstimates: nextUser.notifyOnRoughEstimates,
       createdAt: toIsoDateString((nextUser as unknown as { createdAt?: unknown }).createdAt),
       updatedAt: new Date().toISOString(),
     }).filter(([, value]) => value !== undefined)

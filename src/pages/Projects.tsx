@@ -86,6 +86,35 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
       }
 
       await updateDoc(projectRef, updateData);
+
+      if (type === 'rough') {
+        try {
+          const homeownerSnapshot = await getDoc(doc(db, 'users', project.uid));
+          const homeownerData = homeownerSnapshot.exists() ? homeownerSnapshot.data() : null;
+
+          if (homeownerData?.email && (homeownerData.notifyOnRoughEstimates ?? true)) {
+            const response = await fetch('/api/send-rough-estimate-alert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                homeownerEmail: homeownerData.email,
+                homeownerName: homeownerData.name || 'Homeowner',
+                contractorName: user.name,
+                projectTitle: project.title,
+                amount: estimate.amount,
+              }),
+            });
+
+            if (!response.ok) {
+              const payload = await response.json().catch(() => null);
+              console.error('Rough estimate alert failed:', payload?.error || response.statusText);
+            }
+          }
+        } catch (notificationError) {
+          console.error('Error sending rough estimate alert:', notificationError);
+        }
+      }
+
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} estimate submitted!`);
       onSuccess();
       onClose();

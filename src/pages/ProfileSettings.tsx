@@ -32,7 +32,9 @@ export default function ProfileSettings() {
     governmentIdImage: user?.governmentIdImage || '',
     licenseNumber: user?.licenseNumber || '',
     isTradesman: user?.isTradesman || false,
-    trade: user?.trade || ''
+    trade: user?.trade || '',
+    notifyOnNewProjects: user?.notifyOnNewProjects ?? (user?.role === 'Contractor'),
+    notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner')
   });
   const governmentIdInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,6 +50,9 @@ export default function ProfileSettings() {
       licenseNumber: user?.licenseNumber || '',
       isTradesman: user?.isTradesman || false,
       trade: user?.trade || ''
+      ,
+      notifyOnNewProjects: user?.notifyOnNewProjects ?? (user?.role === 'Contractor'),
+      notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner')
     });
   }, [
     user?.name,
@@ -60,6 +65,9 @@ export default function ProfileSettings() {
     user?.licenseNumber,
     user?.isTradesman,
     user?.trade,
+    user?.notifyOnNewProjects,
+    user?.notifyOnRoughEstimates,
+    user?.role,
   ]);
 
   const handleSave = async () => {
@@ -94,6 +102,9 @@ export default function ProfileSettings() {
         licenseNumber: formData.licenseNumber,
         isTradesman: formData.isTradesman,
         trade: formData.trade
+        ,
+        notifyOnNewProjects: formData.notifyOnNewProjects,
+        notifyOnRoughEstimates: formData.notifyOnRoughEstimates
       });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -318,6 +329,21 @@ export default function ProfileSettings() {
 
               {user.role === 'Contractor' && (
                 <div className="md:col-span-2 space-y-6 pt-4 border-t border-slate-100">
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email Alerts</p>
+                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={formData.notifyOnNewProjects}
+                        onChange={(e) => setFormData({ ...formData, notifyOnNewProjects: e.target.checked })}
+                        className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+                      />
+                      <span className="text-sm font-bold text-slate-600">
+                        Email me whenever a new homeowner project is submitted
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Upload Government ID / Driver's License</label>
                     <label className="flex min-h-[72px] cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition-colors hover:border-primary/40 hover:bg-slate-100/70">
@@ -381,6 +407,23 @@ export default function ProfileSettings() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {user.role === 'Homeowner' && (
+                <div className="md:col-span-2 space-y-4 pt-4 border-t border-slate-100">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email Alerts</p>
+                  <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={formData.notifyOnRoughEstimates}
+                      onChange={(e) => setFormData({ ...formData, notifyOnRoughEstimates: e.target.checked })}
+                      className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+                    />
+                    <span className="text-sm font-bold text-slate-600">
+                      Email me whenever a contractor submits a rough estimate on my project
+                    </span>
+                  </label>
                 </div>
               )}
             </div>
