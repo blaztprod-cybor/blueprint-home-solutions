@@ -37,7 +37,6 @@ export default function ContractorLeads() {
 
   const hasLeadAccess =
     user?.role === 'Contractor' &&
-    !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
 
@@ -240,11 +239,11 @@ export default function ContractorLeads() {
           </div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900">Lead Marketplace</h1>
           <p className="text-sm font-medium leading-7 text-slate-600">
-            Verified contractors on an active plan can review homeowner leads. First contact stays inside Blueprint.
+            Contractors on an active trial or plan can review homeowner leads. First contact stays inside Blueprint.
           </p>
           <div className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-blue-700">
             <ShieldCheck size={14} />
-            Verification and active subscription required
+            Active trial or subscription required
           </div>
         </div>
       </div>

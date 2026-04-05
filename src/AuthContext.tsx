@@ -87,6 +87,17 @@ function stripUndefinedFields<T>(value: T): T {
   return value;
 }
 
+function isPermissionDeniedError(error: unknown) {
+  if (!error) return false;
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    return (error as { code?: string }).code === 'permission-denied';
+  }
+  if (error instanceof Error) {
+    return error.message.includes('permission-denied') || error.message.includes('Missing or insufficient permissions');
+  }
+  return false;
+}
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
@@ -250,6 +261,13 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     firebaseUser.photoURL ||
     getInitialsAvatar(cachedUser?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User');
 
+  const recoveredIsVerified =
+    role === 'Contractor'
+      ? false
+      : cachedMatchesIdentity
+        ? (cachedUser?.isVerified ?? false)
+        : false;
+
   const recoveredUser: User = {
     id: firebaseUser.uid,
     name: (cachedMatchesIdentity && cachedUser?.name) || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
@@ -262,7 +280,7 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     governmentIdImage: cachedMatchesIdentity ? cachedUser?.governmentIdImage : undefined,
     avatar,
     rating: role === 'Contractor' ? 4.9 : undefined,
-    isVerified: cachedMatchesIdentity ? (cachedUser?.isVerified ?? false) : false,
+    isVerified: recoveredIsVerified,
     licenseNumber: cachedMatchesIdentity ? cachedUser?.licenseNumber : undefined,
     licenseStatus: cachedMatchesIdentity ? cachedUser?.licenseStatus : undefined,
     isTradesman: cachedMatchesIdentity ? cachedUser?.isTradesman : undefined,
@@ -274,6 +292,100 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
   };
 
   return { recoveredUser, createdAt };
+}
+
+function buildFirestoreUserPayload(
+  userId: string,
+  data: {
+    email: string;
+    name: string;
+    role: UserRole;
+    phone?: string;
+    street?: string;
+    town?: string;
+    zip?: string;
+    governmentIdImage?: string;
+    avatar?: string;
+    isVerified?: boolean;
+    licenseNumber?: string;
+    licenseStatus?: User['licenseStatus'];
+    isTradesman?: boolean;
+    trade?: string;
+    subscriptionLevel?: User['subscriptionLevel'];
+    accountPlan?: User['accountPlan'];
+    trialStartedAt?: string;
+    trialEndsAt?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  },
+  options?: {
+    omitMedia?: boolean;
+  }
+) {
+  return stripUndefinedFields({
+    uid: userId,
+    email: data.email,
+    name: data.name,
+    role: data.role,
+    phone: data.phone,
+    street: data.street,
+    town: data.town,
+    zip: data.zip,
+    governmentIdImage: options?.omitMedia ? undefined : data.governmentIdImage,
+    avatar: options?.omitMedia ? undefined : data.avatar,
+    isVerified: data.isVerified ?? false,
+    licenseNumber: data.licenseNumber,
+    licenseStatus: data.licenseStatus,
+    isTradesman: data.isTradesman,
+    trade: data.trade,
+    subscriptionLevel: data.subscriptionLevel,
+    accountPlan: data.accountPlan,
+    trialStartedAt: data.trialStartedAt,
+    trialEndsAt: data.trialEndsAt,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  });
+}
+
+async function writeUserDocWithRecovery(
+  userId: string,
+  data: Parameters<typeof buildFirestoreUserPayload>[1]
+) {
+  try {
+    await setDoc(doc(db, 'users', userId), buildFirestoreUserPayload(userId, data));
+  } catch (error) {
+    if (!isPermissionDeniedError(error)) {
+      throw error;
+    }
+
+    // Retry without large inline media fields so the account can still recover into Settings.
+    await setDoc(doc(db, 'users', userId), buildFirestoreUserPayload(userId, data, { omitMedia: true }));
+  }
+}
+
+async function sendSignupConfirmationEmail({
+  email,
+  name,
+  role,
+}: {
+  email: string;
+  name: string;
+  role: UserRole;
+}) {
+  const endpoint =
+    role === 'Contractor'
+      ? '/api/send-contractor-signup-confirmation'
+      : '/api/send-welcome-email';
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name, role }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error || response.statusText || 'Signup email request failed');
+  }
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -383,6 +495,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
               rating: role === 'Contractor' ? 4.9 : undefined,
               isVerified: data.isVerified ?? false,
+              licenseNumber: data.licenseNumber,
+              licenseStatus: data.licenseStatus,
+              isTradesman: data.isTradesman,
+              trade: data.trade,
+              accountPlan: data.accountPlan,
+              trialStartedAt: data.trialStartedAt,
+              trialEndsAt: data.trialEndsAt,
               subscriptionLevel: data.subscriptionLevel || getDerivedSubscriptionLevel(role, data.createdAt),
               ...getDerivedTrialFields(role, data.createdAt),
             };
@@ -391,8 +510,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await claimPendingPublicSubmissions(userData);
           } else {
             const { recoveredUser, createdAt } = buildRecoveredUserFromAuth(firebaseUser);
-            await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
-              uid: firebaseUser.uid,
+            await writeUserDocWithRecovery(firebaseUser.uid, {
               email: recoveredUser.email,
               name: recoveredUser.name,
               role: recoveredUser.role,
@@ -408,9 +526,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               isTradesman: recoveredUser.isTradesman,
               trade: recoveredUser.trade,
               subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
+              accountPlan: recoveredUser.accountPlan,
+              trialStartedAt: recoveredUser.trialStartedAt,
+              trialEndsAt: recoveredUser.trialEndsAt,
               createdAt,
               updatedAt: new Date().toISOString(),
-            }));
+            });
 
             setUser(recoveredUser);
             localStorage.setItem('blueprint_user', JSON.stringify(recoveredUser));
@@ -436,8 +557,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!userDoc) {
         const { recoveredUser, createdAt } = buildRecoveredUserFromAuth(userCredential.user);
-        await setDoc(doc(db, 'users', userCredential.user.uid), stripUndefinedFields({
-          uid: userCredential.user.uid,
+        await writeUserDocWithRecovery(userCredential.user.uid, {
           email: recoveredUser.email,
           name: recoveredUser.name,
           role: recoveredUser.role,
@@ -453,9 +573,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isTradesman: recoveredUser.isTradesman,
           trade: recoveredUser.trade,
           subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
+          accountPlan: recoveredUser.accountPlan,
+          trialStartedAt: recoveredUser.trialStartedAt,
+          trialEndsAt: recoveredUser.trialEndsAt,
           createdAt,
           updatedAt: new Date().toISOString(),
-        }));
+        });
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -474,16 +597,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
         const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
-        await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || 'User',
-          role: role,
-          avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
-          isVerified: false,
-          subscriptionLevel: getDerivedSubscriptionLevel(role),
-          createdAt: new Date().toISOString(),
-        }));
+      await writeUserDocWithRecovery(firebaseUser.uid, {
+        email: firebaseUser.email || '',
+        name: firebaseUser.displayName || 'User',
+        role,
+        avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
+        isVerified: false,
+        subscriptionLevel: getDerivedSubscriptionLevel(role),
+        accountPlan: getDerivedTrialFields(role).accountPlan,
+        trialStartedAt: getDerivedTrialFields(role).trialStartedAt,
+        trialEndsAt: getDerivedTrialFields(role).trialEndsAt,
+        createdAt: new Date().toISOString(),
+      });
         
         const userData: User = {
           id: firebaseUser.uid,
@@ -498,25 +623,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(userData);
         await claimPendingPublicSubmissions(userData);
 
-        // Send welcome email
+        // Send signup confirmation email
         try {
-          console.log(`[AuthContext] Attempting to send welcome email to ${firebaseUser.email}...`);
-          const welcomeResponse = await fetch('/api/send-welcome-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: firebaseUser.email,
-              name: firebaseUser.displayName || 'User',
-              role: role
-            })
+          console.log(`[AuthContext] Attempting to send signup confirmation email to ${firebaseUser.email}...`);
+          await sendSignupConfirmationEmail({
+            email: firebaseUser.email || '',
+            name: firebaseUser.displayName || 'User',
+            role,
           });
-          const welcomeResult = await welcomeResponse.json().catch(() => null);
-          if (!welcomeResponse.ok) {
-            throw new Error(welcomeResult?.error || welcomeResponse.statusText || 'Welcome email request failed');
-          }
-          console.log("[AuthContext] Welcome email API response:", welcomeResult);
         } catch (emailError) {
-          console.error("[AuthContext] Failed to send welcome email:", emailError);
+          console.error("[AuthContext] Failed to send signup confirmation email:", emailError);
         }
       }
     } catch (error) {
@@ -578,10 +694,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('blueprint_user', JSON.stringify(userData));
       await claimPendingPublicSubmissions(userData);
 
-      await setDoc(doc(db, 'users', firebaseUser.uid), stripUndefinedFields({
-        uid: firebaseUser.uid,
-        email: email,
-        name: name,
+      await writeUserDocWithRecovery(firebaseUser.uid, {
+        email,
+        name,
         role: finalRole,
         phone: nextProfile.phone,
         street: nextProfile.street,
@@ -595,28 +710,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
         trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
+        accountPlan: userData.accountPlan,
+        trialStartedAt: userData.trialStartedAt,
+        trialEndsAt: userData.trialEndsAt,
         createdAt: new Date().toISOString(),
-      }));
+      });
 
-      // Send welcome email
+      // Send signup confirmation email
       try {
-        console.log(`[AuthContext] Attempting to send welcome email to ${email}...`);
-        const welcomeResponse = await fetch('/api/send-welcome-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email,
-            name: name,
-            role: finalRole
-          })
+        console.log(`[AuthContext] Attempting to send signup confirmation email to ${email}...`);
+        await sendSignupConfirmationEmail({
+          email,
+          name,
+          role: finalRole,
         });
-        const welcomeResult = await welcomeResponse.json().catch(() => null);
-        if (!welcomeResponse.ok) {
-          throw new Error(welcomeResult?.error || welcomeResponse.statusText || 'Welcome email request failed');
-        }
-        console.log("[AuthContext] Welcome email API response:", welcomeResult);
       } catch (emailError) {
-        console.error("[AuthContext] Failed to send welcome email:", emailError);
+        console.error("[AuthContext] Failed to send signup confirmation email:", emailError);
       }
     } catch (error: any) {
       console.error('Signup error:', error);

@@ -77,7 +77,6 @@ const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
 
 const contractorHasPaidAccess = (user: ReturnType<typeof useAuth>['user']) =>
   user?.role === 'Contractor' &&
-  !!user.isVerified &&
   !!user.subscriptionLevel &&
   user.subscriptionLevel !== 'none';
 
@@ -98,6 +97,12 @@ const contractorProfileComplete = (user: ReturnType<typeof useAuth>['user']) => 
     : !!user.licenseNumber?.trim();
 
   return hasCoreDetails && hasTradeCredential;
+};
+
+const contractorPortalPath = (user: ReturnType<typeof useAuth>['user']) => {
+  if (user?.role !== 'Contractor') return '/homeowner-dashboard';
+  if (!contractorProfileComplete(user)) return '/settings';
+  return '/projects';
 };
 
 const ContractorSubscriptionRoute = ({ children }: { children: React.ReactNode }) => {
@@ -333,7 +338,7 @@ export default function App() {
     user?.role === 'admin'
       ? '/admin'
       : user?.role === 'Contractor'
-        ? (!contractorProfileComplete(user) ? '/settings' : contractorHasPaidAccess(user) ? '/lead-marketplace' : '/contractor-paywall')
+        ? contractorPortalPath(user)
         : '/homeowner-dashboard';
   return (
     <Router>

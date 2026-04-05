@@ -460,6 +460,40 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-contractor-signup-confirmation", async (req, res) => {
+    const { email, name } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: email,
+        cc: adminEmail,
+        subject: "Blueprint Home Pro signup received",
+        html: renderIntroEmail({
+          heading: "Home Pro Signup Received",
+          greeting: `Hi ${name || "Home Pro"},`,
+          bodyLines: [
+            "Blueprint received your contractor signup and your account has been created.",
+            "Your account remains unverified until Blueprint completes its review. You can still finish your profile and access your portal while review is pending.",
+          ],
+          detailLines: [
+            "<strong>Status:</strong> Account created",
+            "<strong>Verification:</strong> Pending Blueprint review",
+            "<strong>Next step:</strong> Blueprint will review your profile before marketplace access is approved",
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId });
+    } catch (error) {
+      console.error("Error sending contractor signup confirmation:", error);
+      res.status(500).json({ error: "Failed to send contractor signup confirmation" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

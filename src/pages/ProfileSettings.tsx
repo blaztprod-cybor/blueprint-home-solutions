@@ -36,6 +36,32 @@ export default function ProfileSettings() {
   });
   const governmentIdInputRef = useRef<HTMLInputElement>(null);
 
+  React.useEffect(() => {
+    setFormData({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      street: user?.street || '',
+      town: user?.town || '',
+      zip: user?.zip || '',
+      governmentIdImage: user?.governmentIdImage || '',
+      licenseNumber: user?.licenseNumber || '',
+      isTradesman: user?.isTradesman || false,
+      trade: user?.trade || ''
+    });
+  }, [
+    user?.name,
+    user?.email,
+    user?.phone,
+    user?.street,
+    user?.town,
+    user?.zip,
+    user?.governmentIdImage,
+    user?.licenseNumber,
+    user?.isTradesman,
+    user?.trade,
+  ]);
+
   const handleSave = async () => {
     setIsSaving(true);
     setError('');
@@ -223,9 +249,12 @@ export default function ProfileSettings() {
               <div className="flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <h2 className="text-2xl font-bold">{user.name}</h2>
-                  <span className="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1 w-fit">
+                  <span className={cn(
+                    'text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest flex items-center gap-1 w-fit',
+                    user.isVerified ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-700'
+                  )}>
                     <CheckCircle2 size={10} />
-                    Verified {user.role}
+                    {user.isVerified ? `Verified ${user.role}` : `${user.role} Pending Review`}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-4 mt-4">

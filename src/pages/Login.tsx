@@ -28,7 +28,6 @@ export default function Login() {
       : 'Welcome Back';
   const contractorHasPaidAccess =
     user?.role === 'Contractor' &&
-    !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
   const contractorProfileComplete =
@@ -43,6 +42,11 @@ export default function Login() {
       !!user.governmentIdImage?.trim() &&
       (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
     );
+
+  const contractorDefaultPath =
+    !contractorProfileComplete
+      ? '/settings'
+      : '/projects';
 
   React.useEffect(() => {
     const authNotice = sessionStorage.getItem('blueprint_auth_notice');
@@ -68,11 +72,11 @@ export default function Login() {
         user.role === 'admin'
           ? '/admin'
           : user.role === 'Contractor'
-            ? (!contractorProfileComplete ? '/settings' : contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+            ? (contractorHasPaidAccess ? '/lead-marketplace' : contractorDefaultPath)
             : '/homeowner-dashboard'
       );
     }
-  }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorProfileComplete]);
+  }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorDefaultPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

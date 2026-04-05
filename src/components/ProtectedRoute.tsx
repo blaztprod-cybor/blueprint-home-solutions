@@ -13,7 +13,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   const location = useLocation();
   const contractorHasPaidAccess =
     user?.role === 'Contractor' &&
-    !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
   const contractorProfileComplete =

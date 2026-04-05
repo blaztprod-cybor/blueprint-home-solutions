@@ -35,7 +35,6 @@ export default function SignUp() {
   const navigate = useNavigate();
   const contractorHasPaidAccess =
     user?.role === 'Contractor' &&
-    !!user.isVerified &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
   const contractorProfileComplete =
@@ -50,6 +49,10 @@ export default function SignUp() {
       !!user.governmentIdImage?.trim() &&
       (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
     );
+  const contractorDefaultPath =
+    !contractorProfileComplete
+      ? '/settings'
+      : '/projects';
 
     React.useEffect(() => {
       try {
@@ -127,11 +130,11 @@ export default function SignUp() {
           user.role === 'admin'
             ? '/admin'
             : user.role === 'Contractor'
-              ? (!contractorProfileComplete ? '/settings' : contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+              ? (contractorHasPaidAccess ? '/lead-marketplace' : contractorDefaultPath)
               : '/homeowner-dashboard'
         );
       }
-    }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorProfileComplete]);
+    }, [user, navigate, redirectTarget, category, leadId, contractorHasPaidAccess, contractorDefaultPath]);
 
     const compressImage = (base64Str: string): Promise<string> => {
       return new Promise((resolve) => {
