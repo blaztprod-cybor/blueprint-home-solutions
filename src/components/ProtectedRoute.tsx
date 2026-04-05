@@ -15,18 +15,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     user?.role === 'Contractor' &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
-  const contractorProfileComplete =
-    user?.role !== 'Contractor' ||
-    (
-      !!user.avatar &&
-      !user.avatar.startsWith('data:image/svg+xml') &&
-      !!user.phone?.trim() &&
-      !!user.street?.trim() &&
-      !!user.town?.trim() &&
-      !!user.zip?.trim() &&
-      !!user.governmentIdImage?.trim() &&
-      (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
-    );
 
   if (isLoading) {
     return (
@@ -48,7 +36,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     const defaultPath = user.role === 'admin'
       ? '/admin'
       : user.role === 'Contractor'
-        ? (!contractorProfileComplete ? '/settings' : contractorHasPaidAccess ? '/lead-marketplace' : '/contractor-paywall')
+        ? (contractorHasPaidAccess ? '/projects' : '/contractor-paywall')
         : '/homeowner-dashboard';
     return <Navigate to={defaultPath} replace />;
   }

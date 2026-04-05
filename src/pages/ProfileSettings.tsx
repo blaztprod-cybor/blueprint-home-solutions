@@ -34,7 +34,8 @@ export default function ProfileSettings() {
     isTradesman: user?.isTradesman || false,
     trade: user?.trade || '',
     notifyOnNewProjects: user?.notifyOnNewProjects ?? (user?.role === 'Contractor'),
-    notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner')
+    notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner'),
+    notifyOnProductUpdates: user?.notifyOnProductUpdates ?? false,
   });
   const governmentIdInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +53,8 @@ export default function ProfileSettings() {
       trade: user?.trade || ''
       ,
       notifyOnNewProjects: user?.notifyOnNewProjects ?? (user?.role === 'Contractor'),
-      notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner')
+      notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner'),
+      notifyOnProductUpdates: user?.notifyOnProductUpdates ?? false,
     });
   }, [
     user?.name,
@@ -67,6 +69,7 @@ export default function ProfileSettings() {
     user?.trade,
     user?.notifyOnNewProjects,
     user?.notifyOnRoughEstimates,
+    user?.notifyOnProductUpdates,
     user?.role,
   ]);
 
@@ -104,7 +107,8 @@ export default function ProfileSettings() {
         trade: formData.trade
         ,
         notifyOnNewProjects: formData.notifyOnNewProjects,
-        notifyOnRoughEstimates: formData.notifyOnRoughEstimates
+        notifyOnRoughEstimates: formData.notifyOnRoughEstimates,
+        notifyOnProductUpdates: formData.notifyOnProductUpdates,
       });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -342,6 +346,17 @@ export default function ProfileSettings() {
                         Email me whenever a new homeowner project is submitted
                       </span>
                     </label>
+                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={formData.notifyOnProductUpdates}
+                        onChange={(e) => setFormData({ ...formData, notifyOnProductUpdates: e.target.checked })}
+                        className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+                      />
+                      <span className="text-sm font-bold text-slate-600">
+                        Email me product updates, feature announcements, and Blueprint news
+                      </span>
+                    </label>
                   </div>
 
                   <div className="space-y-2">
@@ -422,6 +437,17 @@ export default function ProfileSettings() {
                     />
                     <span className="text-sm font-bold text-slate-600">
                       Email me whenever a contractor submits a rough estimate on my project
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={formData.notifyOnProductUpdates}
+                      onChange={(e) => setFormData({ ...formData, notifyOnProductUpdates: e.target.checked })}
+                      className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+                    />
+                    <span className="text-sm font-bold text-slate-600">
+                      Email me product updates, feature announcements, and Blueprint news
                     </span>
                   </label>
                 </div>

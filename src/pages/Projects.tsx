@@ -30,8 +30,12 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, deleteDoc, orderBy, limit, getDoc } from 'firebase/firestore';
-import { Project, Estimate } from '../types';
+import { Project, Estimate, LeadMarketplaceItem } from '../types';
 import { Toaster, toast } from 'sonner';
+
+type ContractorProjectLead = Project & {
+  marketplaceStatus?: LeadMarketplaceItem['status'];
+};
 
 interface EstimateModalProps {
   project: Project;
@@ -203,7 +207,7 @@ const getProjectLocationLabel = (project: Project, hideExactAddress: boolean) =>
 
 export default function Projects() {
   const location = useLocation();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ContractorProjectLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -211,6 +215,7 @@ export default function Projects() {
   const [isUploading, setIsUploading] = useState(false);
   const [contractorView, setContractorView] = useState<'projects' | 'contracts' | 'settings'>('projects');
   const [projectPhotos, setProjectPhotos] = useState<{id: string, url: string}[]>([]);
+  const [loadingError, setLoadingError] = useState('');
   const [estimateModal, setEstimateModal] = useState<{ isOpen: boolean; type: 'rough' | 'final'; project: Project | null }>({
     isOpen: false,
     type: 'rough',
@@ -255,25 +260,111 @@ export default function Projects() {
   useEffect(() => {
     if (!user) return;
 
-    const projectsRef = collection(db, 'projects');
-    // If contractor, show all projects (simplified for demo, in real app might be based on bids/assignments)
-    // If homeowner, show only their projects
-    const q = isContractor 
-      ? query(projectsRef)
-      : query(projectsRef, where('uid', '==', user.id));
+    setLoadingError('');
+    setIsLoading(true);
+
+    if (isContractor) {
+      const hasMarketplaceAccess = !!user.subscriptionLevel && user.subscriptionLevel !== 'none';
+      if (!hasMarketplaceAccess) {
+        setProjects([]);
+        setLoadingError('Your contractor account does not currently have marketplace access.');
+        setIsLoading(false);
+        return;
+      }
+
+      const leadQuery = query(collection(db, 'lead_marketplace'), orderBy('createdAt', 'desc'));
+      const unsubscribe = onSnapshot(
+        leadQuery,
+        async (snapshot) => {
+          try {
+            const marketplaceLeads = snapshot.docs.map((entry) => ({
+              id: entry.id,
+              ...(entry.data() as Omit<LeadMarketplaceItem, 'id'>),
+            })) as LeadMarketplaceItem[];
+
+            const hydratedProjects = await Promise.all(
+              marketplaceLeads.map(async (lead) => {
+                try {
+                  const projectSnapshot = await getDoc(doc(db, 'projects', lead.leadId));
+                  if (projectSnapshot.exists()) {
+                    return {
+                      id: projectSnapshot.id,
+                      ...(projectSnapshot.data() as Omit<Project, 'id'>),
+                      marketplaceStatus: lead.status,
+                      photos:
+                        (projectSnapshot.data().photos as string[] | undefined)?.length
+                          ? (projectSnapshot.data().photos as string[])
+                          : lead.photos,
+                      photoCount:
+                        (projectSnapshot.data().photoCount as number | undefined) ?? lead.photoCount ?? 0,
+                    } as ContractorProjectLead;
+                  }
+                } catch (projectError) {
+                  console.error(`[Projects] Failed to hydrate lead ${lead.leadId}:`, projectError);
+                }
+
+                return {
+                  id: lead.leadId,
+                  uid: '',
+                  title: lead.category,
+                  description: lead.description,
+                  status: 'New Open Project',
+                  budget: 0,
+                  startDate: '',
+                  category: lead.category,
+                  photos: lead.photos,
+                  photoCount: lead.photoCount,
+                  location: {
+                    street: '',
+                    town: lead.location?.town || '',
+                    zip: lead.location?.zip || '',
+                  },
+                  createdAt: lead.createdAt,
+                  marketplaceStatus: lead.status,
+                } as ContractorProjectLead;
+              })
+            );
+
+            hydratedProjects.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            setProjects(hydratedProjects);
+            console.log(`[Projects] Fetched ${hydratedProjects.length} marketplace leads for contractor ${user.id}`);
+            setIsLoading(false);
+          } catch (error) {
+            console.error("[Projects] Error hydrating contractor leads:", error);
+            setProjects([]);
+            setLoadingError('Blueprint could not load homeowner leads for this contractor account.');
+            toast.error('Could not load homeowner leads. Check contractor subscription data and Firestore access.');
+            setIsLoading(false);
+          }
+        },
+        (error) => {
+          console.error("[Projects] Error fetching contractor leads:", error);
+          setProjects([]);
+          setLoadingError('Blueprint could not load homeowner leads for this contractor account.');
+          toast.error('Could not load homeowner leads. Check contractor subscription data and Firestore access.');
+          setIsLoading(false);
+        }
+      );
+
+      return () => unsubscribe();
+    }
+
+    const q = query(collection(db, 'projects'), where('uid', '==', user.id));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       console.log(`[Projects] Fetched ${snapshot.size} projects for user ${user.id}`);
       const projectsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as Project[];
+      })) as ContractorProjectLead[];
       projectsData.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setProjects(projectsData);
       setIsLoading(false);
     }, (error) => {
       console.error("[Projects] Error fetching projects:", error);
-      handleFirestoreError(error, OperationType.GET, 'projects');
+      setProjects([]);
+      setLoadingError('Blueprint could not load this account’s projects.');
+      toast.error('Could not load projects for this account.');
       setIsLoading(false);
     });
 
@@ -512,6 +603,9 @@ export default function Projects() {
   };
 
   const filteredProjects = projects.filter(project => {
+    if (isContractor && project.marketplaceStatus === 'Closed') {
+      return false;
+    }
     if (activeTab === 'All') return true;
     if (activeTab === 'Bidding') {
       return ['New Open Project', 'Rough Estimates', 'Final Estimates'].includes(project.status);
@@ -540,10 +634,16 @@ export default function Projects() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight"></h1>
           {isContractor && (
-            <p className="text-muted-foreground mt-1">Projects are automatically created when a homeowner agrees to hire you after an estimate.</p>
+            <p className="text-muted-foreground mt-1">Available homeowner leads appear here first so you can review details, photos, and submit a bid from the Home Pro portal.</p>
           )}
         </div>
       </div>
+
+      {loadingError && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-medium text-amber-900">
+          {loadingError}
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex items-center gap-4">
@@ -576,7 +676,7 @@ export default function Projects() {
                 )}
               >
                 <Briefcase size={14} />
-                Projects
+                Leads
               </button>
               <button 
                 onClick={() => setContractorView('contracts')}
@@ -841,7 +941,7 @@ export default function Projects() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/30">
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Preview</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Project Details</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{isContractor ? 'Lead Details' : 'Project Details'}</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Estimates</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Actions</th>
@@ -883,7 +983,7 @@ export default function Projects() {
                                   {project.category}
                                 </span>
                               </div>
-                              <p className="font-black text-slate-900 text-base leading-tight group-hover:text-primary transition-colors">{project.title}</p>
+                              <p className="font-black text-slate-900 text-base leading-tight group-hover:text-primary transition-colors">{project.title || project.category}</p>
                               <div className="flex items-center gap-2">
                                 <MapPin size={10} className="text-primary" />
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{locationLabel}</span>
@@ -932,6 +1032,7 @@ export default function Projects() {
                             )}>
                               {isExpired ? 'Expired' : 
                                ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? 'Taking Bids' :
+                               (isContractor && project.marketplaceStatus === 'Requested') ? 'Requested' :
                                project.status === 'New Open Project' ? 'New' : 
                                project.status}
                             </span>
@@ -983,10 +1084,10 @@ export default function Projects() {
                           <div className="w-24 h-24 bg-slate-50 rounded-[32px] flex items-center justify-center mx-auto mb-8 border border-slate-100 shadow-inner">
                             <Briefcase size={40} className="text-slate-300" />
                           </div>
-                          <h3 className="text-2xl font-black text-slate-900 mb-3">{isContractor ? 'No projects found' : 'No projects yet'}</h3>
+                          <h3 className="text-2xl font-black text-slate-900 mb-3">{isContractor ? 'No leads found' : 'No projects yet'}</h3>
                           {isContractor && (
                             <p className="text-slate-500 font-medium max-w-sm mx-auto mb-10">
-                              You haven't been assigned to any projects yet. Projects will appear here once homeowners select you for their home improvements.
+                              No homeowner leads match this view yet. New homeowner submissions will appear here with preview details and bidding actions.
                             </p>
                           )}
                         </div>

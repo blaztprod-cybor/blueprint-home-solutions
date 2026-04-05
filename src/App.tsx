@@ -20,6 +20,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Toaster, toast } from 'sonner';
 import { cn } from './lib/utils';
 import { useAuth } from './AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -80,37 +81,13 @@ const contractorHasPaidAccess = (user: ReturnType<typeof useAuth>['user']) =>
   !!user.subscriptionLevel &&
   user.subscriptionLevel !== 'none';
 
-const contractorProfileComplete = (user: ReturnType<typeof useAuth>['user']) => {
-  if (user?.role !== 'Contractor') return true;
-
-  const hasRealProfilePhoto = !!user.avatar && !user.avatar.startsWith('data:image/svg+xml');
-  const hasCoreDetails =
-    hasRealProfilePhoto &&
-    !!user.phone?.trim() &&
-    !!user.street?.trim() &&
-    !!user.town?.trim() &&
-    !!user.zip?.trim() &&
-    !!user.governmentIdImage?.trim();
-
-  const hasTradeCredential = user.isTradesman
-    ? !!user.trade?.trim()
-    : !!user.licenseNumber?.trim();
-
-  return hasCoreDetails && hasTradeCredential;
-};
-
 const contractorPortalPath = (user: ReturnType<typeof useAuth>['user']) => {
   if (user?.role !== 'Contractor') return '/homeowner-dashboard';
-  if (!contractorProfileComplete(user)) return '/settings';
   return '/projects';
 };
 
 const ContractorSubscriptionRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
-
-  if (user?.role === 'Contractor' && !contractorProfileComplete(user)) {
-    return <Navigate to="/settings" replace />;
-  }
 
   if (user?.role === 'Contractor' && !contractorHasPaidAccess(user)) {
     return <Navigate to="/contractor-paywall" replace />;
@@ -238,6 +215,14 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     return daysLeft > 0 ? `TRIAL ${daysLeft}D LEFT` : 'TRIAL ENDED';
   })();
 
+  useEffect(() => {
+    const emailWarning = sessionStorage.getItem('blueprint_email_warning_notice');
+    if (!emailWarning) return;
+
+    toast.warning(emailWarning, { duration: 7000 });
+    sessionStorage.removeItem('blueprint_email_warning_notice');
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50">
       <Navigation isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />
@@ -252,7 +237,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
               <Menu size={20} />
             </button>
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-200 overflow-hidden border border-slate-200">
-              <img src={user?.avatar} alt="Profile" referrerPolicy="no-referrer" />
+              <img src={user?.avatar} alt="Profile" referrerPolicy="no-referrer" className="h-full w-full object-cover object-center" />
             </div>
             <div className="hidden xs:block">
               <div className="flex items-center gap-2">
@@ -321,6 +306,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           isOpen={isMessagingOpen} 
           onClose={() => setIsMessagingOpen(false)} 
         />
+        <Toaster position="top-right" richColors />
       </main>
     </div>
   );

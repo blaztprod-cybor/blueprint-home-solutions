@@ -30,23 +30,10 @@ export default function Login() {
     user?.role === 'Contractor' &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
-  const contractorProfileComplete =
-    user?.role !== 'Contractor' ||
-    (
-      !!user.avatar &&
-      !user.avatar.startsWith('data:image/svg+xml') &&
-      !!user.phone?.trim() &&
-      !!user.street?.trim() &&
-      !!user.town?.trim() &&
-      !!user.zip?.trim() &&
-      !!user.governmentIdImage?.trim() &&
-      (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
-    );
-
   const contractorDefaultPath =
-    !contractorProfileComplete
-      ? '/settings'
-      : '/projects';
+    contractorHasPaidAccess
+      ? '/projects'
+      : '/contractor-paywall';
 
   React.useEffect(() => {
     const authNotice = sessionStorage.getItem('blueprint_auth_notice');

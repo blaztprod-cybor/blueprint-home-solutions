@@ -28,6 +28,7 @@ export default function SignUp() {
   const [isTradesman, setIsTradesman] = useState(false);
   const [trade, setTrade] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
+  const [notifyOnProductUpdates, setNotifyOnProductUpdates] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,22 +38,10 @@ export default function SignUp() {
     user?.role === 'Contractor' &&
     !!user.subscriptionLevel &&
     user.subscriptionLevel !== 'none';
-  const contractorProfileComplete =
-    user?.role !== 'Contractor' ||
-    (
-      !!user.avatar &&
-      !user.avatar.startsWith('data:image/svg+xml') &&
-      !!user.phone?.trim() &&
-      !!user.street?.trim() &&
-      !!user.town?.trim() &&
-      !!user.zip?.trim() &&
-      !!user.governmentIdImage?.trim() &&
-      (user.isTradesman ? !!user.trade?.trim() : !!user.licenseNumber?.trim())
-    );
   const contractorDefaultPath =
-    !contractorProfileComplete
-      ? '/settings'
-      : '/projects';
+    contractorHasPaidAccess
+      ? '/projects'
+      : '/contractor-paywall';
 
     React.useEffect(() => {
       try {
@@ -71,6 +60,7 @@ export default function SignUp() {
           isTradesman: boolean;
           trade: string;
           avatar: string;
+          notifyOnProductUpdates: boolean;
         }>;
 
         if (draft.name) setName(draft.name);
@@ -85,6 +75,7 @@ export default function SignUp() {
         if (typeof draft.isTradesman === 'boolean') setIsTradesman(draft.isTradesman);
         if (draft.trade) setTrade(draft.trade);
         if (draft.avatar) setAvatar(draft.avatar);
+        if (typeof draft.notifyOnProductUpdates === 'boolean') setNotifyOnProductUpdates(draft.notifyOnProductUpdates);
       } catch (draftError) {
         console.error('[SignUp] Failed to restore contractor signup draft:', draftError);
       }
@@ -107,12 +98,13 @@ export default function SignUp() {
             isTradesman,
             trade,
             avatar,
+            notifyOnProductUpdates,
           })
         );
       } catch (draftError) {
         console.error('[SignUp] Failed to save contractor signup draft:', draftError);
       }
-    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar]);
+    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar, notifyOnProductUpdates]);
   
     React.useEffect(() => {
       if (user) {
@@ -254,6 +246,7 @@ export default function SignUp() {
           avatar,
           isTradesman,
           trade: trade.trim(),
+          notifyOnProductUpdates,
         });
         sessionStorage.removeItem(CONTRACTOR_SIGNUP_DRAFT_KEY);
         // Navigation is handled by the useEffect watching the user state
@@ -579,6 +572,18 @@ export default function SignUp() {
                 By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
               </p>
             </div>
+
+            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <input
+                type="checkbox"
+                checked={notifyOnProductUpdates}
+                onChange={(e) => setNotifyOnProductUpdates(e.target.checked)}
+                className="mt-0.5 h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+              />
+              <span className="text-sm font-bold text-slate-600">
+                Email me product updates, feature announcements, and platform news from Blueprint Home Solutions
+              </span>
+            </label>
 
             <button 
               type="submit"

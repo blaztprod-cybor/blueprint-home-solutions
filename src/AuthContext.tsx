@@ -117,6 +117,7 @@ interface AuthContextType {
       avatar?: string;
       isTradesman?: boolean;
       trade?: string;
+      notifyOnProductUpdates?: boolean;
     }
   ) => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -131,6 +132,7 @@ const MISSING_ACCOUNT_NOTICE =
   'This account is no longer active in Blueprint Home Solutions. Contact admin if you need access restored.';
 const PENDING_PUBLIC_SUBMISSIONS_KEY = 'blueprint_pending_public_submissions';
 const AUTH_ROLE_HINTS_KEY = 'blueprint_auth_role_hints';
+const EMAIL_WARNING_NOTICE_KEY = 'blueprint_email_warning_notice';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -317,6 +319,7 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
       : getDerivedSubscriptionLevel(role, createdAt),
     notifyOnNewProjects: cachedMatchesIdentity ? (cachedUser?.notifyOnNewProjects ?? (role === 'Contractor')) : (role === 'Contractor'),
     notifyOnRoughEstimates: cachedMatchesIdentity ? (cachedUser?.notifyOnRoughEstimates ?? (role === 'Homeowner')) : (role === 'Homeowner'),
+    notifyOnProductUpdates: cachedMatchesIdentity ? (cachedUser?.notifyOnProductUpdates ?? false) : false,
     ...getDerivedTrialFields(role, createdAt),
   };
 
@@ -343,6 +346,7 @@ function buildFirestoreUserPayload(
     subscriptionLevel?: User['subscriptionLevel'];
     notifyOnNewProjects?: boolean;
     notifyOnRoughEstimates?: boolean;
+    notifyOnProductUpdates?: boolean;
     accountPlan?: User['accountPlan'];
     trialStartedAt?: string;
     trialEndsAt?: string;
@@ -372,6 +376,7 @@ function buildFirestoreUserPayload(
     subscriptionLevel: data.subscriptionLevel,
     notifyOnNewProjects: data.notifyOnNewProjects,
     notifyOnRoughEstimates: data.notifyOnRoughEstimates,
+    notifyOnProductUpdates: data.notifyOnProductUpdates,
     accountPlan: data.accountPlan,
     trialStartedAt: data.trialStartedAt,
     trialEndsAt: data.trialEndsAt,
@@ -571,6 +576,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               subscriptionLevel: data.subscriptionLevel || getDerivedSubscriptionLevel(role, data.createdAt),
               notifyOnNewProjects: data.notifyOnNewProjects ?? (role === 'Contractor'),
               notifyOnRoughEstimates: data.notifyOnRoughEstimates ?? (role === 'Homeowner'),
+              notifyOnProductUpdates: data.notifyOnProductUpdates ?? false,
               ...getDerivedTrialFields(role, data.createdAt),
             };
             setUser(userData);
@@ -597,6 +603,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
               notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
               notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
+              notifyOnProductUpdates: recoveredUser.notifyOnProductUpdates,
               accountPlan: recoveredUser.accountPlan,
               trialStartedAt: recoveredUser.trialStartedAt,
               trialEndsAt: recoveredUser.trialEndsAt,
@@ -647,6 +654,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
           notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
           notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
+          notifyOnProductUpdates: recoveredUser.notifyOnProductUpdates,
           accountPlan: recoveredUser.accountPlan,
           trialStartedAt: recoveredUser.trialStartedAt,
           trialEndsAt: recoveredUser.trialEndsAt,
@@ -692,10 +700,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: role,
           avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
           isVerified: false,
-          subscriptionLevel: getDerivedSubscriptionLevel(role),
-          notifyOnNewProjects: role === 'Contractor',
-          notifyOnRoughEstimates: role === 'Homeowner',
-          ...getDerivedTrialFields(role),
+        subscriptionLevel: getDerivedSubscriptionLevel(role),
+        notifyOnNewProjects: role === 'Contractor',
+        notifyOnRoughEstimates: role === 'Homeowner',
+        notifyOnProductUpdates: false,
+        ...getDerivedTrialFields(role),
         };
         setUser(userData);
         localStorage.setItem('blueprint_user', JSON.stringify(userData));
@@ -703,16 +712,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await claimPendingPublicSubmissions(userData);
 
         // Send signup confirmation email
-        try {
-          console.log(`[AuthContext] Attempting to send signup confirmation email to ${firebaseUser.email}...`);
-          await sendSignupConfirmationEmail({
-            email: firebaseUser.email || '',
-            name: firebaseUser.displayName || 'User',
-            role,
-          });
-        } catch (emailError) {
-          console.error("[AuthContext] Failed to send signup confirmation email:", emailError);
-        }
+      try {
+        console.log(`[AuthContext] Attempting to send signup confirmation email to ${firebaseUser.email}...`);
+        await sendSignupConfirmationEmail({
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || 'User',
+          role,
+        });
+      } catch (emailError) {
+        console.error("[AuthContext] Failed to send signup confirmation email:", emailError);
+        sessionStorage.setItem(
+          EMAIL_WARNING_NOTICE_KEY,
+          'Your account was created, but Blueprint could not send the signup confirmation email. Check your email settings or Netlify function logs.'
+        );
+      }
       }
     } catch (error) {
       console.error('Google login error:', error);
@@ -735,6 +748,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       avatar?: string;
       isTradesman?: boolean;
       trade?: string;
+      notifyOnProductUpdates?: boolean;
     }
   ) => {
     const nextProfile = profile || {};
@@ -771,6 +785,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         notifyOnNewProjects: finalRole === 'Contractor',
         notifyOnRoughEstimates: finalRole === 'Homeowner',
+        notifyOnProductUpdates: nextProfile.notifyOnProductUpdates ?? false,
         ...getDerivedTrialFields(finalRole),
       };
 
@@ -798,6 +813,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         notifyOnNewProjects: userData.notifyOnNewProjects,
         notifyOnRoughEstimates: userData.notifyOnRoughEstimates,
+        notifyOnProductUpdates: userData.notifyOnProductUpdates,
         accountPlan: userData.accountPlan,
         trialStartedAt: userData.trialStartedAt,
         trialEndsAt: userData.trialEndsAt,
@@ -814,6 +830,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       } catch (emailError) {
         console.error("[AuthContext] Failed to send signup confirmation email:", emailError);
+        sessionStorage.setItem(
+          EMAIL_WARNING_NOTICE_KEY,
+          'Your account was created, but Blueprint could not send the signup confirmation email. Check your email settings or Netlify function logs.'
+        );
       }
     } catch (error: any) {
       console.error('Signup error:', error);

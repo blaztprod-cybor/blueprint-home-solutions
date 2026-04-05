@@ -104,6 +104,7 @@ function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = 
       subscriptionLevel: nextUser.subscriptionLevel || 'none',
       notifyOnNewProjects: nextUser.notifyOnNewProjects,
       notifyOnRoughEstimates: nextUser.notifyOnRoughEstimates,
+      notifyOnProductUpdates: nextUser.notifyOnProductUpdates,
       createdAt: toIsoDateString((nextUser as unknown as { createdAt?: unknown }).createdAt),
       updatedAt: new Date().toISOString(),
     }).filter(([, value]) => value !== undefined)
@@ -456,7 +457,7 @@ const AdminDashboard = () => {
 
   const filterOptions: AdminFilter[] =
     activeTab === 'users'
-      ? ['all', 'verified', 'unverified', 'licensed', 'unlicensed', 'homeowner']
+      ? ['all', 'homeowner', 'verified', 'unverified', 'licensed', 'unlicensed']
       : activeTab === 'projects'
         ? ['all', 'active', 'completed', 'flagged']
         : ['all', 'flagged'];
@@ -511,8 +512,8 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 relative">
+      <div className={cn("grid grid-cols-1 gap-4", activeTab === 'users' ? 'md:grid-cols-[minmax(0,340px)_1fr]' : 'md:grid-cols-3')}>
+        <div className={cn("relative", activeTab !== 'users' && 'md:col-span-2')}>
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
           <input
             type="text"
@@ -528,13 +529,13 @@ const AdminDashboard = () => {
             className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none font-medium"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-start">
           {filterOptions.map((entry) => (
             <button
               key={entry}
               onClick={() => setFilter(entry)}
               className={cn(
-                'flex-1 px-4 py-3 rounded-2xl text-sm font-bold capitalize transition-all',
+                'px-4 py-3 rounded-2xl text-sm font-bold capitalize transition-all whitespace-nowrap',
                 filter === entry
                   ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'

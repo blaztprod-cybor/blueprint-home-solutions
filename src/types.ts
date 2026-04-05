@@ -218,4 +218,5 @@ export interface User {
   subscriptionLevel?: 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
   notifyOnNewProjects?: boolean;
   notifyOnRoughEstimates?: boolean;
+  notifyOnProductUpdates?: boolean;
 }
