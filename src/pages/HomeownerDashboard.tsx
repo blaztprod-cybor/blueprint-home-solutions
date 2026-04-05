@@ -16,8 +16,18 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, getDocs, limit, updateDoc, doc } from 'firebase/firestore';
-import { Project } from '../types';
+import { LeadInquiry, Project } from '../types';
 import { cn } from '../lib/utils';
+
+function inquiryStatusBadgeClass(status: LeadInquiry['status']) {
+  if (status === 'Requested') return 'bg-slate-100 text-slate-700 border-slate-200';
+  if (status === 'Admin Reviewing') return 'bg-amber-100 text-amber-800 border-amber-200';
+  if (status === 'Homeowner Contact Pending') return 'bg-orange-100 text-orange-800 border-orange-200';
+  if (status === 'Homeowner Confirmed') return 'bg-sky-100 text-sky-800 border-sky-200';
+  if (status === 'Introduction Approved') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+  if (status === 'Declined') return 'bg-rose-100 text-rose-800 border-rose-200';
+  return 'bg-slate-200 text-slate-700 border-slate-300';
+}
 
 export default function HomeownerDashboard() {
   const { user } = useAuth();
@@ -26,6 +36,7 @@ export default function HomeownerDashboard() {
   const [error, setError] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectPhotos, setProjectPhotos] = useState<{ id: string; url: string }[]>([]);
+  const [introSummaries, setIntroSummaries] = useState<Record<string, LeadInquiry[]>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -120,6 +131,48 @@ export default function HomeownerDashboard() {
     }
   }, [projects, selectedProject]);
 
+  useEffect(() => {
+    if (!user || projects.length === 0) {
+      setIntroSummaries({});
+      return;
+    }
+
+    const loadInquirySummaries = async () => {
+      try {
+        const grouped: Record<string, LeadInquiry[]> = {};
+        const chunks: string[][] = [];
+        for (let index = 0; index < projects.length; index += 10) {
+          chunks.push(projects.slice(index, index + 10).map((project) => project.id));
+        }
+
+        for (const chunk of chunks) {
+          if (chunk.length === 0) continue;
+          const snapshot = await getDocs(
+            query(collection(db, 'lead_inquiries'), where('leadId', 'in', chunk))
+          );
+
+          for (const entry of snapshot.docs) {
+            const inquiry = {
+              id: entry.id,
+              ...(entry.data() as Omit<LeadInquiry, 'id'>),
+            };
+            grouped[inquiry.leadId] = [...(grouped[inquiry.leadId] || []), inquiry].sort(
+              (left, right) =>
+                new Date(right.updatedAt || right.createdAt).getTime() -
+                new Date(left.updatedAt || left.createdAt).getTime()
+            );
+          }
+        }
+
+        setIntroSummaries(grouped);
+      } catch (inquiryError) {
+        console.error('[HomeownerDashboard] Error loading intro summaries:', inquiryError);
+      }
+    };
+
+    void loadInquirySummaries();
+  }, [projects, user]);
+
   const activeProjects = projects.filter((p) =>
     ['New Open Project', 'Rough Estimates', 'Final Estimates', 'In Contract', 'In Progress', 'On Hold'].includes(p.status)
   );
@@ -167,6 +220,83 @@ export default function HomeownerDashboard() {
     }
 
     return 'No estimates yet';
+  };
+
+  const getIntroSummaryLabel = (projectId: string) => {
+    const projectInquiries = introSummaries[projectId] || [];
+    if (projectInquiries.some((entry) => entry.status === 'Introduction Approved')) {
+      return 'Introduction approved';
+    }
+    if (projectInquiries.some((entry) => entry.status === 'Homeowner Confirmed')) {
+      return 'Homeowner confirmed';
+    }
+    if (projectInquiries.some((entry) => entry.status === 'Homeowner Contact Pending')) {
+      return 'Vendor interest under review';
+    }
+    if (projectInquiries.some((entry) => entry.status === 'Admin Reviewing')) {
+      return 'Blueprint reviewing vendor interest';
+    }
+    if (projectInquiries.some((entry) => entry.status === 'Requested')) {
+      return 'Vendor interest received';
+    }
+    if (projectInquiries.some((entry) => entry.status === 'Declined')) {
+      return 'A request was declined';
+    }
+    return 'No contractor introductions yet';
+  };
+
+  const getIntroSummaryMeta = (projectId: string) => {
+    const projectInquiries = introSummaries[projectId] || [];
+    if (projectInquiries.length === 0) {
+      return 'No Home Pro has requested an introduction for this project yet.';
+    }
+
+    const latestInquiry = projectInquiries[0];
+    const requestedCount = projectInquiries.filter((entry) =>
+      ['Requested', 'Admin Reviewing', 'Homeowner Contact Pending', 'Homeowner Confirmed'].includes(entry.status)
+    ).length;
+
+    if (latestInquiry.status === 'Introduction Approved') {
+      return 'Blueprint approved a shared introduction and kept the thread coordinated through email.';
+    }
+    if (latestInquiry.status === 'Declined') {
+      return 'Blueprint reviewed at least one request and declined it.';
+    }
+    if (requestedCount > 1) {
+      return `${requestedCount} contractor requests are moving through Blueprint review.`;
+    }
+
+    return 'Blueprint is coordinating contractor interest before releasing any direct introduction.';
+  };
+
+  const formatTimestamp = (value?: string) => {
+    if (!value) return 'Not yet';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  };
+
+  const getInquiryStatusDetail = (inquiry: LeadInquiry) => {
+    if (inquiry.status === 'Introduction Approved') {
+      return 'Blueprint approved this introduction and opened the shared email thread.';
+    }
+    if (inquiry.status === 'Homeowner Confirmed') {
+      return 'Blueprint recorded that you are open to this introduction and can move forward.';
+    }
+    if (inquiry.status === 'Homeowner Contact Pending') {
+      return 'Blueprint is actively reviewing contractor interest and may contact you before any introduction is released.';
+    }
+    if (inquiry.status === 'Admin Reviewing') {
+      return 'Blueprint is evaluating this contractor request for fit and readiness.';
+    }
+    if (inquiry.status === 'Declined') {
+      return inquiry.declineReason
+        ? `Blueprint declined this request: ${inquiry.declineReason}`
+        : 'Blueprint declined this introduction request.';
+    }
+    if (inquiry.status === 'Closed') {
+      return 'Blueprint closed this request and no further action is expected.';
+    }
+    return 'A Home Pro has requested an introduction through Blueprint.';
   };
 
   if (isLoading) {
@@ -242,6 +372,7 @@ export default function HomeownerDashboard() {
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Preview</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Project</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Estimates</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Intro Activity</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Status</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 text-right">Details</th>
                 </tr>
@@ -268,6 +399,14 @@ export default function HomeownerDashboard() {
                       </td>
                       <td className="px-6 py-5">
                         <p className="text-sm font-bold text-slate-700">{getEstimateSummary(project)}</p>
+                      </td>
+                      <td className="px-6 py-5">
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-slate-700">{getIntroSummaryLabel(project.id)}</p>
+                          <p className="text-xs font-medium text-slate-500">
+                            {(introSummaries[project.id] || []).length} request{(introSummaries[project.id] || []).length === 1 ? '' : 's'}
+                          </p>
+                        </div>
                       </td>
                       <td className="px-6 py-5">
                         <p className="text-sm font-bold text-slate-700">{getProjectPhaseLabel(project)}</p>
@@ -405,6 +544,48 @@ export default function HomeownerDashboard() {
                     <p className="text-lg font-black text-slate-900">{getProjectPhaseLabel(selectedProject)}</p>
                   </div>
                 </div>
+
+                <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
+                      <FileText size={20} />
+                    </div>
+                    <h3 className="font-black text-lg text-slate-900">Introduction Activity</h3>
+                  </div>
+                  <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6">
+                    <p className="text-sm font-bold text-slate-900">{getIntroSummaryLabel(selectedProject.id)}</p>
+                    <p className="mt-2 text-sm text-slate-600">{getIntroSummaryMeta(selectedProject.id)}</p>
+                    {(introSummaries[selectedProject.id] || []).length > 0 ? (
+                      <div className="mt-4 space-y-3">
+                        {(introSummaries[selectedProject.id] || []).slice(0, 4).map((inquiry) => (
+                          <div key={inquiry.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="font-bold text-slate-900">{inquiry.contractorName}</p>
+                              <span className={cn(
+                                'inline-flex rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em]',
+                                inquiryStatusBadgeClass(inquiry.status)
+                              )}>
+                                {inquiry.status}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-slate-600">{getInquiryStatusDetail(inquiry)}</p>
+                            <div className="mt-3 grid gap-2 text-[11px] font-medium text-slate-500 md:grid-cols-2">
+                              <p>Requested: {formatTimestamp(inquiry.createdAt)}</p>
+                              <p>Updated: {formatTimestamp(inquiry.statusUpdatedAt || inquiry.updatedAt || inquiry.createdAt)}</p>
+                              <p>Last Communication: {formatTimestamp(inquiry.lastCommunicationAt)}</p>
+                              <p>Homeowner Confirmed: {formatTimestamp(inquiry.homeownerConfirmedAt)}</p>
+                              {inquiry.introductionThreadId && <p>Thread Ready: {inquiry.introductionThreadId}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500">
+                        No contractor has requested an introduction for this project yet.
+                      </p>
+                    )}
+                  </div>
+                </section>
 
                 <section className="space-y-4">
                   <div className="flex items-center gap-3">

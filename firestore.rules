@@ -270,15 +270,66 @@ service cloud.firestore {
 
     function isValidLeadInquiry(data) {
       return hasRequiredFields(['leadId', 'contractorId', 'contractorName', 'contractorEmail', 'message', 'status', 'createdAt']) &&
-        hasOnlyAllowedFields(['leadId', 'contractorId', 'contractorName', 'contractorEmail', 'message', 'status', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields([
+          'leadId',
+          'contractorId',
+          'contractorName',
+          'contractorEmail',
+          'message',
+          'status',
+          'createdAt',
+          'updatedAt',
+          'statusUpdatedAt',
+          'reviewedBy',
+          'approvedAt',
+          'declinedAt',
+          'declineReason',
+          'homeownerContactedAt',
+          'homeownerConfirmedAt',
+          'introductionThreadId',
+          'lastCommunicationAt'
+        ]) &&
         data.leadId is string && data.leadId.size() > 0 &&
-        data.contractorId is string && data.contractorId == request.auth.uid &&
+        data.contractorId is string && data.contractorId.size() > 0 &&
+        (data.contractorId == request.auth.uid || isAdmin()) &&
         data.contractorName is string && data.contractorName.size() > 0 && data.contractorName.size() < 120 &&
         data.contractorEmail is string && isValidEmail(data.contractorEmail) &&
         data.message is string && data.message.size() > 0 && data.message.size() < 4000 &&
-        data.status in ['Requested', 'Reviewed', 'Matched', 'Closed'] &&
+        data.status in [
+          'Requested',
+          'Admin Reviewing',
+          'Homeowner Contact Pending',
+          'Homeowner Confirmed',
+          'Introduction Approved',
+          'Declined',
+          'Closed'
+        ] &&
         data.createdAt is string && isValidDateString(data.createdAt) &&
-        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt)) &&
+        (!('statusUpdatedAt' in data) || isValidDateString(data.statusUpdatedAt)) &&
+        (!('reviewedBy' in data) || (
+          data.reviewedBy is map &&
+          data.reviewedBy.keys().hasOnly(['id', 'name']) &&
+          (!('id' in data.reviewedBy) || data.reviewedBy.id is string) &&
+          (!('name' in data.reviewedBy) || data.reviewedBy.name is string)
+        )) &&
+        (!('approvedAt' in data) || isValidDateString(data.approvedAt)) &&
+        (!('declinedAt' in data) || isValidDateString(data.declinedAt)) &&
+        (!('declineReason' in data) || (data.declineReason is string && data.declineReason.size() < 1000)) &&
+        (!('homeownerContactedAt' in data) || isValidDateString(data.homeownerContactedAt)) &&
+        (!('homeownerConfirmedAt' in data) || isValidDateString(data.homeownerConfirmedAt)) &&
+        (!('introductionThreadId' in data) || data.introductionThreadId is string) &&
+        (!('lastCommunicationAt' in data) || isValidDateString(data.lastCommunicationAt));
+    }
+
+    function isValidLeadInquiryNote(data) {
+      return hasRequiredFields(['inquiryId', 'body', 'createdAt']) &&
+        hasOnlyAllowedFields(['inquiryId', 'body', 'authorId', 'authorName', 'createdAt']) &&
+        data.inquiryId is string && data.inquiryId.size() > 0 &&
+        data.body is string && data.body.size() > 0 && data.body.size() < 4000 &&
+        (!('authorId' in data) || data.authorId is string) &&
+        (!('authorName' in data) || data.authorName is string) &&
+        data.createdAt is string && isValidDateString(data.createdAt);
     }
 
     function isValidLeadActivity(data) {
@@ -291,6 +342,26 @@ service cloud.firestore {
         data.message is string && data.message.size() > 0 && data.message.size() < 4000 &&
         (!('actorId' in data) || data.actorId is string) &&
         (!('actorName' in data) || data.actorName is string) &&
+        data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    function isValidLeadInquiryHistory(data) {
+      return hasRequiredFields(['inquiryId', 'eventType', 'message', 'createdAt']) &&
+        hasOnlyAllowedFields(['inquiryId', 'eventType', 'message', 'actorId', 'actorName', 'metadata', 'createdAt']) &&
+        data.inquiryId is string && data.inquiryId.size() > 0 &&
+        data.eventType in [
+          'request_created',
+          'status_changed',
+          'note_added',
+          'homeowner_email_sent',
+          'home_pro_email_sent',
+          'introduction_approved',
+          'request_declined'
+        ] &&
+        data.message is string && data.message.size() > 0 && data.message.size() < 4000 &&
+        (!('actorId' in data) || data.actorId is string) &&
+        (!('actorName' in data) || data.actorName is string) &&
+        (!('metadata' in data) || data.metadata is map) &&
         data.createdAt is string && isValidDateString(data.createdAt);
     }
 
@@ -352,8 +423,32 @@ service cloud.firestore {
 
     match /lead_inquiries/{inquiryId} {
       allow create: if canAccessLeadMarketplace() && isValidLeadInquiry(request.resource.data);
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.contractorId == request.auth.uid);
+      allow read: if isAdmin() ||
+        (isAuthenticated() && resource.data.contractorId == request.auth.uid) ||
+        (
+          isAuthenticated() &&
+          get(/databases/$(database)/documents/projects/$(resource.data.leadId)).data.uid == request.auth.uid
+        );
       allow update, delete: if isAdmin() && isValidLeadInquiry(request.resource.data);
+    }
+
+    match /lead_inquiry_notes/{noteId} {
+      allow create: if isAdmin() && isValidLeadInquiryNote(request.resource.data);
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /lead_inquiry_history/{historyId} {
+      allow create: if isValidLeadInquiryHistory(request.resource.data) && (
+        isAdmin() ||
+        (
+          canAccessLeadMarketplace() &&
+          request.resource.data.actorId == request.auth.uid &&
+          request.resource.data.eventType in ['request_created', 'home_pro_email_sent']
+        )
+      );
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /lead_activity/{activityId} {

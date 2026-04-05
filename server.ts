@@ -57,6 +57,38 @@ async function startServer() {
       },
     });
 
+  const adminEmail = process.env.BLUEPRINT_ADMIN_EMAIL || process.env.SMTP_USER || SMTP_FROM_EMAIL;
+  const sendMail = async (options: nodemailer.SendMailOptions) => {
+    const transporter = createTransporter();
+    if (process.env.SMTP_USER && process.env.SMTP_USER !== "mock_user") {
+      return transporter.sendMail(options);
+    }
+
+    console.log(`[MOCK EMAIL SENT] ${options.subject} -> ${options.to}`);
+    return { messageId: `mock-${Date.now()}` };
+  };
+  const renderIntroEmail = ({
+    heading,
+    greeting,
+    bodyLines,
+    detailLines,
+  }: {
+    heading: string;
+    greeting: string;
+    bodyLines: string[];
+    detailLines: string[];
+  }) => `
+    <div style="font-family: sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 18px;">
+      <h1 style="margin: 0 0 16px; color: #0f172a;">${heading}</h1>
+      <p style="margin: 0 0 16px; color: #334155;">${greeting}</p>
+      ${bodyLines.map((line) => `<p style="margin: 0 0 14px; color: #475569;">${line}</p>`).join("")}
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin: 20px 0;">
+        ${detailLines.map((line) => `<p style="margin: 0 0 10px; color: #0f172a;">${line}</p>`).join("")}
+      </div>
+      <p style="margin: 20px 0 0; color: #334155;">Best regards,<br/>Blueprint Home Solutions</p>
+    </div>
+  `;
+
   // API route for sending project confirmation email
   app.post("/api/send-project-confirmation", async (req, res) => {
     const { email, name, projectTitle, startDate, description, photos } = req.body;
@@ -287,6 +319,144 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending admin message:", error);
       res.status(500).json({ error: "Failed to send admin message" });
+    }
+  });
+
+  app.post("/api/send-intro-request-acknowledgment", async (req, res) => {
+    const { contractorEmail, contractorName, category, town } = req.body;
+    if (!contractorEmail) {
+      return res.status(400).json({ error: "Contractor email is required" });
+    }
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: contractorEmail,
+        cc: adminEmail,
+        subject: `Blueprint received your ${category || "project"} introduction request`,
+        html: renderIntroEmail({
+          heading: "Introduction Request Received",
+          greeting: `Hi ${contractorName || "Home Pro"},`,
+          bodyLines: [
+            "Blueprint received your request and will review it before any homeowner introduction is approved.",
+            "We will keep you updated as the request moves through the review process.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${category || "Project request"}`,
+            `<strong>Area:</strong> ${town || "Local service area"}`,
+            "<strong>Status:</strong> Requested",
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId, threadId: info.messageId });
+    } catch (error) {
+      console.error("Error sending intro acknowledgment:", error);
+      res.status(500).json({ error: "Failed to send intro acknowledgment" });
+    }
+  });
+
+  app.post("/api/send-intro-review-update", async (req, res) => {
+    const { recipientEmail, recipientName, recipientType, category, location, statusLabel, nextStep } = req.body;
+    if (!recipientEmail) {
+      return res.status(400).json({ error: "Recipient email is required" });
+    }
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: recipientEmail,
+        cc: adminEmail,
+        subject: `Blueprint update for ${category || "your request"}`,
+        html: renderIntroEmail({
+          heading: recipientType === "homeowner" ? "Contractor Interest Update" : "Introduction Request Review",
+          greeting: `Hi ${recipientName || "there"},`,
+          bodyLines: [
+            statusLabel || "Blueprint has an update on your request.",
+            nextStep || "Blueprint is coordinating the next step and will follow up again when the request changes.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${category || "Project request"}`,
+            `<strong>Area:</strong> ${location || "Local service area"}`,
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId, threadId: info.messageId });
+    } catch (error) {
+      console.error("Error sending intro review update:", error);
+      res.status(500).json({ error: "Failed to send intro review update" });
+    }
+  });
+
+  app.post("/api/send-intro-approval-shared-thread", async (req, res) => {
+    const { homeownerEmail, homeownerName, contractorEmail, contractorName, category, location, homeownerPhone } = req.body;
+    if (!homeownerEmail || !contractorEmail) {
+      return res.status(400).json({ error: "Homeowner and contractor emails are required" });
+    }
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: [homeownerEmail, contractorEmail].join(", "),
+        cc: adminEmail,
+        replyTo: adminEmail,
+        subject: `Blueprint introduction approved: ${category || "project request"}`,
+        html: renderIntroEmail({
+          heading: "Blueprint Introduction Approved",
+          greeting: `Hi ${homeownerName || "Homeowner"} and ${contractorName || "Home Pro"},`,
+          bodyLines: [
+            "Blueprint approved this introduction and is opening one shared email thread so everyone can coordinate in one place.",
+            "Please reply on this thread for scheduling and next steps so Blueprint remains copied during the early workflow.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${category || "Project request"}`,
+            `<strong>Area:</strong> ${location || "Local service area"}`,
+            `<strong>Homeowner:</strong> ${homeownerName || "Homeowner"}${homeownerPhone ? ` (${homeownerPhone})` : ""}`,
+            `<strong>Home Pro:</strong> ${contractorName || "Home Pro"}`,
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId, threadId: info.messageId });
+    } catch (error) {
+      console.error("Error sending intro approval email:", error);
+      res.status(500).json({ error: "Failed to send intro approval email" });
+    }
+  });
+
+  app.post("/api/send-intro-decline", async (req, res) => {
+    const { contractorEmail, contractorName, category, location, declineReason } = req.body;
+    if (!contractorEmail) {
+      return res.status(400).json({ error: "Contractor email is required" });
+    }
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: contractorEmail,
+        cc: adminEmail,
+        subject: `Blueprint update on your ${category || "project"} request`,
+        html: renderIntroEmail({
+          heading: "Introduction Request Update",
+          greeting: `Hi ${contractorName || "Home Pro"},`,
+          bodyLines: [
+            "Blueprint is not moving forward with this introduction request.",
+            "Thank you for your interest. We will keep you posted on future opportunities that fit your profile.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${category || "Project request"}`,
+            `<strong>Area:</strong> ${location || "Local service area"}`,
+            "<strong>Outcome:</strong> Declined",
+            `<strong>Note:</strong> ${declineReason || "No additional reason provided"}`,
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId, threadId: info.messageId });
+    } catch (error) {
+      console.error("Error sending intro decline email:", error);
+      res.status(500).json({ error: "Failed to send intro decline email" });
     }
   });
 

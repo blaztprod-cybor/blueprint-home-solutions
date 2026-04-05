@@ -130,9 +130,28 @@ export interface LeadInquiry {
   contractorName: string;
   contractorEmail: string;
   message: string;
-  status: 'Requested' | 'Reviewed' | 'Matched' | 'Closed';
+  status:
+    | 'Requested'
+    | 'Admin Reviewing'
+    | 'Homeowner Contact Pending'
+    | 'Homeowner Confirmed'
+    | 'Introduction Approved'
+    | 'Declined'
+    | 'Closed';
   createdAt: string;
   updatedAt?: string;
+  statusUpdatedAt?: string;
+  reviewedBy?: {
+    id?: string;
+    name?: string;
+  };
+  approvedAt?: string;
+  declinedAt?: string;
+  declineReason?: string;
+  homeownerContactedAt?: string;
+  homeownerConfirmedAt?: string;
+  introductionThreadId?: string;
+  lastCommunicationAt?: string;
 }
 
 export interface LeadActivity {
@@ -144,6 +163,33 @@ export interface LeadActivity {
   message: string;
   actorId?: string;
   actorName?: string;
+  createdAt: string;
+}
+
+export interface LeadInquiryNote {
+  id: string;
+  inquiryId: string;
+  body: string;
+  authorId?: string;
+  authorName?: string;
+  createdAt: string;
+}
+
+export interface LeadInquiryHistory {
+  id: string;
+  inquiryId: string;
+  eventType:
+    | 'request_created'
+    | 'status_changed'
+    | 'note_added'
+    | 'homeowner_email_sent'
+    | 'home_pro_email_sent'
+    | 'introduction_approved'
+    | 'request_declined';
+  message: string;
+  actorId?: string;
+  actorName?: string;
+  metadata?: Record<string, string | number | boolean | null>;
   createdAt: string;
 }
 

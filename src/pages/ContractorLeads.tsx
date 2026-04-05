@@ -21,7 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
-import { LeadInquiry, LeadMarketplaceItem } from '../types';
+import { LeadInquiry, LeadInquiryHistory, LeadMarketplaceItem } from '../types';
 import { cn } from '../lib/utils';
 
 export default function ContractorLeads() {
@@ -122,7 +122,20 @@ export default function ContractorLeads() {
     [leads, categoryFilter, queryText]
   );
 
-  const requestedLeadIds = new Set(inquiries.map((inquiry) => inquiry.leadId));
+  const inquiryByLeadId = useMemo(
+    () =>
+      new Map(
+        inquiries
+          .slice()
+          .sort((left, right) => {
+            const leftTime = new Date(left.updatedAt || left.createdAt).getTime();
+            const rightTime = new Date(right.updatedAt || right.createdAt).getTime();
+            return rightTime - leftTime;
+          })
+          .map((inquiry) => [inquiry.leadId, inquiry] as const)
+      ),
+    [inquiries]
+  );
 
   const formatDate = (value: string) => {
     const parsed = new Date(value);
@@ -136,27 +149,68 @@ export default function ContractorLeads() {
 
     setSubmittingLeadId(selectedLead.id);
     try {
-      await addDoc(collection(db, 'lead_inquiries'), {
+      const timestamp = new Date().toISOString();
+      const inquiryPayload: Omit<LeadInquiry, 'id'> = {
         leadId: selectedLead.leadId,
         contractorId: user.id,
         contractorName: user.name,
         contractorEmail: user.email,
         message: trimmedMessage,
         status: 'Requested',
-        createdAt: new Date().toISOString(),
-      });
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        statusUpdatedAt: timestamp,
+      };
+      const inquiryRef = await addDoc(collection(db, 'lead_inquiries'), inquiryPayload);
+
+      const historyEntries: Omit<LeadInquiryHistory, 'id'>[] = [
+        {
+          inquiryId: inquiryRef.id,
+          eventType: 'request_created',
+          message: `${user.name} requested an introduction for ${selectedLead.category}.`,
+          actorId: user.id,
+          actorName: user.name,
+          createdAt: timestamp,
+        },
+      ];
+
+      try {
+        const response = await fetch('/api/send-intro-request-acknowledgment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractorEmail: user.email,
+            contractorName: user.name,
+            category: selectedLead.category,
+            town: selectedLead.location?.town,
+          }),
+        });
+
+        if (response.ok) {
+          historyEntries.push({
+            inquiryId: inquiryRef.id,
+            eventType: 'home_pro_email_sent',
+            message: `Blueprint sent an introduction request acknowledgment to ${user.email}.`,
+            actorId: user.id,
+            actorName: user.name,
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          console.error('Intro acknowledgment email failed:', await response.text());
+        }
+      } catch (emailError) {
+        console.error('Intro acknowledgment email failed:', emailError);
+      }
+
+      await Promise.all(
+        historyEntries.map((entry) => addDoc(collection(db, 'lead_inquiry_history'), entry))
+      );
 
       setInquiries((current) => [
         ...current,
         {
-          id: `${selectedLead.id}-${user.id}`,
-          leadId: selectedLead.leadId,
-          contractorId: user.id,
-          contractorName: user.name,
-          contractorEmail: user.email,
-          message: trimmedMessage,
-          status: 'Requested',
-          createdAt: new Date().toISOString(),
+          id: inquiryRef.id,
+          ...inquiryPayload,
         },
       ]);
       setLeads((current) =>
@@ -242,7 +296,8 @@ export default function ContractorLeads() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           {filteredLeads.map((lead) => {
-            const alreadyRequested = requestedLeadIds.has(lead.leadId);
+            const inquiry = inquiryByLeadId.get(lead.leadId);
+            const alreadyRequested = !!inquiry;
 
             return (
               <article key={lead.id} className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
@@ -285,9 +340,16 @@ export default function ContractorLeads() {
                 )}
 
                 <div className="mt-5 flex items-center justify-between gap-4">
-                  <p className="text-xs font-medium text-slate-500">
-                    Homeowner contact stays inside Blueprint until introduction is approved.
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-500">
+                      Homeowner contact stays inside Blueprint until introduction is approved.
+                    </p>
+                    {inquiry && (
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                        Your request: {inquiry.status}
+                      </p>
+                    )}
+                  </div>
                   <button
                     type="button"
                     disabled={alreadyRequested}
@@ -299,7 +361,7 @@ export default function ContractorLeads() {
                     }}
                     className="rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white shadow-lg shadow-blue-500/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {alreadyRequested ? 'Requested' : 'Request Introduction'}
+                    {alreadyRequested ? inquiry?.status || 'Requested' : 'Request Introduction'}
                   </button>
                 </div>
               </article>
