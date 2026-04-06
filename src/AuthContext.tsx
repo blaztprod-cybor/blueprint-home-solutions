@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from './types';
 import { auth, db, uploadDataUrlToStorage } from './firebase';
+import { sendContractorNotification } from './lib/contractorNotifications';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
@@ -118,6 +119,7 @@ interface AuthContextType {
       isTradesman?: boolean;
       trade?: string;
       notifyOnProductUpdates?: boolean;
+      notifyOnSmsLeadAlerts?: boolean;
     }
   ) => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -320,6 +322,8 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     notifyOnNewProjects: cachedMatchesIdentity ? (cachedUser?.notifyOnNewProjects ?? (role === 'Contractor')) : (role === 'Contractor'),
     notifyOnRoughEstimates: cachedMatchesIdentity ? (cachedUser?.notifyOnRoughEstimates ?? (role === 'Homeowner')) : (role === 'Homeowner'),
     notifyOnProductUpdates: cachedMatchesIdentity ? (cachedUser?.notifyOnProductUpdates ?? false) : false,
+    notifyOnSmsLeadAlerts: cachedMatchesIdentity ? (cachedUser?.notifyOnSmsLeadAlerts ?? false) : false,
+    smsConsentAt: cachedMatchesIdentity ? cachedUser?.smsConsentAt : undefined,
     ...getDerivedTrialFields(role, createdAt),
   };
 
@@ -347,6 +351,8 @@ function buildFirestoreUserPayload(
     notifyOnNewProjects?: boolean;
     notifyOnRoughEstimates?: boolean;
     notifyOnProductUpdates?: boolean;
+    notifyOnSmsLeadAlerts?: boolean;
+    smsConsentAt?: string;
     accountPlan?: User['accountPlan'];
     trialStartedAt?: string;
     trialEndsAt?: string;
@@ -377,6 +383,8 @@ function buildFirestoreUserPayload(
     notifyOnNewProjects: data.notifyOnNewProjects,
     notifyOnRoughEstimates: data.notifyOnRoughEstimates,
     notifyOnProductUpdates: data.notifyOnProductUpdates,
+    notifyOnSmsLeadAlerts: data.notifyOnSmsLeadAlerts,
+    smsConsentAt: data.smsConsentAt,
     accountPlan: data.accountPlan,
     trialStartedAt: data.trialStartedAt,
     trialEndsAt: data.trialEndsAt,
@@ -410,30 +418,24 @@ async function sendSignupConfirmationEmail({
   name: string;
   role: UserRole;
 }) {
-  const endpoints =
-    role === 'Contractor'
-      ? ['/api/send-contractor-signup-confirmation', '/api/send-welcome-email']
-      : ['/api/send-welcome-email'];
-
-  let lastError: Error | null = null;
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, role }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (response.ok) {
-        return;
-      }
-      lastError = new Error(payload?.error || response.statusText || 'Signup email request failed');
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Signup email request failed');
-    }
+  if (role === 'Contractor') {
+    await sendContractorNotification({
+      eventType: 'signup_confirmation',
+      contractorEmail: email,
+      contractorName: name,
+    });
+    return;
   }
 
-  throw (lastError || new Error('Signup email request failed'));
+  const response = await fetch('/api/send-welcome-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name, role }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error || response.statusText || 'Signup email request failed');
+  }
 }
 
 async function resolveProfileMediaUrls(
@@ -577,6 +579,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               notifyOnNewProjects: data.notifyOnNewProjects ?? (role === 'Contractor'),
               notifyOnRoughEstimates: data.notifyOnRoughEstimates ?? (role === 'Homeowner'),
               notifyOnProductUpdates: data.notifyOnProductUpdates ?? false,
+              notifyOnSmsLeadAlerts: data.notifyOnSmsLeadAlerts ?? false,
+              smsConsentAt: data.smsConsentAt,
               ...getDerivedTrialFields(role, data.createdAt),
             };
             setUser(userData);
@@ -604,6 +608,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
               notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
               notifyOnProductUpdates: recoveredUser.notifyOnProductUpdates,
+              notifyOnSmsLeadAlerts: recoveredUser.notifyOnSmsLeadAlerts,
+              smsConsentAt: recoveredUser.smsConsentAt,
               accountPlan: recoveredUser.accountPlan,
               trialStartedAt: recoveredUser.trialStartedAt,
               trialEndsAt: recoveredUser.trialEndsAt,
@@ -655,6 +661,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
           notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
           notifyOnProductUpdates: recoveredUser.notifyOnProductUpdates,
+          notifyOnSmsLeadAlerts: recoveredUser.notifyOnSmsLeadAlerts,
+          smsConsentAt: recoveredUser.smsConsentAt,
           accountPlan: recoveredUser.accountPlan,
           trialStartedAt: recoveredUser.trialStartedAt,
           trialEndsAt: recoveredUser.trialEndsAt,
@@ -687,6 +695,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
         isVerified: false,
         subscriptionLevel: getDerivedSubscriptionLevel(role),
+        notifyOnSmsLeadAlerts: false,
         accountPlan: getDerivedTrialFields(role).accountPlan,
         trialStartedAt: getDerivedTrialFields(role).trialStartedAt,
         trialEndsAt: getDerivedTrialFields(role).trialEndsAt,
@@ -704,6 +713,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notifyOnNewProjects: role === 'Contractor',
         notifyOnRoughEstimates: role === 'Homeowner',
         notifyOnProductUpdates: false,
+        notifyOnSmsLeadAlerts: false,
         ...getDerivedTrialFields(role),
         };
         setUser(userData);
@@ -749,9 +759,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isTradesman?: boolean;
       trade?: string;
       notifyOnProductUpdates?: boolean;
+      notifyOnSmsLeadAlerts?: boolean;
     }
   ) => {
     const nextProfile = profile || {};
+    const smsConsentAt = nextProfile.notifyOnSmsLeadAlerts ? new Date().toISOString() : undefined;
     try {
       saveAuthRoleHint(email, role);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -786,6 +798,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notifyOnNewProjects: finalRole === 'Contractor',
         notifyOnRoughEstimates: finalRole === 'Homeowner',
         notifyOnProductUpdates: nextProfile.notifyOnProductUpdates ?? false,
+        notifyOnSmsLeadAlerts: finalRole === 'Contractor' ? (nextProfile.notifyOnSmsLeadAlerts ?? false) : false,
+        smsConsentAt: finalRole === 'Contractor' ? smsConsentAt : undefined,
         ...getDerivedTrialFields(finalRole),
       };
 
@@ -814,6 +828,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notifyOnNewProjects: userData.notifyOnNewProjects,
         notifyOnRoughEstimates: userData.notifyOnRoughEstimates,
         notifyOnProductUpdates: userData.notifyOnProductUpdates,
+        notifyOnSmsLeadAlerts: userData.notifyOnSmsLeadAlerts,
+        smsConsentAt: userData.smsConsentAt,
         accountPlan: userData.accountPlan,
         trialStartedAt: userData.trialStartedAt,
         trialEndsAt: userData.trialEndsAt,
@@ -852,6 +868,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         governmentIdImage: data.governmentIdImage,
       });
       const updatedUser = { ...user, ...data, ...resolvedMedia };
+      const nextSmsOptIn =
+        typeof data.notifyOnSmsLeadAlerts === 'boolean'
+          ? data.notifyOnSmsLeadAlerts
+          : updatedUser.notifyOnSmsLeadAlerts;
+      updatedUser.smsConsentAt = nextSmsOptIn
+        ? updatedUser.smsConsentAt || new Date().toISOString()
+        : undefined;
       const { id: _ignoredId, ...firestoreUserData } = updatedUser;
       
       // If name changed but no avatar provided, update initials avatar if it was using initials

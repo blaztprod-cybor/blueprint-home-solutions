@@ -36,6 +36,7 @@ export default function ProfileSettings() {
     notifyOnNewProjects: user?.notifyOnNewProjects ?? (user?.role === 'Contractor'),
     notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner'),
     notifyOnProductUpdates: user?.notifyOnProductUpdates ?? false,
+    notifyOnSmsLeadAlerts: user?.notifyOnSmsLeadAlerts ?? false,
   });
   const governmentIdInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +56,7 @@ export default function ProfileSettings() {
       notifyOnNewProjects: user?.notifyOnNewProjects ?? (user?.role === 'Contractor'),
       notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner'),
       notifyOnProductUpdates: user?.notifyOnProductUpdates ?? false,
+      notifyOnSmsLeadAlerts: user?.notifyOnSmsLeadAlerts ?? false,
     });
   }, [
     user?.name,
@@ -70,6 +72,7 @@ export default function ProfileSettings() {
     user?.notifyOnNewProjects,
     user?.notifyOnRoughEstimates,
     user?.notifyOnProductUpdates,
+    user?.notifyOnSmsLeadAlerts,
     user?.role,
   ]);
 
@@ -109,6 +112,7 @@ export default function ProfileSettings() {
         notifyOnNewProjects: formData.notifyOnNewProjects,
         notifyOnRoughEstimates: formData.notifyOnRoughEstimates,
         notifyOnProductUpdates: formData.notifyOnProductUpdates,
+        notifyOnSmsLeadAlerts: formData.notifyOnSmsLeadAlerts,
       });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -344,6 +348,20 @@ export default function ProfileSettings() {
                       />
                       <span className="text-sm font-bold text-slate-600">
                         Email me whenever a new homeowner project is submitted
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={formData.notifyOnSmsLeadAlerts}
+                        onChange={(e) => setFormData({ ...formData, notifyOnSmsLeadAlerts: e.target.checked })}
+                        className="mt-0.5 w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+                      />
+                      <span className="text-sm font-bold text-slate-600">
+                        Text me when Blueprint has a new lead or important contractor update
+                        <span className="mt-1 block text-xs font-medium text-slate-400">
+                          Uses your saved phone number and requires SMS consent.
+                        </span>
                       </span>
                     </label>
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">

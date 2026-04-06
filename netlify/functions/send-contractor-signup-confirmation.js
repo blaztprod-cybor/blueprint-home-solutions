@@ -1,4 +1,10 @@
-import { getAdminEmail, renderIntroEmail, sendIntroEmail } from './_intro-email.js';
+import {
+  createEmailLogContext,
+  getAdminEmail,
+  renderIntroEmail,
+  sendLoggedIntroEmail,
+} from './_intro-email.js';
+import { getContractorNotificationContent } from './send-contractor-notification.js';
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -11,23 +17,28 @@ export const handler = async (event) => {
   }
 
   try {
-    const info = await sendIntroEmail({
-      to: email,
-      cc: getAdminEmail(),
-      subject: 'Blueprint Home Pro signup received',
-      html: renderIntroEmail({
-        heading: 'Home Pro Signup Received',
-        greeting: `Hi ${name || 'Home Pro'},`,
-        bodyLines: [
-          'Blueprint received your contractor signup and your account has been created.',
-          'Your account remains unverified until Blueprint completes its review. You can still finish your profile and access your portal while review is pending.',
-        ],
-        detailLines: [
-          '<strong>Status:</strong> Account created',
-          '<strong>Verification:</strong> Pending Blueprint review',
-          '<strong>Next step:</strong> Blueprint will review your profile before marketplace access is approved',
-        ],
+    const content = getContractorNotificationContent({
+      eventType: 'signup_confirmation',
+      contractorName: name,
+    });
+    const info = await sendLoggedIntroEmail({
+      logContext: createEmailLogContext({
+        handlerName: 'send-contractor-signup-confirmation',
+        eventType: 'signup_confirmation',
+        recipient: email,
+        metadata: { contractorName: name, deprecatedEndpoint: true },
       }),
+      mail: {
+        to: email,
+        cc: getAdminEmail(),
+        subject: content.subject,
+        html: renderIntroEmail({
+          heading: content.heading,
+          greeting: `Hi ${name || 'Home Pro'},`,
+          bodyLines: content.bodyLines,
+          detailLines: content.detailLines,
+        }),
+      },
     });
 
     return {

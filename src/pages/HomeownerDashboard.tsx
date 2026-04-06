@@ -15,9 +15,10 @@ import {
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, orderBy, getDocs, limit, updateDoc, doc } from 'firebase/firestore';
-import { LeadInquiry, Project } from '../types';
+import { collection, query, where, onSnapshot, orderBy, getDocs, limit, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { LeadInquiry, Project, Estimate } from '../types';
 import { cn } from '../lib/utils';
+import { Toaster, toast } from 'sonner';
 
 function inquiryStatusBadgeClass(status: LeadInquiry['status']) {
   if (status === 'Requested') return 'bg-slate-100 text-slate-700 border-slate-200';
@@ -37,6 +38,7 @@ export default function HomeownerDashboard() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectPhotos, setProjectPhotos] = useState<{ id: string; url: string }[]>([]);
   const [introSummaries, setIntroSummaries] = useState<Record<string, LeadInquiry[]>>({});
+  const [acceptingEstimateKey, setAcceptingEstimateKey] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -275,6 +277,130 @@ export default function HomeownerDashboard() {
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
   };
 
+  const acceptEstimate = async (project: Project, estimate: Estimate) => {
+    if (!user) return;
+
+    const estimateType = estimate.type;
+    const estimateKey = `${project.id}-${estimateType}-${estimate.contractorId}-${estimate.submittedAt}`;
+    setAcceptingEstimateKey(estimateKey);
+
+    try {
+      const contractorSnapshot = await getDoc(doc(db, 'users', estimate.contractorId));
+      const contractorData = contractorSnapshot.exists() ? contractorSnapshot.data() : null;
+      const contractorEmail = typeof contractorData?.email === 'string' ? contractorData.email : '';
+      const contractorName = (contractorData?.name as string | undefined) || estimate.contractorName;
+
+      const nextStatus = estimateType === 'final' ? 'In Contract' : 'Final Estimates';
+      const updatePayload: Partial<Project> & { updatedAt: string } = {
+        selectedContractorId: estimate.contractorId,
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await updateDoc(doc(db, 'projects', project.id), updatePayload);
+
+      if (contractorEmail) {
+        const response = await fetch('/api/send-estimate-accepted-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            homeownerEmail: user.email,
+            homeownerName: user.name,
+            contractorEmail,
+            contractorName,
+            projectTitle: project.title,
+            amount: estimate.amount,
+            estimateType,
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          console.error('Estimate acceptance notification failed:', payload?.error || response.statusText);
+        }
+      }
+
+      setProjects((current) =>
+        current.map((entry) =>
+          entry.id === project.id
+            ? { ...entry, ...updatePayload }
+            : entry
+        )
+      );
+      setSelectedProject((current) =>
+        current?.id === project.id
+          ? { ...current, ...updatePayload }
+          : current
+      );
+
+      toast.success(
+        estimateType === 'final'
+          ? 'Final estimate accepted. Homeowner, contractor, and admin were notified.'
+          : 'Rough estimate accepted. Everyone has been notified to move toward inspection and final estimate.'
+      );
+    } catch (acceptError) {
+      console.error('[HomeownerDashboard] Failed to accept estimate:', acceptError);
+      toast.error('Could not accept that estimate right now.');
+    } finally {
+      setAcceptingEstimateKey('');
+    }
+  };
+
+  const renderEstimateCards = (project: Project, estimates: Estimate[] | undefined, type: 'rough' | 'final') => {
+    if (!estimates || estimates.length === 0) {
+      return (
+        <p className="text-sm text-slate-500">
+          No {type} estimates received yet.
+        </p>
+      );
+    }
+
+    const sortedEstimates = [...estimates].sort(
+      (left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime()
+    );
+
+    return (
+      <div className="space-y-3">
+        {sortedEstimates.map((estimate) => {
+          const estimateKey = `${project.id}-${type}-${estimate.contractorId}-${estimate.submittedAt}`;
+          const isAccepted = project.selectedContractorId === estimate.contractorId &&
+            ((type === 'rough' && ['Final Estimates', 'In Contract', 'In Progress'].includes(project.status)) ||
+              (type === 'final' && ['In Contract', 'In Progress'].includes(project.status)));
+
+          return (
+            <div key={estimateKey} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-bold text-slate-900">{estimate.contractorName}</p>
+                  <p className="text-sm font-medium text-slate-600">${estimate.amount.toLocaleString()}</p>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Submitted {new Date(estimate.submittedAt).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  {isAccepted ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                      Accepted
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!!acceptingEstimateKey}
+                      onClick={() => void acceptEstimate(project, estimate)}
+                      className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white disabled:opacity-50"
+                    >
+                      {acceptingEstimateKey === estimateKey ? 'Saving...' : `Accept ${type} estimate`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const getInquiryStatusDetail = (inquiry: LeadInquiry) => {
     if (inquiry.status === 'Introduction Approved') {
       return 'Blueprint approved this introduction and opened the shared email thread.';
@@ -309,6 +435,7 @@ export default function HomeownerDashboard() {
 
   return (
     <div className="space-y-8">
+      <Toaster position="top-right" richColors />
       <div className="mb-4">
         <h1 className="text-3xl font-black tracking-tight">My Dashboard</h1>
         <p className="text-muted-foreground mt-1 font-medium">Manage your home improvement journey</p>
@@ -544,6 +671,29 @@ export default function HomeownerDashboard() {
                     <p className="text-lg font-black text-slate-900">{getProjectPhaseLabel(selectedProject)}</p>
                   </div>
                 </div>
+
+                <section className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
+                      <FileText size={20} />
+                    </div>
+                    <h3 className="font-black text-lg text-slate-900">Estimates</h3>
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Rough Estimates</p>
+                      <div className="mt-4">
+                        {renderEstimateCards(selectedProject, selectedProject.roughEstimates, 'rough')}
+                      </div>
+                    </div>
+                    <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Final Estimates</p>
+                      <div className="mt-4">
+                        {renderEstimateCards(selectedProject, selectedProject.finalEstimates, 'final')}
+                      </div>
+                    </div>
+                  </div>
+                </section>
 
                 <section className="space-y-4">
                   <div className="flex items-center gap-3">

@@ -249,6 +249,14 @@ export default function AdminLeads() {
   };
 
   const sendIntroEmail = async (path: string, payload: Record<string, unknown>) => {
+    console.log('[AdminLeads] Sending intro email request', {
+      path,
+      inquiryId: payload.inquiryId,
+      recipientType: payload.recipientType,
+      recipientEmail: payload.recipientEmail,
+      contractorEmail: payload.contractorEmail,
+      homeownerEmail: payload.homeownerEmail,
+    });
     const response = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -257,6 +265,11 @@ export default function AdminLeads() {
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);
+      console.error('[AdminLeads] Intro email request failed', {
+        path,
+        payload,
+        error: body?.error || `Failed request to ${path}`,
+      });
       throw new Error(body?.error || `Failed request to ${path}`);
     }
 

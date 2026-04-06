@@ -32,6 +32,43 @@ const getSmtpConfig = () => {
 export const getAdminEmail = () =>
   process.env.BLUEPRINT_ADMIN_EMAIL || process.env.SMTP_USER || SMTP_FROM_EMAIL;
 
+export const createEmailLogContext = ({ handlerName, eventType, recipient, metadata = {} }) => ({
+  requestId: `${handlerName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  handlerName,
+  eventType,
+  recipient,
+  metadata,
+});
+
+export const logEmailStart = (context) => {
+  console.log(`[EMAIL][START] ${context.handlerName}`, {
+    requestId: context.requestId,
+    eventType: context.eventType,
+    recipient: context.recipient,
+    metadata: context.metadata,
+  });
+};
+
+export const logEmailSuccess = (context, info) => {
+  console.log(`[EMAIL][SUCCESS] ${context.handlerName}`, {
+    requestId: context.requestId,
+    eventType: context.eventType,
+    recipient: context.recipient,
+    messageId: info?.messageId,
+  });
+};
+
+export const logEmailFailure = (context, error) => {
+  console.error(`[EMAIL][FAILURE] ${context.handlerName}`, {
+    requestId: context.requestId,
+    eventType: context.eventType,
+    recipient: context.recipient,
+    metadata: context.metadata,
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+};
+
 export const renderIntroEmail = ({ heading, greeting, bodyLines, detailLines, footerLines = [] }) => `
   <div style="font-family: sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 18px;">
     <h1 style="margin: 0 0 16px; color: #0f172a;">${heading}</h1>
@@ -57,4 +94,19 @@ export const sendIntroEmail = async ({ to, cc, subject, html, replyTo }) => {
   });
 
   return info;
+};
+
+export const sendLoggedIntroEmail = async ({
+  logContext,
+  mail,
+}) => {
+  logEmailStart(logContext);
+  try {
+    const info = await sendIntroEmail(mail);
+    logEmailSuccess(logContext, info);
+    return info;
+  } catch (error) {
+    logEmailFailure(logContext, error);
+    throw error;
+  }
 };

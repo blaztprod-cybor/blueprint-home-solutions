@@ -91,8 +91,7 @@ service cloud.firestore {
     function canAccessLeadMarketplace() {
       return isAdmin() || (
         isAuthenticated() &&
-        currentUserData().role == 'Contractor' &&
-        currentUserData().subscriptionLevel in ['trial', 'beginner', 'junior', 'pro']
+        currentUserData().role == 'Contractor'
       );
     }
 
@@ -141,7 +140,7 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'notifyOnProductUpdates', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'notifyOnProductUpdates', 'notifyOnSmsLeadAlerts', 'smsConsentAt', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
         (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
@@ -167,6 +166,8 @@ service cloud.firestore {
         (!('notifyOnNewProjects' in data) || data.notifyOnNewProjects is bool) &&
         (!('notifyOnRoughEstimates' in data) || data.notifyOnRoughEstimates is bool) &&
         (!('notifyOnProductUpdates' in data) || data.notifyOnProductUpdates is bool) &&
+        (!('notifyOnSmsLeadAlerts' in data) || data.notifyOnSmsLeadAlerts is bool) &&
+        (!('smsConsentAt' in data) || isValidDateString(data.smsConsentAt)) &&
         (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
     }

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { createEmailLogContext, logEmailFailure, logEmailStart, logEmailSuccess } from './_intro-email.js';
 
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Blueprint Home Solutions';
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || 'info@blueprinthomesolutions.com';
@@ -41,6 +42,13 @@ export const handler = async (event) => {
   }
 
   try {
+    const logContext = createEmailLogContext({
+      handlerName: 'send-welcome-email',
+      eventType: 'welcome_email',
+      recipient: email,
+      metadata: { role, name },
+    });
+    logEmailStart(logContext);
     const transporter = nodemailer.createTransport(getSmtpConfig());
 
     const mailOptions = {
@@ -65,7 +73,8 @@ export const handler = async (event) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    logEmailSuccess(logContext, info);
 
     return {
       statusCode: 200,
@@ -73,7 +82,15 @@ export const handler = async (event) => {
       body: JSON.stringify({ success: true, message: 'Welcome email processed' }),
     };
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    logEmailFailure(
+      createEmailLogContext({
+        handlerName: 'send-welcome-email',
+        eventType: 'welcome_email',
+        recipient: email,
+        metadata: { role, name },
+      }),
+      error
+    );
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },

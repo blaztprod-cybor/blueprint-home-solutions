@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../AuthContext';
+import { sendContractorNotification } from '../lib/contractorNotifications';
 import { LeadInquiry, LeadInquiryHistory, LeadMarketplaceItem } from '../types';
 import { cn } from '../lib/utils';
 
@@ -174,29 +175,21 @@ export default function ContractorLeads() {
       ];
 
       try {
-        const response = await fetch('/api/send-intro-request-acknowledgment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contractorEmail: user.email,
-            contractorName: user.name,
-            category: selectedLead.category,
-            town: selectedLead.location?.town,
-          }),
+        await sendContractorNotification({
+          eventType: 'intro_request_acknowledgment',
+          contractorEmail: user.email,
+          contractorName: user.name,
+          category: selectedLead.category,
+          town: selectedLead.location?.town,
         });
-
-        if (response.ok) {
-          historyEntries.push({
-            inquiryId: inquiryRef.id,
-            eventType: 'home_pro_email_sent',
-            message: `Blueprint sent an introduction request acknowledgment to ${user.email}.`,
-            actorId: user.id,
-            actorName: user.name,
-            createdAt: new Date().toISOString(),
-          });
-        } else {
-          console.error('Intro acknowledgment email failed:', await response.text());
-        }
+        historyEntries.push({
+          inquiryId: inquiryRef.id,
+          eventType: 'home_pro_email_sent',
+          message: `Blueprint sent an introduction request acknowledgment to ${user.email}.`,
+          actorId: user.id,
+          actorName: user.name,
+          createdAt: new Date().toISOString(),
+        });
       } catch (emailError) {
         console.error('Intro acknowledgment email failed:', emailError);
       }

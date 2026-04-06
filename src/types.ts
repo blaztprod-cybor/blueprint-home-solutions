@@ -219,4 +219,6 @@ export interface User {
   notifyOnNewProjects?: boolean;
   notifyOnRoughEstimates?: boolean;
   notifyOnProductUpdates?: boolean;
+  notifyOnSmsLeadAlerts?: boolean;
+  smsConsentAt?: string;
 }

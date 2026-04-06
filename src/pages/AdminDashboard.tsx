@@ -105,6 +105,8 @@ function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = 
       notifyOnNewProjects: nextUser.notifyOnNewProjects,
       notifyOnRoughEstimates: nextUser.notifyOnRoughEstimates,
       notifyOnProductUpdates: nextUser.notifyOnProductUpdates,
+      notifyOnSmsLeadAlerts: nextUser.notifyOnSmsLeadAlerts,
+      smsConsentAt: nextUser.smsConsentAt,
       createdAt: toIsoDateString((nextUser as unknown as { createdAt?: unknown }).createdAt),
       updatedAt: new Date().toISOString(),
     }).filter(([, value]) => value !== undefined)

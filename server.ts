@@ -12,8 +12,13 @@ dotenv.config();
 
 const execFileAsync = promisify(execFile);
 const PERMIT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const ENABLE_DEV_PERMIT_SYNC = process.env.ENABLE_DEV_PERMIT_SYNC === "true";
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
+const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
 function getSmtpSecureSetting() {
   if (process.env.SMTP_SECURE) {
@@ -21,6 +26,45 @@ function getSmtpSecureSetting() {
   }
 
   return parseInt(process.env.SMTP_PORT || "587", 10) === 465;
+}
+
+async function sendSms({
+  to,
+  body,
+}: {
+  to: string;
+  body: string;
+}) {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || (!TWILIO_FROM_NUMBER && !TWILIO_MESSAGING_SERVICE_SID)) {
+    throw new Error("SMS provider is not configured");
+  }
+
+  const params = new URLSearchParams({
+    To: to,
+    Body: body,
+  });
+
+  if (TWILIO_MESSAGING_SERVICE_SID) {
+    params.set("MessagingServiceSid", TWILIO_MESSAGING_SERVICE_SID);
+  } else if (TWILIO_FROM_NUMBER) {
+    params.set("From", TWILIO_FROM_NUMBER);
+  }
+
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.message || "Failed to send SMS notification");
+  }
+
+  return data;
 }
 
 async function syncPermitFeed() {
@@ -104,11 +148,216 @@ async function startServer() {
       <p style="margin: 0 0 16px; color: #334155;">${greeting}</p>
       ${bodyLines.map((line) => `<p style="margin: 0 0 14px; color: #475569;">${line}</p>`).join("")}
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin: 20px 0;">
-        ${detailLines.map((line) => `<p style="margin: 0 0 10px; color: #0f172a;">${line}</p>`).join("")}
+      ${detailLines.map((line) => `<p style="margin: 0 0 10px; color: #0f172a;">${line}</p>`).join("")}
       </div>
       <p style="margin: 20px 0 0; color: #334155;">Best regards,<br/>Blueprint Home Solutions</p>
     </div>
   `;
+  const createEmailLogContext = ({
+    handlerName,
+    eventType,
+    recipient,
+    metadata = {},
+  }: {
+    handlerName: string;
+    eventType: string;
+    recipient: string | string[];
+    metadata?: Record<string, unknown>;
+  }) => ({
+    requestId: `${handlerName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    handlerName,
+    eventType,
+    recipient,
+    metadata,
+  });
+  const logEmailStart = (context: ReturnType<typeof createEmailLogContext>) => {
+    console.log(`[EMAIL][START] ${context.handlerName}`, context);
+  };
+  const logEmailSuccess = (
+    context: ReturnType<typeof createEmailLogContext>,
+    info: { messageId?: string }
+  ) => {
+    console.log(`[EMAIL][SUCCESS] ${context.handlerName}`, {
+      requestId: context.requestId,
+      eventType: context.eventType,
+      recipient: context.recipient,
+      messageId: info?.messageId,
+    });
+  };
+  const logEmailFailure = (context: ReturnType<typeof createEmailLogContext>, error: unknown) => {
+    console.error(`[EMAIL][FAILURE] ${context.handlerName}`, {
+      requestId: context.requestId,
+      eventType: context.eventType,
+      recipient: context.recipient,
+      metadata: context.metadata,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  };
+  const sendLoggedMail = async ({
+    logContext,
+    mail,
+  }: {
+    logContext: ReturnType<typeof createEmailLogContext>;
+    mail: nodemailer.SendMailOptions;
+  }) => {
+    logEmailStart(logContext);
+    try {
+      const info = await sendMail(mail);
+      logEmailSuccess(logContext, info);
+      return info;
+    } catch (error) {
+      logEmailFailure(logContext, error);
+      throw error;
+    }
+  };
+  const getContractorNotificationContent = ({
+    eventType,
+    contractorName,
+    projectTitle,
+    category,
+    town,
+    amount,
+    estimateType,
+    requestedVisitDate,
+  }: {
+    eventType: string;
+    contractorName?: string;
+    projectTitle?: string;
+    category?: string;
+    town?: string;
+    amount?: number;
+    estimateType?: string;
+    requestedVisitDate?: string;
+  }) => {
+    switch (eventType) {
+      case "signup_confirmation":
+        return {
+          subject: "Blueprint Home Pro signup received",
+          heading: "Home Pro Signup Received",
+          bodyLines: [
+            "Blueprint received your contractor signup and your account has been created.",
+            "Your account remains unverified until Blueprint completes its review. You can still finish your profile and access your portal while review is pending.",
+          ],
+          detailLines: [
+            "<strong>Status:</strong> Account created",
+            "<strong>Verification:</strong> Pending Blueprint review",
+            "<strong>Next step:</strong> Blueprint will review your profile before marketplace access is approved",
+          ],
+        };
+      case "intro_request_acknowledgment":
+        return {
+          subject: `Blueprint received your ${category || "project"} introduction request`,
+          heading: "Introduction Request Received",
+          bodyLines: [
+            "Blueprint received your request and will review it before any homeowner introduction is approved.",
+            "We will keep you updated as the request moves through the review process.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${category || "Project request"}`,
+            `<strong>Area:</strong> ${town || "Local service area"}`,
+            "<strong>Status:</strong> Requested",
+          ],
+        };
+      case "estimate_confirmation":
+        return {
+          subject: `${estimateType === "final" ? "Final" : "Rough"} estimate submitted for ${projectTitle || "project lead"}`,
+          heading: `${estimateType === "final" ? "Final" : "Rough"} Estimate Submitted`,
+          bodyLines: [
+            `Blueprint recorded your ${estimateType === "final" ? "final" : "rough"} estimate submission.`,
+            "You can return to the Home Pro portal at any time to monitor project status and next steps.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${projectTitle || "Project lead"}`,
+            `<strong>Estimate type:</strong> ${estimateType === "final" ? "Final estimate" : "Rough estimate"}`,
+            `<strong>Amount:</strong> $${Number(amount || 0).toLocaleString()}`,
+          ],
+        };
+      case "inspection_request_confirmation":
+        return {
+          subject: `Inspection request sent for ${projectTitle || "project lead"}`,
+          heading: "Inspection Request Sent",
+          bodyLines: [
+            "Blueprint recorded your request to schedule an in-person inspection.",
+            "You can monitor the homeowner response and project status from the Home Pro portal.",
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${projectTitle || "Project lead"}`,
+            `<strong>Requested inspection date:</strong> ${requestedVisitDate || "Not specified"}`,
+          ],
+        };
+      default:
+        throw new Error("Unsupported contractor notification event");
+    }
+  };
+  const sendContractorNotificationEmail = async ({
+    handlerName,
+    eventType,
+    contractorEmail,
+    contractorName,
+    projectTitle,
+    category,
+    town,
+    amount,
+    estimateType,
+    requestedVisitDate,
+    replyTo,
+    deprecatedEndpoint = false,
+  }: {
+    handlerName: string;
+    eventType: string;
+    contractorEmail: string;
+    contractorName?: string;
+    projectTitle?: string;
+    category?: string;
+    town?: string;
+    amount?: number;
+    estimateType?: string;
+    requestedVisitDate?: string;
+    replyTo?: string;
+    deprecatedEndpoint?: boolean;
+  }) => {
+    const content = getContractorNotificationContent({
+      eventType,
+      contractorName,
+      projectTitle,
+      category,
+      town,
+      amount,
+      estimateType,
+      requestedVisitDate,
+    });
+    return sendLoggedMail({
+      logContext: createEmailLogContext({
+        handlerName,
+        eventType,
+        recipient: contractorEmail,
+        metadata: {
+          contractorName,
+          projectTitle,
+          category,
+          town,
+          amount,
+          estimateType,
+          requestedVisitDate,
+          deprecatedEndpoint,
+        },
+      }),
+      mail: {
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: contractorEmail,
+        cc: adminEmail,
+        replyTo,
+        subject: content.subject,
+        html: renderIntroEmail({
+          heading: content.heading,
+          greeting: `Hi ${contractorName || "Home Pro"},`,
+          bodyLines: content.bodyLines,
+          detailLines: content.detailLines,
+        }),
+      },
+    });
+  };
 
   // API route for sending project confirmation email
   app.post("/api/send-project-confirmation", async (req, res) => {
@@ -183,6 +432,75 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending email:", error);
       res.status(500).json({ error: "Failed to send email" });
+    }
+  });
+
+  app.post("/api/send-contractor-sms-notification", async (req, res) => {
+    const { contractorPhone, message, eventType } = req.body;
+
+    if (!contractorPhone) {
+      return res.status(400).json({ error: "Contractor phone number is required" });
+    }
+
+    if (!message) {
+      return res.status(400).json({ error: "SMS message body is required" });
+    }
+
+    try {
+      const result = await sendSms({
+        to: contractorPhone,
+        body: message,
+      });
+
+      res.json({
+        success: true,
+        sid: result.sid,
+        status: result.status,
+        eventType: eventType || "contractor_update",
+      });
+    } catch (error) {
+      console.error("Error sending contractor SMS notification:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to send contractor SMS notification",
+        eventType: eventType || "contractor_update",
+      });
+    }
+  });
+
+  app.get("/api/recent-project-posts", async (_req, res) => {
+    const formatRelativeDate = (value: string) => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "Recently posted";
+
+      const diffMs = Date.now() - date.getTime();
+      const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+
+      if (diffHours < 1) return "Posted just now";
+      if (diffHours < 24) return `Posted ${diffHours}h ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return "Posted 1 day ago";
+      return `Posted ${diffDays} days ago`;
+    };
+
+    try {
+      const db = getAdminDb();
+      const snapshot = await db.collection("projects").orderBy("createdAt", "desc").limit(8).get();
+
+      const items = snapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          category: data.category || data.title || "Home Improvement",
+          town: data.location?.town || "Local area",
+          summary: formatRelativeDate(data.createdAt),
+        };
+      });
+
+      res.json({ items });
+    } catch (error) {
+      console.error("Error loading recent project posts:", error);
+      res.status(500).json({ error: "Failed to load recent project posts" });
     }
   });
 
@@ -350,24 +668,14 @@ async function startServer() {
     }
 
     try {
-      const info = await sendMail({
-        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
-        to: contractorEmail,
-        cc: adminEmail,
-        subject: `Blueprint received your ${category || "project"} introduction request`,
-        html: renderIntroEmail({
-          heading: "Introduction Request Received",
-          greeting: `Hi ${contractorName || "Home Pro"},`,
-          bodyLines: [
-            "Blueprint received your request and will review it before any homeowner introduction is approved.",
-            "We will keep you updated as the request moves through the review process.",
-          ],
-          detailLines: [
-            `<strong>Project:</strong> ${category || "Project request"}`,
-            `<strong>Area:</strong> ${town || "Local service area"}`,
-            "<strong>Status:</strong> Requested",
-          ],
-        }),
+      const info = await sendContractorNotificationEmail({
+        handlerName: "send-intro-request-acknowledgment",
+        eventType: "intro_request_acknowledgment",
+        contractorEmail,
+        contractorName,
+        category,
+        town,
+        deprecatedEndpoint: true,
       });
 
       res.json({ success: true, messageId: info.messageId, threadId: info.messageId });
@@ -488,30 +796,62 @@ async function startServer() {
     }
 
     try {
-      const info = await sendMail({
-        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
-        to: email,
-        cc: adminEmail,
-        subject: "Blueprint Home Pro signup received",
-        html: renderIntroEmail({
-          heading: "Home Pro Signup Received",
-          greeting: `Hi ${name || "Home Pro"},`,
-          bodyLines: [
-            "Blueprint received your contractor signup and your account has been created.",
-            "Your account remains unverified until Blueprint completes its review. You can still finish your profile and access your portal while review is pending.",
-          ],
-          detailLines: [
-            "<strong>Status:</strong> Account created",
-            "<strong>Verification:</strong> Pending Blueprint review",
-            "<strong>Next step:</strong> Blueprint will review your profile before marketplace access is approved",
-          ],
-        }),
+      const info = await sendContractorNotificationEmail({
+        handlerName: "send-contractor-signup-confirmation",
+        eventType: "signup_confirmation",
+        contractorEmail: email,
+        contractorName: name,
+        deprecatedEndpoint: true,
       });
 
       res.json({ success: true, messageId: info.messageId });
     } catch (error) {
       console.error("Error sending contractor signup confirmation:", error);
       res.status(500).json({ error: "Failed to send contractor signup confirmation" });
+    }
+  });
+
+  app.post("/api/send-contractor-notification", async (req, res) => {
+    const {
+      eventType,
+      contractorEmail,
+      contractorName,
+      projectTitle,
+      category,
+      town,
+      amount,
+      estimateType,
+      requestedVisitDate,
+      replyTo,
+    } = req.body;
+
+    if (!contractorEmail) {
+      return res.status(400).json({ error: "Contractor email is required" });
+    }
+
+    if (!eventType) {
+      return res.status(400).json({ error: "Notification event type is required" });
+    }
+
+    try {
+      const info = await sendContractorNotificationEmail({
+        handlerName: "send-contractor-notification",
+        eventType,
+        contractorEmail,
+        contractorName,
+        projectTitle,
+        category,
+        town,
+        amount,
+        estimateType,
+        requestedVisitDate,
+        replyTo,
+      });
+
+      res.json({ success: true, messageId: info.messageId, eventType });
+    } catch (error) {
+      console.error("Error sending contractor notification:", error);
+      res.status(500).json({ error: "Failed to send contractor notification", eventType });
     }
   });
 
@@ -546,6 +886,103 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending rough estimate alert:", error);
       res.status(500).json({ error: "Failed to send rough estimate alert" });
+    }
+  });
+
+  app.post("/api/send-contractor-estimate-confirmation", async (req, res) => {
+    const { contractorEmail, contractorName, projectTitle, amount, estimateType } = req.body;
+    if (!contractorEmail) {
+      return res.status(400).json({ error: "Contractor email is required" });
+    }
+
+    try {
+      const info = await sendContractorNotificationEmail({
+        handlerName: "send-contractor-estimate-confirmation",
+        eventType: "estimate_confirmation",
+        contractorEmail,
+        contractorName,
+        projectTitle,
+        amount,
+        estimateType,
+        deprecatedEndpoint: true,
+      });
+
+      res.json({ success: true, messageId: info.messageId });
+    } catch (error) {
+      console.error("Error sending contractor estimate confirmation:", error);
+      res.status(500).json({ error: "Failed to send contractor estimate confirmation" });
+    }
+  });
+
+  app.post("/api/send-contractor-inspection-request-confirmation", async (req, res) => {
+    const { contractorEmail, contractorName, projectTitle, requestedVisitDate } = req.body;
+    if (!contractorEmail) {
+      return res.status(400).json({ error: "Contractor email is required" });
+    }
+
+    try {
+      const info = await sendContractorNotificationEmail({
+        handlerName: "send-contractor-inspection-request-confirmation",
+        eventType: "inspection_request_confirmation",
+        contractorEmail,
+        contractorName,
+        projectTitle,
+        requestedVisitDate,
+        deprecatedEndpoint: true,
+      });
+
+      res.json({ success: true, messageId: info.messageId });
+    } catch (error) {
+      console.error("Error sending contractor inspection confirmation:", error);
+      res.status(500).json({ error: "Failed to send contractor inspection confirmation" });
+    }
+  });
+
+  app.post("/api/send-estimate-accepted-notification", async (req, res) => {
+    const {
+      homeownerEmail,
+      homeownerName,
+      contractorEmail,
+      contractorName,
+      projectTitle,
+      amount,
+      estimateType,
+    } = req.body;
+
+    if (!homeownerEmail || !contractorEmail) {
+      return res.status(400).json({ error: "Homeowner and contractor emails are required" });
+    }
+
+    const nextStep =
+      estimateType === "final"
+        ? "The project can now move into contracting and execution through Blueprint."
+        : "Next step: coordinate the in-person inspection and final estimate through Blueprint.";
+
+    try {
+      const info = await sendMail({
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+        to: [homeownerEmail, contractorEmail],
+        cc: adminEmail,
+        subject: `${estimateType === "final" ? "Final" : "Rough"} estimate accepted for ${projectTitle || "project"}`,
+        html: renderIntroEmail({
+          heading: `${estimateType === "final" ? "Final" : "Rough"} Estimate Accepted`,
+          greeting: `Hi ${homeownerName || "Homeowner"} and ${contractorName || "Home Pro"},`,
+          bodyLines: [
+            `${homeownerName || "The homeowner"} accepted the ${estimateType === "final" ? "final" : "rough"} estimate through Blueprint.`,
+            nextStep,
+          ],
+          detailLines: [
+            `<strong>Project:</strong> ${projectTitle || "Project"}`,
+            `<strong>Accepted estimate type:</strong> ${estimateType === "final" ? "Final estimate" : "Rough estimate"}`,
+            `<strong>Accepted amount:</strong> $${Number(amount || 0).toLocaleString()}`,
+          ],
+        }),
+      });
+
+      res.json({ success: true, messageId: info.messageId });
+    } catch (error) {
+      console.error("Error sending estimate acceptance notification:", error);
+      res.status(500).json({ error: "Failed to send estimate acceptance notification" });
     }
   });
 
@@ -616,10 +1053,15 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 
-  void syncPermitFeed();
-  setInterval(() => {
+  const shouldRunPermitSync = process.env.NODE_ENV === "production" || ENABLE_DEV_PERMIT_SYNC;
+  if (shouldRunPermitSync) {
     void syncPermitFeed();
-  }, PERMIT_SYNC_INTERVAL_MS);
+    setInterval(() => {
+      void syncPermitFeed();
+    }, PERMIT_SYNC_INTERVAL_MS);
+  } else {
+    console.log("[PERMIT SYNC] Skipped automatic permit sync in local dev. Set ENABLE_DEV_PERMIT_SYNC=true to enable it.");
+  }
 }
 
 startServer();

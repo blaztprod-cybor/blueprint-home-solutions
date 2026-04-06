@@ -55,6 +55,54 @@ import ContractorLeads from './pages/ContractorLeads';
 import HomeownerDashboard from './pages/HomeownerDashboard';
 import SelectImprovement from './pages/SelectImprovement';
 
+class PortalErrorBoundary extends React.Component<
+  { children: React.ReactNode; pathname: string },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode; pathname: string }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return {
+      hasError: true,
+      message: error?.message || 'Blueprint could not render this portal page.',
+    };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[PortalErrorBoundary] Portal render failed:', error);
+  }
+
+  componentDidUpdate(prevProps: { pathname: string }) {
+    if (prevProps.pathname !== this.props.pathname && this.state.hasError) {
+      this.setState({ hasError: false, message: '' });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="mx-auto flex min-h-[60vh] w-full max-w-3xl items-center justify-center px-2 py-8">
+          <div className="w-full rounded-[32px] border border-amber-200 bg-amber-50 p-8 text-left shadow-sm">
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-700">Portal Notice</p>
+            <h2 className="mt-3 text-2xl font-black text-slate-900">Blueprint could not load this portal page.</h2>
+            <p className="mt-3 text-sm font-medium leading-6 text-slate-700">
+              The portal shell is still running, but this page threw a runtime error.
+            </p>
+            <p className="mt-3 rounded-2xl bg-white/70 px-4 py-3 text-sm font-medium text-slate-700">
+              {this.state.message}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const SidebarLink = ({ to, icon: Icon, label, active }: any) => (
   <Link
     to={to}
@@ -107,8 +155,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
   }, [location.pathname, setIsMobileMenuOpen]);
 
   const contractorLinks = [
-    { to: "/projects", icon: Briefcase, label: "Projects" },
-    { to: hasPaidContractorAccess ? "/lead-marketplace" : "/contractor-paywall", icon: MessageSquare, label: hasPaidContractorAccess ? "Lead Marketplace" : "Billing & Subscriptions" },
+    { to: "/projects", icon: Briefcase, label: "Project Leads" },
     { to: hasPaidContractorAccess ? "/permit-feed" : "/contractor-paywall", icon: Building2, label: hasPaidContractorAccess ? "Permit Feed" : "Permit Feed Locked" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
@@ -297,9 +344,11 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
         </header>
 
         <div className="p-4 md:p-8 flex-1">
-          <AnimatePresence mode="wait">
-            {children}
-          </AnimatePresence>
+          <PortalErrorBoundary pathname={location.pathname}>
+            <AnimatePresence mode="wait">
+              {children}
+            </AnimatePresence>
+          </PortalErrorBoundary>
         </div>
 
         <MessagingWindow 
@@ -352,7 +401,7 @@ export default function App() {
             <DashboardLayout>
               <Routes>
                 <Route path="/projects" element={<Projects />} />
-                <Route path="/lead-marketplace" element={<ContractorSubscriptionRoute><ContractorLeads /></ContractorSubscriptionRoute>} />
+                <Route path="/lead-marketplace" element={<Navigate to="/projects" replace />} />
                 <Route path="/permit-feed" element={<ContractorSubscriptionRoute><DOBLeads /></ContractorSubscriptionRoute>} />
                 <Route path="/permit-map" element={<ContractorSubscriptionRoute><PermitMap /></ContractorSubscriptionRoute>} />
                 <Route path="/clients" element={<Clients />} />

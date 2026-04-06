@@ -29,6 +29,7 @@ export default function SignUp() {
   const [trade, setTrade] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
   const [notifyOnProductUpdates, setNotifyOnProductUpdates] = useState(false);
+  const [notifyOnSmsLeadAlerts, setNotifyOnSmsLeadAlerts] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +62,7 @@ export default function SignUp() {
           trade: string;
           avatar: string;
           notifyOnProductUpdates: boolean;
+          notifyOnSmsLeadAlerts: boolean;
         }>;
 
         if (draft.name) setName(draft.name);
@@ -76,6 +78,7 @@ export default function SignUp() {
         if (draft.trade) setTrade(draft.trade);
         if (draft.avatar) setAvatar(draft.avatar);
         if (typeof draft.notifyOnProductUpdates === 'boolean') setNotifyOnProductUpdates(draft.notifyOnProductUpdates);
+        if (typeof draft.notifyOnSmsLeadAlerts === 'boolean') setNotifyOnSmsLeadAlerts(draft.notifyOnSmsLeadAlerts);
       } catch (draftError) {
         console.error('[SignUp] Failed to restore contractor signup draft:', draftError);
       }
@@ -99,12 +102,13 @@ export default function SignUp() {
             trade,
             avatar,
             notifyOnProductUpdates,
+            notifyOnSmsLeadAlerts,
           })
         );
       } catch (draftError) {
         console.error('[SignUp] Failed to save contractor signup draft:', draftError);
       }
-    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar, notifyOnProductUpdates]);
+    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar, notifyOnProductUpdates, notifyOnSmsLeadAlerts]);
   
     React.useEffect(() => {
       if (user) {
@@ -247,6 +251,7 @@ export default function SignUp() {
           isTradesman,
           trade: trade.trim(),
           notifyOnProductUpdates,
+          notifyOnSmsLeadAlerts,
         });
         sessionStorage.removeItem(CONTRACTOR_SIGNUP_DRAFT_KEY);
         // Navigation is handled by the useEffect watching the user state
@@ -572,6 +577,18 @@ export default function SignUp() {
                 By creating an account, you agree to our <Link to={`/terms?flow=signup&role=${role.toLowerCase()}`} className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
               </p>
             </div>
+
+            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <input
+                type="checkbox"
+                checked={notifyOnSmsLeadAlerts}
+                onChange={(e) => setNotifyOnSmsLeadAlerts(e.target.checked)}
+                className="mt-0.5 h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+              />
+              <span className="text-sm font-bold text-slate-600">
+                Text me when Blueprint has a new lead or important contractor update
+              </span>
+            </label>
 
             <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <input

@@ -27,14 +27,42 @@ import {
   Database
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { sendContractorNotification } from '../lib/contractorNotifications';
 import { useAuth } from '../AuthContext';
 import { db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, deleteDoc, orderBy, limit, getDoc } from 'firebase/firestore';
-import { Project, Estimate, LeadMarketplaceItem } from '../types';
+import { Project, Estimate } from '../types';
 import { Toaster, toast } from 'sonner';
 
 type ContractorProjectLead = Project & {
-  marketplaceStatus?: LeadMarketplaceItem['status'];
+  marketplaceStatus?: 'Open' | 'Requested' | 'Assigned' | 'Closed';
+};
+
+const formatLeadLoadError = (error: unknown) => {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+
+  if (code === 'permission-denied' || message.includes('Missing or insufficient permissions')) {
+    return 'Blueprint could not load homeowner leads because Firestore returned "Missing or insufficient permissions."';
+  }
+
+  if (message) {
+    return `Blueprint could not load homeowner leads: ${message}`;
+  }
+
+  if (code) {
+    return `Blueprint could not load homeowner leads: ${code}`;
+  }
+
+  return 'Blueprint could not load homeowner leads for this contractor account.';
 };
 
 interface EstimateModalProps {
@@ -49,6 +77,12 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
   const { user } = useAuth();
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setAmount('');
+    }
+  }, [isOpen, project?.id, type]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,6 +124,20 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
       }
 
       await updateDoc(projectRef, updateData);
+
+      try {
+        await sendContractorNotification({
+          eventType: 'estimate_confirmation',
+          contractorEmail: user.email,
+          contractorName: user.name,
+          projectTitle: project.title,
+          amount: estimate.amount,
+          estimateType: type,
+        });
+      } catch (notificationError) {
+        console.error('Error sending contractor estimate confirmation:', notificationError);
+        toast.warning('Estimate submitted, but Blueprint could not send the contractor confirmation email.');
+      }
 
       if (type === 'rough') {
         try {
@@ -180,7 +228,7 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                  className="flex-1 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
                 >
                   {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Submit'}
                 </button>
@@ -272,76 +320,43 @@ export default function Projects() {
         return;
       }
 
-      const leadQuery = query(collection(db, 'lead_marketplace'), orderBy('createdAt', 'desc'));
+      const leadQuery = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
       const unsubscribe = onSnapshot(
         leadQuery,
         async (snapshot) => {
           try {
-            const marketplaceLeads = snapshot.docs.map((entry) => ({
-              id: entry.id,
-              ...(entry.data() as Omit<LeadMarketplaceItem, 'id'>),
-            })) as LeadMarketplaceItem[];
-
-            const hydratedProjects = await Promise.all(
-              marketplaceLeads.map(async (lead) => {
-                try {
-                  const projectSnapshot = await getDoc(doc(db, 'projects', lead.leadId));
-                  if (projectSnapshot.exists()) {
-                    return {
-                      id: projectSnapshot.id,
-                      ...(projectSnapshot.data() as Omit<Project, 'id'>),
-                      marketplaceStatus: lead.status,
-                      photos:
-                        (projectSnapshot.data().photos as string[] | undefined)?.length
-                          ? (projectSnapshot.data().photos as string[])
-                          : lead.photos,
-                      photoCount:
-                        (projectSnapshot.data().photoCount as number | undefined) ?? lead.photoCount ?? 0,
-                    } as ContractorProjectLead;
-                  }
-                } catch (projectError) {
-                  console.error(`[Projects] Failed to hydrate lead ${lead.leadId}:`, projectError);
-                }
-
-                return {
-                  id: lead.leadId,
-                  uid: '',
-                  title: lead.category,
-                  description: lead.description,
-                  status: 'New Open Project',
-                  budget: 0,
-                  startDate: '',
-                  category: lead.category,
-                  photos: lead.photos,
-                  photoCount: lead.photoCount,
-                  location: {
-                    street: '',
-                    town: lead.location?.town || '',
-                    zip: lead.location?.zip || '',
-                  },
-                  createdAt: lead.createdAt,
-                  marketplaceStatus: lead.status,
-                } as ContractorProjectLead;
-              })
-            );
+            const hydratedProjects = snapshot.docs
+              .map((entry) => ({
+                id: entry.id,
+                ...(entry.data() as Omit<Project, 'id'>),
+              }) as ContractorProjectLead)
+              .filter((project) =>
+                ['New Open Project', 'Rough Estimates', 'Final Estimates', 'On Hold', 'In Contract', 'In Progress'].includes(project.status)
+              )
+              .map((project) => ({
+                ...project,
+                marketplaceStatus: project.status === 'In Contract' ? 'Assigned' : 'Open',
+              }));
 
             hydratedProjects.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
             setProjects(hydratedProjects);
-            console.log(`[Projects] Fetched ${hydratedProjects.length} marketplace leads for contractor ${user.id}`);
+            console.log(`[Projects] Fetched ${hydratedProjects.length} project leads for contractor ${user.id}`);
             setIsLoading(false);
           } catch (error) {
-            console.error("[Projects] Error hydrating contractor leads:", error);
+            console.error("[Projects] Error hydrating contractor project leads:", error);
             setProjects([]);
-            setLoadingError('Blueprint could not load homeowner leads for this contractor account.');
-            toast.error('Could not load homeowner leads. Check contractor subscription data and Firestore access.');
+            const nextError = formatLeadLoadError(error);
+            setLoadingError(nextError);
+            toast.error(nextError);
             setIsLoading(false);
           }
         },
         (error) => {
-          console.error("[Projects] Error fetching contractor leads:", error);
+          console.error("[Projects] Error fetching contractor project leads:", error);
           setProjects([]);
-          setLoadingError('Blueprint could not load homeowner leads for this contractor account.');
-          toast.error('Could not load homeowner leads. Check contractor subscription data and Firestore access.');
+          const nextError = formatLeadLoadError(error);
+          setLoadingError(nextError);
+          toast.error(nextError);
           setIsLoading(false);
         }
       );
@@ -467,6 +482,19 @@ export default function Projects() {
         } catch (emailError) {
           console.error("Failed to send visit request email:", emailError);
         }
+      }
+
+      try {
+        await sendContractorNotification({
+          eventType: 'inspection_request_confirmation',
+          contractorEmail: user.email,
+          contractorName: user.name,
+          projectTitle: selectedProject.title,
+          requestedVisitDate: new Date(inspectionDate).toLocaleString(),
+        });
+      } catch (contractorEmailError) {
+        console.error("Failed to send contractor inspection confirmation:", contractorEmailError);
+        toast.warning('Visit request sent, but Blueprint could not send the contractor confirmation email.');
       }
 
       setSelectedProject({ ...selectedProject, ...updateData });
@@ -632,9 +660,13 @@ export default function Projects() {
       <Toaster position="top-right" richColors />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight"></h1>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">
+            {isContractor ? 'Blueprint Marketplace' : 'Projects'}
+          </h1>
           {isContractor && (
-            <p className="text-muted-foreground mt-1">Available homeowner leads appear here first so you can review details, photos, and submit a bid from the Home Pro portal.</p>
+            <p className="mt-1 text-base font-medium text-muted-foreground md:text-lg">
+              Click on the project preview photo to see details and submit estimates.
+            </p>
           )}
         </div>
       </div>
@@ -676,7 +708,7 @@ export default function Projects() {
                 )}
               >
                 <Briefcase size={14} />
-                Leads
+                Project Leads
               </button>
               <button 
                 onClick={() => setContractorView('contracts')}
@@ -705,7 +737,7 @@ export default function Projects() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="Search projects..." 
+            placeholder={isContractor ? "Search project leads..." : "Search projects..."} 
             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all"
           />
         </div>
@@ -952,6 +984,41 @@ export default function Projects() {
                     filteredProjects.map((project) => {
                       const isExpired = project.expirationDate && new Date(project.expirationDate) < new Date();
                       const locationLabel = getProjectLocationLabel(project, isContractor);
+                      const finalEstimateCount = project.finalEstimates?.length || 0;
+                      const roughEstimateCount = project.roughEstimates?.length || 0;
+                      const finalBiddingClosed = finalEstimateCount >= 7;
+                      const roughBiddingClosed = roughEstimateCount >= 7;
+                      const currentUserRoughEstimate = isContractor
+                        ? project.roughEstimates?.find((estimate) => estimate.contractorId === user?.id)
+                        : undefined;
+                      const currentUserFinalEstimate = isContractor
+                        ? project.finalEstimates?.find((estimate) => estimate.contractorId === user?.id)
+                        : undefined;
+                      const hasAnyBids = roughEstimateCount > 0 || finalEstimateCount > 0;
+                      const statusToneClass = isExpired
+                        ? "bg-red-50 text-red-600 border-red-100"
+                        : project.status === 'In Progress'
+                          ? "bg-blue-50 text-blue-600 border-blue-100"
+                          : project.status === 'Completed'
+                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                            : (currentUserRoughEstimate || currentUserFinalEstimate || hasAnyBids)
+                              ? "bg-amber-50 text-amber-600 border-amber-100"
+                              : project.status === 'New Open Project'
+                                ? "bg-purple-50 text-purple-600 border-purple-100 animate-pulse"
+                                : "bg-slate-50 text-slate-500 border-slate-100";
+                      const statusLabel = isExpired
+                        ? 'Expired'
+                        : currentUserFinalEstimate
+                          ? `Your final bid: $${currentUserFinalEstimate.amount.toLocaleString()}`
+                          : currentUserRoughEstimate
+                            ? `Your rough bid: $${currentUserRoughEstimate.amount.toLocaleString()}`
+                            : hasAnyBids
+                              ? 'Taking Bids'
+                              : (isContractor && project.marketplaceStatus === 'Requested')
+                                ? 'Requested'
+                                : project.status === 'New Open Project'
+                                  ? 'New'
+                                  : project.status;
 
                       return (
                         <tr 
@@ -962,7 +1029,7 @@ export default function Projects() {
                           }}
                           className={cn(
                             "group hover:bg-slate-50/40 transition-all cursor-pointer border-b border-slate-50",
-                            isExpired && "opacity-50 grayscale"
+                            isExpired && "bg-slate-50/60"
                           )}
                         >
                           <td className="px-8 py-6">
@@ -979,7 +1046,7 @@ export default function Projects() {
                           <td className="px-8 py-6">
                             <div className="space-y-1.5">
                               <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[8px] font-black uppercase tracking-widest rounded-md border border-slate-200">
+                                <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-lg border border-blue-100 shadow-sm">
                                   {project.category}
                                 </span>
                               </div>
@@ -996,26 +1063,22 @@ export default function Projects() {
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Final Bid</span>
                                   <span className="text-[10px] font-black text-emerald-500">
-                                    {project.finalEstimates?.length || 0}
+                                    {finalEstimateCount}
                                   </span>
                                 </div>
                                 <span className="text-xs font-black text-slate-900">
-                                  {project.finalEstimates && project.finalEstimates.length > 0 
-                                    ? `$${Math.max(...project.finalEstimates.map((e: any) => e.amount)).toLocaleString()}`
-                                    : 'NONE'}
+                                  {finalBiddingClosed ? '7 of 7 CLOSED' : `${finalEstimateCount} of 7`}
                                 </span>
                               </div>
                               <div className="flex flex-col">
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rough Bid</span>
                                   <span className="text-[10px] font-black text-primary">
-                                    {project.roughEstimates?.length || 0}
+                                    {roughEstimateCount}
                                   </span>
                                 </div>
                                 <span className="text-xs font-black text-slate-500">
-                                  {project.roughEstimates && project.roughEstimates.length > 0
-                                    ? `$${Math.max(...project.roughEstimates.map((e: any) => e.amount)).toLocaleString()}`
-                                    : 'NONE'}
+                                  {roughBiddingClosed ? '7 of 7 CLOSED' : `${roughEstimateCount} of 7`}
                                 </span>
                               </div>
                             </div>
@@ -1023,18 +1086,9 @@ export default function Projects() {
                           <td className="px-8 py-6">
                             <span className={cn(
                               "text-[10px] font-black px-4 py-2 rounded-2xl uppercase tracking-[0.1em] inline-block shadow-sm border",
-                              isExpired ? "bg-red-50 text-red-600 border-red-100" :
-                              project.status === 'In Progress' ? "bg-blue-50 text-blue-600 border-blue-100" : 
-                              project.status === 'Completed' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
-                              ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? "bg-amber-50 text-amber-600 border-amber-100" :
-                              project.status === 'New Open Project' ? "bg-purple-50 text-purple-600 border-purple-100 animate-pulse" :
-                              "bg-slate-50 text-slate-500 border-slate-100"
+                              statusToneClass
                             )}>
-                              {isExpired ? 'Expired' : 
-                               ((project.roughEstimates?.length || 0) > 0 || (project.finalEstimates?.length || 0) > 0) ? 'Taking Bids' :
-                               (isContractor && project.marketplaceStatus === 'Requested') ? 'Requested' :
-                               project.status === 'New Open Project' ? 'New' : 
-                               project.status}
+                              {statusLabel}
                             </span>
                           </td>
                           <td className="px-8 py-6 text-right">
@@ -1045,7 +1099,8 @@ export default function Projects() {
                                     e.stopPropagation();
                                     setEstimateModal({ isOpen: true, type: 'rough', project: project });
                                   }}
-                                  className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-all border border-slate-100"
+                                  disabled={roughBiddingClosed}
+                                  className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-all border border-slate-100 disabled:opacity-40 disabled:hover:text-slate-400 disabled:hover:bg-slate-50"
                                   title="Submit Rough Estimate"
                                 >
                                   <PlusCircle size={20} />
@@ -1055,7 +1110,8 @@ export default function Projects() {
                                     e.stopPropagation();
                                     setEstimateModal({ isOpen: true, type: 'final', project: project });
                                   }}
-                                  className="w-10 h-10 flex items-center justify-center bg-emerald-50 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-100"
+                                  disabled={finalBiddingClosed}
+                                  className="w-10 h-10 flex items-center justify-center bg-emerald-50 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-100 disabled:opacity-40 disabled:hover:text-emerald-400 disabled:hover:bg-emerald-50"
                                   title="Submit Final Estimate"
                                 >
                                   <PlusCircle size={20} className="rotate-45" />
@@ -1122,7 +1178,9 @@ export default function Projects() {
               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">{selectedProject.category}</span>
+                    <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-blue-700 shadow-sm">
+                      {selectedProject.category}
+                    </span>
                     <span className="w-1 h-1 bg-slate-300 rounded-full" />
                     <span className={cn(
                       "text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest",
@@ -1199,14 +1257,7 @@ export default function Projects() {
                 </section>
 
                 {/* Quick Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Budget</p>
-                    <p className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      <DollarSign size={20} className="text-emerald-500" />
-                      {selectedProject.budget.toLocaleString()}
-                    </p>
-                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-8 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100">
                   <div className="space-y-1">
                     <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">Start Date</p>
                     <p className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -1295,7 +1346,7 @@ export default function Projects() {
 
                   {isContractor && selectedProject.status === 'New Open Project' && (
                     <>
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4">
                         <button 
                           onClick={() => {
                             setEstimateModal({ isOpen: true, type: 'rough', project: selectedProject });
@@ -1311,28 +1362,20 @@ export default function Projects() {
                             </span>
                           </div>
                         </button>
-                        <button 
-                          onClick={() => handleScheduleAppointment(selectedProject.id)}
-                          disabled={isUpdating}
-                          className="px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl hover:bg-slate-100 transition-all disabled:opacity-50 shadow-sm text-left"
-                        >
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Request to</span>
-                            <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                              <CalendarCheck size={16} className="text-primary" />
-                              {isUpdating ? 'Send Inspection Request' : 'Schedule Inspection'}
-                            </span>
-                          </div>
-                        </button>
-                      </div>
-
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-left">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Bid Notice</p>
-                        <p className="mt-2 text-sm font-medium leading-6 text-amber-900">
-                          Submitting a bid means you agree to the Blueprint terms, platform rules, and compensation guidelines for homeowner introductions that begin here.
-                        </p>
                       </div>
                     </>
+                  )}
+
+                  {isContractor && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-left">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Bid Notice</p>
+                      <p className="mt-2 text-sm font-medium leading-6 text-amber-900">
+                        By submitting an estimate, you agree to the terms set forth by Blueprint Home Solutions.
+                      </p>
+                      <p className="mt-3 text-sm font-medium leading-6 text-amber-900">
+                        After the homeowner accepts the rough estimate, they will initiate the visual inspection and share their location and contact information.
+                      </p>
+                    </div>
                   )}
 
                   <div className="pt-2">

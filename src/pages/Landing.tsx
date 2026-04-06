@@ -8,6 +8,13 @@ import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
 import { projectCategories } from '../data/projectCategories';
 
+type RecentProjectPost = {
+  id: string;
+  category: string;
+  town: string;
+  summary: string;
+};
+
 export default function Landing() {
   const PREVIEW_ITEMS_PER_PAGE = 20;
   const PERMIT_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -17,6 +24,7 @@ export default function Landing() {
   const [loading, setLoading] = useState(true);
   const [previewPage, setPreviewPage] = useState(1);
   const [boroughFilter, setBoroughFilter] = useState('All Boroughs');
+  const [recentPosts, setRecentPosts] = useState<RecentProjectPost[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -37,6 +45,24 @@ export default function Landing() {
     return () => {
       window.clearInterval(intervalId);
     };
+  }, []);
+
+  useEffect(() => {
+    const loadRecentPosts = async () => {
+      try {
+        const response = await fetch('/api/recent-project-posts');
+        if (!response.ok) {
+          throw new Error(response.statusText);
+        }
+
+        const payload = await response.json();
+        setRecentPosts(Array.isArray(payload?.items) ? payload.items : []);
+      } catch (error) {
+        console.error('Error loading recent project posts:', error);
+      }
+    };
+
+    void loadRecentPosts();
   }, []);
 
   const previewTotalPages = Math.max(1, Math.ceil(permitData.length / PREVIEW_ITEMS_PER_PAGE));
@@ -173,6 +199,22 @@ export default function Landing() {
               </button>
             )}
           </div>
+          {recentPosts.length > 0 && (
+            <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white/85 px-3 py-2 shadow-sm">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <p className="shrink-0 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                  Recent Homeowner Posts
+                </p>
+                <div className="flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
+                  {recentPosts.slice(0, 3).map((post) => (
+                    <span key={post.id} className="rounded-full bg-slate-50 px-3 py-1.5">
+                      {post.category} just submitted in {post.town} • {post.summary}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -274,6 +316,7 @@ export default function Landing() {
                 {primaryAccountCta.label}
               </Link>
             </div>
+
           </motion.div>
 
           <motion.div
