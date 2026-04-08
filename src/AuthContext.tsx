@@ -551,8 +551,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     testConnection();
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        try {
+      try {
+        if (firebaseUser) {
           const userDoc = await getUserDocWithRetry(firebaseUser.uid);
           if (userDoc) {
             const data = userDoc.data();
@@ -628,14 +628,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             saveAuthRoleHint(recoveredUser.email, recoveredUser.role);
             await claimPendingPublicSubmissions(recoveredUser);
           }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
+        } else {
+          setUser(null);
+          localStorage.removeItem('blueprint_user');
         }
-      } else {
-        setUser(null);
-        localStorage.removeItem('blueprint_user');
+      } catch (error) {
+        console.error('Auth state initialization failed:', error);
+
+        if (firebaseUser) {
+          const cachedUser = loadCachedBlueprintUser();
+          const hintedRole = getAuthRoleHint(firebaseUser.email);
+          const fallbackRole = hintedRole || 'Homeowner';
+          const createdAt = firebaseUser.metadata.creationTime || new Date().toISOString();
+          const fallbackUser: User = {
+            id: firebaseUser.uid,
+            name:
+              (cachedUser?.id === firebaseUser.uid && cachedUser.name) ||
+              firebaseUser.displayName ||
+              firebaseUser.email?.split('@')[0] ||
+              'User',
+            email: firebaseUser.email || '',
+            role:
+              cachedUser?.id === firebaseUser.uid && cachedUser.role
+                ? cachedUser.role
+                : fallbackRole,
+            phone: cachedUser?.id === firebaseUser.uid ? cachedUser.phone : undefined,
+            street: cachedUser?.id === firebaseUser.uid ? cachedUser.street : undefined,
+            town: cachedUser?.id === firebaseUser.uid ? cachedUser.town : undefined,
+            zip: cachedUser?.id === firebaseUser.uid ? cachedUser.zip : undefined,
+            governmentIdImage: cachedUser?.id === firebaseUser.uid ? cachedUser.governmentIdImage : undefined,
+            avatar:
+              (cachedUser?.id === firebaseUser.uid && cachedUser.avatar) ||
+              firebaseUser.photoURL ||
+              getInitialsAvatar(
+                (cachedUser?.id === firebaseUser.uid && cachedUser.name) ||
+                  firebaseUser.displayName ||
+                  firebaseUser.email?.split('@')[0] ||
+                  'User'
+              ),
+            rating:
+              ((cachedUser?.id === firebaseUser.uid ? cachedUser.role : fallbackRole) === 'Contractor') ? 4.9 : undefined,
+            isVerified: cachedUser?.id === firebaseUser.uid ? (cachedUser.isVerified ?? false) : false,
+            licenseNumber: cachedUser?.id === firebaseUser.uid ? cachedUser.licenseNumber : undefined,
+            licenseStatus: cachedUser?.id === firebaseUser.uid ? cachedUser.licenseStatus : undefined,
+            isTradesman: cachedUser?.id === firebaseUser.uid ? cachedUser.isTradesman : undefined,
+            trade: cachedUser?.id === firebaseUser.uid ? cachedUser.trade : undefined,
+            leadCategories: cachedUser?.id === firebaseUser.uid ? cachedUser.leadCategories : undefined,
+            subscriptionLevel:
+              (cachedUser?.id === firebaseUser.uid && cachedUser.subscriptionLevel) ||
+              getDerivedSubscriptionLevel(
+                (cachedUser?.id === firebaseUser.uid && cachedUser.role) || fallbackRole,
+                createdAt
+              ),
+            notifyOnNewProjects:
+              cachedUser?.id === firebaseUser.uid
+                ? (cachedUser.notifyOnNewProjects ?? (((cachedUser.role || fallbackRole) === 'Contractor')))
+                : fallbackRole === 'Contractor',
+            notifyOnRoughEstimates:
+              cachedUser?.id === firebaseUser.uid
+                ? (cachedUser.notifyOnRoughEstimates ?? (((cachedUser.role || fallbackRole) === 'Homeowner')))
+                : fallbackRole === 'Homeowner',
+            notifyOnProductUpdates: cachedUser?.id === firebaseUser.uid ? (cachedUser.notifyOnProductUpdates ?? false) : false,
+            notifyOnSmsLeadAlerts: cachedUser?.id === firebaseUser.uid ? (cachedUser.notifyOnSmsLeadAlerts ?? false) : false,
+            smsConsentAt: cachedUser?.id === firebaseUser.uid ? cachedUser.smsConsentAt : undefined,
+            accountPlan:
+              (cachedUser?.id === firebaseUser.uid && cachedUser.accountPlan) ||
+              getDerivedTrialFields((cachedUser?.id === firebaseUser.uid && cachedUser.role) || fallbackRole, createdAt).accountPlan,
+            trialStartedAt:
+              (cachedUser?.id === firebaseUser.uid && cachedUser.trialStartedAt) ||
+              getDerivedTrialFields((cachedUser?.id === firebaseUser.uid && cachedUser.role) || fallbackRole, createdAt).trialStartedAt,
+            trialEndsAt:
+              (cachedUser?.id === firebaseUser.uid && cachedUser.trialEndsAt) ||
+              getDerivedTrialFields((cachedUser?.id === firebaseUser.uid && cachedUser.role) || fallbackRole, createdAt).trialEndsAt,
+          };
+
+          setUser(fallbackUser);
+          localStorage.setItem('blueprint_user', JSON.stringify(fallbackUser));
+          saveAuthRoleHint(fallbackUser.email, fallbackUser.role);
+        } else {
+          setUser(null);
+          localStorage.removeItem('blueprint_user');
+        }
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return () => unsubscribe();
