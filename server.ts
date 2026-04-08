@@ -709,7 +709,7 @@ async function startServer() {
       const safeName = name || recipientLabel;
 
       const mailOptions = {
-        from: '"Blueprint Home Solutions" <info@blueprinthomesolutions.com>',
+        from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
         to: email,
         subject,
         html: `

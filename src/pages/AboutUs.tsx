@@ -26,7 +26,7 @@ export default function AboutUs() {
             <p>132-23 Bennett Court</p>
             <p>Jamaica, NY</p>
             <p>Phone: 718-701-9090</p>
-            <p>Email: infor@blueprinthomesolutions</p>
+            <p>Email: info@blueprinthomesolutions.com</p>
           </div>
         </div>
 

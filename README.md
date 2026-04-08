@@ -19,7 +19,21 @@ View your app in AI Studio: https://ai.studio/apps/0535c480-1012-4655-a793-62fed
    `TWILIO_ACCOUNT_SID`
    `TWILIO_AUTH_TOKEN`
    `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID`
-4. Run the app:
+4. If you want vendor and homeowner emails to send from `info@blueprinthomesolutions.com`, set these environment variables in Netlify and your local shell or `.env.local`:
+   `SMTP_HOST`
+   `SMTP_PORT`
+   `SMTP_SECURE`
+   `SMTP_USER`
+   `SMTP_PASS`
+   `SMTP_FROM_NAME`
+   `SMTP_FROM_EMAIL`
+   `HOMEOWNER_CALLBACK_EMAIL`
+5. For production inbox placement, also configure DNS for `blueprinthomesolutions.com` with:
+   SPF for your email provider
+   DKIM enabled and verified
+   DMARC published, starting with monitoring
+   The same authenticated domain used for both `from` and return-path whenever your provider supports it
+6. Run the app:
    `npm run dev`
 
 Contractor SMS alerts are sent only for contractors who have `notifyOnSmsLeadAlerts` enabled, a saved phone number, and an `smsConsentAt` timestamp on their user record.
