@@ -5,6 +5,7 @@ import { Building2, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCir
 import { useAuth } from '../AuthContext';
 import { cn } from '../lib/utils';
 import { UserRole } from '../types';
+import { projectCategories } from '../data/projectCategories';
 
 const CONTRACTOR_SIGNUP_DRAFT_KEY = 'blueprint_contractor_signup_draft';
 
@@ -30,6 +31,7 @@ export default function SignUp() {
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
   const [notifyOnProductUpdates, setNotifyOnProductUpdates] = useState(false);
   const [notifyOnSmsLeadAlerts, setNotifyOnSmsLeadAlerts] = useState(false);
+  const [leadCategories, setLeadCategories] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +65,7 @@ export default function SignUp() {
           avatar: string;
           notifyOnProductUpdates: boolean;
           notifyOnSmsLeadAlerts: boolean;
+          leadCategories: string[];
         }>;
 
         if (draft.name) setName(draft.name);
@@ -79,6 +82,7 @@ export default function SignUp() {
         if (draft.avatar) setAvatar(draft.avatar);
         if (typeof draft.notifyOnProductUpdates === 'boolean') setNotifyOnProductUpdates(draft.notifyOnProductUpdates);
         if (typeof draft.notifyOnSmsLeadAlerts === 'boolean') setNotifyOnSmsLeadAlerts(draft.notifyOnSmsLeadAlerts);
+        if (Array.isArray(draft.leadCategories)) setLeadCategories(draft.leadCategories.filter((entry) => typeof entry === 'string'));
       } catch (draftError) {
         console.error('[SignUp] Failed to restore contractor signup draft:', draftError);
       }
@@ -103,12 +107,13 @@ export default function SignUp() {
             avatar,
             notifyOnProductUpdates,
             notifyOnSmsLeadAlerts,
+            leadCategories,
           })
         );
       } catch (draftError) {
         console.error('[SignUp] Failed to save contractor signup draft:', draftError);
       }
-    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar, notifyOnProductUpdates, notifyOnSmsLeadAlerts]);
+    }, [name, email, confirmEmail, phone, street, town, zip, governmentIdImage, licenseNumber, isTradesman, trade, avatar, notifyOnProductUpdates, notifyOnSmsLeadAlerts, leadCategories]);
   
     React.useEffect(() => {
       if (user) {
@@ -252,6 +257,7 @@ export default function SignUp() {
           trade: trade.trim(),
           notifyOnProductUpdates,
           notifyOnSmsLeadAlerts,
+          leadCategories,
         });
         sessionStorage.removeItem(CONTRACTOR_SIGNUP_DRAFT_KEY);
         // Navigation is handled by the useEffect watching the user state
@@ -300,6 +306,14 @@ export default function SignUp() {
     };
 
     const requiredMark = <span className="ml-1 text-red-500">*</span>;
+
+    const toggleLeadCategory = (categoryId: string) => {
+      setLeadCategories((current) =>
+        current.includes(categoryId)
+          ? current.filter((entry) => entry !== categoryId)
+          : [...current, categoryId]
+      );
+    };
 
     const handleGovernmentIdChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -589,6 +603,31 @@ export default function SignUp() {
                 Text me when Blueprint has a new lead or important contractor update
               </span>
             </label>
+
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Lead Categories</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  Pick the project types you want alerts for. Leave everything unchecked to receive all categories.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {projectCategories.map((categoryOption) => (
+                  <label
+                    key={categoryOption.id}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={leadCategories.includes(categoryOption.id)}
+                      onChange={() => toggleLeadCategory(categoryOption.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                    />
+                    <span className="text-sm font-bold text-slate-600">{categoryOption.title}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <input

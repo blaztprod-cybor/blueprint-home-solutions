@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
+import { projectCategories } from '../data/projectCategories';
 
 export default function ProfileSettings() {
   const { user, updateProfile } = useAuth();
@@ -37,6 +38,7 @@ export default function ProfileSettings() {
     notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner'),
     notifyOnProductUpdates: user?.notifyOnProductUpdates ?? false,
     notifyOnSmsLeadAlerts: user?.notifyOnSmsLeadAlerts ?? false,
+    leadCategories: user?.leadCategories ?? [],
   });
   const governmentIdInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,6 +59,7 @@ export default function ProfileSettings() {
       notifyOnRoughEstimates: user?.notifyOnRoughEstimates ?? (user?.role === 'Homeowner'),
       notifyOnProductUpdates: user?.notifyOnProductUpdates ?? false,
       notifyOnSmsLeadAlerts: user?.notifyOnSmsLeadAlerts ?? false,
+      leadCategories: user?.leadCategories ?? [],
     });
   }, [
     user?.name,
@@ -73,6 +76,7 @@ export default function ProfileSettings() {
     user?.notifyOnRoughEstimates,
     user?.notifyOnProductUpdates,
     user?.notifyOnSmsLeadAlerts,
+    user?.leadCategories,
     user?.role,
   ]);
 
@@ -113,6 +117,7 @@ export default function ProfileSettings() {
         notifyOnRoughEstimates: formData.notifyOnRoughEstimates,
         notifyOnProductUpdates: formData.notifyOnProductUpdates,
         notifyOnSmsLeadAlerts: formData.notifyOnSmsLeadAlerts,
+        leadCategories: formData.leadCategories,
       });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
@@ -197,6 +202,15 @@ export default function ProfileSettings() {
       setFormData((current) => ({ ...current, governmentIdImage: compressed }));
     };
     reader.readAsDataURL(file);
+  };
+
+  const toggleLeadCategory = (categoryId: string) => {
+    setFormData((current) => ({
+      ...current,
+      leadCategories: current.leadCategories.includes(categoryId)
+        ? current.leadCategories.filter((entry) => entry !== categoryId)
+        : [...current.leadCategories, categoryId],
+    }));
   };
 
   const tabs = [
@@ -364,6 +378,30 @@ export default function ProfileSettings() {
                         </span>
                       </span>
                     </label>
+                    <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Lead Categories</p>
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          Pick the lead types you want alerts for. Leave everything unchecked to receive all categories.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {projectCategories.map((categoryOption) => (
+                          <label
+                            key={categoryOption.id}
+                            className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.leadCategories.includes(categoryOption.id)}
+                              onChange={() => toggleLeadCategory(categoryOption.id)}
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                            />
+                            <span className="text-sm font-bold text-slate-600">{categoryOption.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <input
                         type="checkbox"

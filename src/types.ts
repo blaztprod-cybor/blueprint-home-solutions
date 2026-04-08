@@ -221,4 +221,5 @@ export interface User {
   notifyOnProductUpdates?: boolean;
   notifyOnSmsLeadAlerts?: boolean;
   smsConsentAt?: string;
+  leadCategories?: string[];
 }

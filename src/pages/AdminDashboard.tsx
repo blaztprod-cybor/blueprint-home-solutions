@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   Loader2,
+  Mail,
   Search,
   ShieldCheck,
   ShieldAlert,
@@ -63,6 +64,7 @@ type AdminFilter =
   | 'flagged';
 type SubscriptionLevel = 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
 type UserSort = 'name' | 'newest' | 'oldest';
+type BroadcastAudience = 'all' | 'contractors' | 'homeowners';
 
 const SUBSCRIPTION_OPTIONS: SubscriptionLevel[] = ['none', 'trial', 'beginner', 'junior', 'pro'];
 
@@ -101,6 +103,7 @@ function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = 
       licenseStatus: nextUser.licenseStatus,
       isTradesman: nextUser.isTradesman,
       trade: nextUser.trade,
+      leadCategories: nextUser.leadCategories,
       subscriptionLevel: nextUser.subscriptionLevel || 'none',
       notifyOnNewProjects: nextUser.notifyOnNewProjects,
       notifyOnRoughEstimates: nextUser.notifyOnRoughEstimates,
@@ -137,6 +140,12 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [userSort, setUserSort] = useState<UserSort>('name');
+  const [broadcastAudience, setBroadcastAudience] = useState<BroadcastAudience>('all');
+  const [broadcastSubject, setBroadcastSubject] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState('');
+  const [broadcastError, setBroadcastError] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -273,6 +282,56 @@ const AdminDashboard = () => {
       return matchesSearch && matchesFilter;
     });
   }, [reviews, searchQuery, filter]);
+
+  const optedInAudienceCounts = useMemo(() => {
+    const optedInUsers = users.filter(
+      (entry) => entry.notifyOnProductUpdates === true && !!entry.email && !entry.isDisabled
+    );
+
+    return {
+      all: optedInUsers.filter((entry) => entry.role === 'Contractor' || entry.role === 'Homeowner').length,
+      contractors: optedInUsers.filter((entry) => entry.role === 'Contractor').length,
+      homeowners: optedInUsers.filter((entry) => entry.role === 'Homeowner').length,
+    };
+  }, [users]);
+
+  const sendBroadcastUpdate = async () => {
+    if (!broadcastSubject.trim() || !broadcastMessage.trim()) {
+      setBroadcastError('Subject and message are required.');
+      return;
+    }
+
+    setIsSendingBroadcast(true);
+    setBroadcastError('');
+    setBroadcastResult('');
+
+    try {
+      const response = await fetch('/api/send-broadcast-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audience: broadcastAudience,
+          subject: broadcastSubject.trim(),
+          message: broadcastMessage.trim(),
+          sentBy: 'Blueprint Admin',
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to send broadcast update');
+      }
+
+      setBroadcastResult(
+        `Sent ${payload?.sent ?? 0} emails to opted-in ${broadcastAudience === 'all' ? 'users' : broadcastAudience}.`
+      );
+      setBroadcastMessage('');
+    } catch (error) {
+      setBroadcastError(error instanceof Error ? error.message : 'Failed to send broadcast update');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
 
   const toggleVerification = async (userId: string, currentStatus: boolean) => {
     setUpdatingId(userId);
@@ -550,19 +609,89 @@ const AdminDashboard = () => {
       </div>
 
       {activeTab === 'users' && (
-        <div className="flex items-center justify-end">
-          <label className="flex items-center gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Sort Users</span>
-            <select
-              value={userSort}
-              onChange={(event) => setUserSort(event.target.value as UserSort)}
-              className="h-11 min-w-[160px] rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-primary"
-            >
-              <option value="name">Name</option>
-              <option value="newest">Newest Joined</option>
-              <option value="oldest">Oldest Joined</option>
-            </select>
-          </label>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <Mail size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-black tracking-tight text-slate-900">Broadcast Updates</h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  Send one email to all opted-in contractors, homeowners, or both.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+              <label className="space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Audience</span>
+                <select
+                  value={broadcastAudience}
+                  onChange={(event) => setBroadcastAudience(event.target.value as BroadcastAudience)}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-primary"
+                >
+                  <option value="all">All opted-in users ({optedInAudienceCounts.all})</option>
+                  <option value="contractors">Contractors only ({optedInAudienceCounts.contractors})</option>
+                  <option value="homeowners">Homeowners only ({optedInAudienceCounts.homeowners})</option>
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Subject</span>
+                <input
+                  value={broadcastSubject}
+                  onChange={(event) => setBroadcastSubject(event.target.value)}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary"
+                  placeholder="Blueprint platform update"
+                />
+              </label>
+            </div>
+
+            <label className="mt-4 block space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Message</span>
+              <textarea
+                value={broadcastMessage}
+                onChange={(event) => setBroadcastMessage(event.target.value)}
+                rows={6}
+                className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary"
+                placeholder="Write the update you want to send to opted-in members."
+              />
+            </label>
+
+            {broadcastError && (
+              <p className="mt-3 text-sm font-semibold text-rose-600">{broadcastError}</p>
+            )}
+            {broadcastResult && (
+              <p className="mt-3 text-sm font-semibold text-emerald-600">{broadcastResult}</p>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={sendBroadcastUpdate}
+                disabled={isSendingBroadcast}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingBroadcast ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                Send Broadcast
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <label className="flex items-center gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Sort Users</span>
+              <select
+                value={userSort}
+                onChange={(event) => setUserSort(event.target.value as UserSort)}
+                className="h-11 min-w-[160px] rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-primary"
+              >
+                <option value="name">Name</option>
+                <option value="newest">Newest Joined</option>
+                <option value="oldest">Oldest Joined</option>
+              </select>
+            </label>
+          </div>
         </div>
       )}
 

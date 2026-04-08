@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 
+dotenv.config({ path: ".env.local" });
 dotenv.config();
 
 const execFileAsync = promisify(execFile);
@@ -15,10 +16,60 @@ const PERMIT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const ENABLE_DEV_PERMIT_SYNC = process.env.ENABLE_DEV_PERMIT_SYNC === "true";
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
+const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
 const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+function toAddressList(value: nodemailer.SendMailOptions["to"]) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean).map((entry) => String(entry));
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function canUseResendApi() {
+  return (
+    typeof RESEND_API_KEY === "string" &&
+    RESEND_API_KEY.startsWith("re_") &&
+    typeof SMTP_FROM_EMAIL === "string" &&
+    SMTP_FROM_EMAIL.length > 0
+  );
+}
+
+function buildProjectAlertSms({
+  projectTitle,
+  category,
+  town,
+  startDate,
+}: {
+  projectTitle?: string;
+  category?: string;
+  town?: string;
+  startDate?: string;
+}) {
+  return [
+    "Blueprint: new homeowner project available.",
+    `Project: ${projectTitle || category || "Project request"}.`,
+    `Category: ${category || "General"}.`,
+    `Area: ${town || "Local service area"}.`,
+    `Start: ${startDate || "Not specified"}.`,
+    "Log in to your Home Pro portal to review it.",
+  ].join(" ");
+}
+
+function matchesLeadCategory(user: { leadCategories?: string[] }, category?: string) {
+  if (!category) return true;
+  if (!Array.isArray(user.leadCategories) || user.leadCategories.length === 0) {
+    return true;
+  }
+
+  return user.leadCategories.includes(category);
+}
 
 function getSmtpSecureSetting() {
   if (process.env.SMTP_SECURE) {
@@ -103,7 +154,12 @@ async function startServer() {
       },
     });
 
-  const adminEmail = process.env.BLUEPRINT_ADMIN_EMAIL || process.env.SMTP_USER || SMTP_FROM_EMAIL;
+  const adminEmail =
+    (EMAIL_ADDRESS_PATTERN.test(String(process.env.BLUEPRINT_ADMIN_EMAIL || "").trim())
+      ? String(process.env.BLUEPRINT_ADMIN_EMAIL).trim()
+      : EMAIL_ADDRESS_PATTERN.test(String(process.env.SMTP_USER || "").trim())
+        ? String(process.env.SMTP_USER).trim()
+        : SMTP_FROM_EMAIL);
   const getAdminDb = () => {
     const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "blueprint-home-solutions";
     const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
@@ -124,6 +180,31 @@ async function startServer() {
     return getAdminFirestore(app, process.env.FIREBASE_FIRESTORE_DATABASE_ID || "blueprinthomesolutionsdata");
   };
   const sendMail = async (options: nodemailer.SendMailOptions) => {
+    if (canUseResendApi()) {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+          to: toAddressList(options.to),
+          cc: toAddressList(options.cc),
+          reply_to: toAddressList(options.replyTo),
+          subject: options.subject,
+          html: options.html,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || "Failed to send email with Resend API");
+      }
+
+      return { messageId: data?.id };
+    }
+
     const transporter = createTransporter();
     if (process.env.SMTP_USER && process.env.SMTP_USER !== "mock_user") {
       return transporter.sendMail(options);
@@ -661,6 +742,86 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-broadcast-update", async (req, res) => {
+    const { audience = "all", subject, message, sentBy } = req.body;
+
+    if (!subject || !message) {
+      return res.status(400).json({ error: "Subject and message are required" });
+    }
+
+    const audienceLabel =
+      audience === "contractors"
+        ? "Home Pros"
+        : audience === "homeowners"
+          ? "Homeowners"
+          : "Blueprint Members";
+
+    try {
+      const snapshot = await getAdminDb()
+        .collection("users")
+        .where("notifyOnProductUpdates", "==", true)
+        .get();
+
+      const recipients = snapshot.docs
+        .map((doc) => doc.data())
+        .filter((entry: any) => {
+          if (!entry.email || typeof entry.email !== "string") return false;
+          if (entry.isDisabled) return false;
+          if (audience === "contractors") return entry.role === "Contractor";
+          if (audience === "homeowners") return entry.role === "Homeowner";
+          return entry.role === "Contractor" || entry.role === "Homeowner";
+        });
+
+      const results = await Promise.allSettled(
+        recipients.map((recipient: any) =>
+          sendLoggedMail({
+            logContext: createEmailLogContext({
+              handlerName: "send-broadcast-update",
+              eventType: "broadcast_update",
+              recipient: recipient.email,
+              metadata: {
+                audience,
+                recipientRole: recipient.role,
+                sentBy,
+              },
+            }),
+            mail: {
+              from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,
+              to: recipient.email,
+              subject,
+              html: renderIntroEmail({
+                heading: subject,
+                greeting: `Hi ${recipient.name || audienceLabel},`,
+                bodyLines: String(message)
+                  .split(/\n+/)
+                  .map((line: string) => line.trim())
+                  .filter(Boolean),
+                detailLines: [
+                  `<strong>Audience:</strong> ${audienceLabel}`,
+                  `<strong>Sent by:</strong> ${sentBy || "Blueprint Admin"}`,
+                ],
+              }),
+            },
+          })
+        )
+      );
+
+      const sent = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - sent;
+
+      res.json({
+        success: true,
+        audience,
+        recipients: recipients.length,
+        sent,
+        failed,
+      });
+    } catch (error) {
+      console.error("Error sending broadcast update:", error);
+      res.status(500).json({ error: "Failed to send broadcast update" });
+    }
+  });
+
   app.post("/api/send-intro-request-acknowledgment", async (req, res) => {
     const { contractorEmail, contractorName, category, town } = req.body;
     if (!contractorEmail) {
@@ -999,7 +1160,19 @@ async function startServer() {
 
       const recipients = snapshot.docs
         .map((entry) => entry.data())
-        .filter((user) => typeof user.email === "string" && user.email.length > 0);
+        .filter((user) => typeof user.email === "string" && user.email.length > 0)
+        .filter((user: any) => matchesLeadCategory(user, category));
+
+      const smsRecipients = snapshot.docs
+        .map((entry) => entry.data())
+        .filter(
+          (user: any) =>
+            matchesLeadCategory(user, category) &&
+            user.notifyOnSmsLeadAlerts === true &&
+            user.smsConsentAt &&
+            typeof user.phone === "string" &&
+            user.phone.trim().length > 0
+        );
 
       await Promise.all(
         recipients.map((recipient) =>
@@ -1027,7 +1200,21 @@ async function startServer() {
         )
       );
 
-      res.json({ success: true, recipients: recipients.length });
+      let smsRecipientsNotified = 0;
+      if ((TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID) && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && smsRecipients.length > 0) {
+        const smsBody = buildProjectAlertSms({ projectTitle, category, town, startDate });
+        const smsResults = await Promise.allSettled(
+          smsRecipients.map((recipient: any) =>
+            sendSms({
+              to: recipient.phone,
+              body: smsBody,
+            })
+          )
+        );
+        smsRecipientsNotified = smsResults.filter((result) => result.status === "fulfilled").length;
+      }
+
+      res.json({ success: true, recipients: recipients.length, smsRecipients: smsRecipientsNotified });
     } catch (error) {
       console.error("Error sending new project alerts:", error);
       res.status(500).json({ error: "Failed to send new project alerts" });

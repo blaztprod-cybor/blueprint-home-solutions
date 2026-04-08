@@ -1,5 +1,28 @@
 import { getAdminDb } from './_firebase-admin.js';
 import { getAdminEmail, renderIntroEmail, sendIntroEmail } from './_intro-email.js';
+import { isTwilioConfigured, sendSms } from './_twilio.js';
+
+function buildProjectAlertSms({ projectTitle, category, town, startDate }) {
+  const parts = [
+    'Blueprint: new homeowner project available.',
+    `Project: ${projectTitle || category || 'Project request'}.`,
+    `Category: ${category || 'General'}.`,
+    `Area: ${town || 'Local service area'}.`,
+    `Start: ${startDate || 'Not specified'}.`,
+    'Log in to your Home Pro portal to review it.',
+  ];
+
+  return parts.join(' ');
+}
+
+function matchesLeadCategory(user, category) {
+  if (!category) return true;
+  if (!Array.isArray(user.leadCategories) || user.leadCategories.length === 0) {
+    return true;
+  }
+
+  return user.leadCategories.includes(category);
+}
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -18,7 +41,19 @@ export const handler = async (event) => {
 
     const recipients = snapshot.docs
       .map((doc) => doc.data())
-      .filter((user) => typeof user.email === 'string' && user.email.length > 0);
+      .filter((user) => typeof user.email === 'string' && user.email.length > 0)
+      .filter((user) => matchesLeadCategory(user, category));
+
+    const smsRecipients = snapshot.docs
+      .map((doc) => doc.data())
+      .filter(
+        (user) =>
+          matchesLeadCategory(user, category) &&
+          user.notifyOnSmsLeadAlerts === true &&
+          user.smsConsentAt &&
+          typeof user.phone === 'string' &&
+          user.phone.trim().length > 0
+      );
 
     await Promise.all(
       recipients.map((recipient) =>
@@ -45,10 +80,29 @@ export const handler = async (event) => {
       )
     );
 
+    let smsRecipientsNotified = 0;
+    if (isTwilioConfigured() && smsRecipients.length > 0) {
+      const smsBody = buildProjectAlertSms({ projectTitle, category, town, startDate });
+      const smsResults = await Promise.allSettled(
+        smsRecipients.map((recipient) =>
+          sendSms({
+            to: recipient.phone,
+            body: smsBody,
+          })
+        )
+      );
+
+      smsRecipientsNotified = smsResults.filter((result) => result.status === 'fulfilled').length;
+    }
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: true, recipients: recipients.length }),
+      body: JSON.stringify({
+        success: true,
+        recipients: recipients.length,
+        smsRecipients: smsRecipientsNotified,
+      }),
     };
   } catch (error) {
     return {

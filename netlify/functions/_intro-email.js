@@ -2,6 +2,23 @@ import nodemailer from 'nodemailer';
 
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Blueprint Home Solutions';
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || 'info@blueprinthomesolutions.com';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const toAddressList = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return String(value)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const canUseResendApi = () =>
+  typeof RESEND_API_KEY === 'string' &&
+  RESEND_API_KEY.startsWith('re_') &&
+  typeof SMTP_FROM_EMAIL === 'string' &&
+  SMTP_FROM_EMAIL.length > 0;
 
 const getSmtpSecureSetting = () => {
   if (process.env.SMTP_SECURE) {
@@ -30,7 +47,11 @@ const getSmtpConfig = () => {
 };
 
 export const getAdminEmail = () =>
-  process.env.BLUEPRINT_ADMIN_EMAIL || process.env.SMTP_USER || SMTP_FROM_EMAIL;
+  (EMAIL_ADDRESS_PATTERN.test(String(process.env.BLUEPRINT_ADMIN_EMAIL || '').trim())
+    ? String(process.env.BLUEPRINT_ADMIN_EMAIL).trim()
+    : EMAIL_ADDRESS_PATTERN.test(String(process.env.SMTP_USER || '').trim())
+      ? String(process.env.SMTP_USER).trim()
+      : SMTP_FROM_EMAIL);
 
 export const createEmailLogContext = ({ handlerName, eventType, recipient, metadata = {} }) => ({
   requestId: `${handlerName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -83,6 +104,31 @@ export const renderIntroEmail = ({ heading, greeting, bodyLines, detailLines, fo
 `;
 
 export const sendIntroEmail = async ({ to, cc, subject, html, replyTo }) => {
+  if (canUseResendApi()) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`,
+        to: toAddressList(to),
+        cc: toAddressList(cc),
+        reply_to: toAddressList(replyTo),
+        subject,
+        html,
+      }),
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to send email with Resend API');
+    }
+
+    return { messageId: data?.id };
+  }
+
   const transporter = nodemailer.createTransport(getSmtpConfig());
   const info = await transporter.sendMail({
     from: `"${SMTP_FROM_NAME}" <${SMTP_FROM_EMAIL}>`,

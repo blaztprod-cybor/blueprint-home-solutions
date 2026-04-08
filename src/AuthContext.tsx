@@ -120,6 +120,7 @@ interface AuthContextType {
       trade?: string;
       notifyOnProductUpdates?: boolean;
       notifyOnSmsLeadAlerts?: boolean;
+      leadCategories?: string[];
     }
   ) => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -316,6 +317,7 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     licenseStatus: cachedMatchesIdentity ? cachedUser?.licenseStatus : undefined,
     isTradesman: cachedMatchesIdentity ? cachedUser?.isTradesman : undefined,
     trade: cachedMatchesIdentity ? cachedUser?.trade : undefined,
+    leadCategories: cachedMatchesIdentity ? cachedUser?.leadCategories : undefined,
     subscriptionLevel: cachedMatchesIdentity && cachedUser?.subscriptionLevel
       ? cachedUser.subscriptionLevel
       : getDerivedSubscriptionLevel(role, createdAt),
@@ -347,6 +349,7 @@ function buildFirestoreUserPayload(
     licenseStatus?: User['licenseStatus'];
     isTradesman?: boolean;
     trade?: string;
+    leadCategories?: string[];
     subscriptionLevel?: User['subscriptionLevel'];
     notifyOnNewProjects?: boolean;
     notifyOnRoughEstimates?: boolean;
@@ -379,6 +382,7 @@ function buildFirestoreUserPayload(
     licenseStatus: data.licenseStatus,
     isTradesman: data.isTradesman,
     trade: data.trade,
+    leadCategories: data.leadCategories,
     subscriptionLevel: data.subscriptionLevel,
     notifyOnNewProjects: data.notifyOnNewProjects,
     notifyOnRoughEstimates: data.notifyOnRoughEstimates,
@@ -572,6 +576,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               licenseStatus: data.licenseStatus,
               isTradesman: data.isTradesman,
               trade: data.trade,
+              leadCategories: data.leadCategories,
               accountPlan: data.accountPlan,
               trialStartedAt: data.trialStartedAt,
               trialEndsAt: data.trialEndsAt,
@@ -604,6 +609,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               licenseStatus: recoveredUser.licenseStatus,
               isTradesman: recoveredUser.isTradesman,
               trade: recoveredUser.trade,
+              leadCategories: recoveredUser.leadCategories,
               subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
               notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
               notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
@@ -657,6 +663,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           licenseStatus: recoveredUser.licenseStatus,
           isTradesman: recoveredUser.isTradesman,
           trade: recoveredUser.trade,
+          leadCategories: recoveredUser.leadCategories,
           subscriptionLevel: recoveredUser.subscriptionLevel || getDerivedSubscriptionLevel(recoveredUser.role, createdAt),
           notifyOnNewProjects: recoveredUser.notifyOnNewProjects,
           notifyOnRoughEstimates: recoveredUser.notifyOnRoughEstimates,
@@ -696,6 +703,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isVerified: false,
         subscriptionLevel: getDerivedSubscriptionLevel(role),
         notifyOnSmsLeadAlerts: false,
+        leadCategories: [],
         accountPlan: getDerivedTrialFields(role).accountPlan,
         trialStartedAt: getDerivedTrialFields(role).trialStartedAt,
         trialEndsAt: getDerivedTrialFields(role).trialEndsAt,
@@ -714,6 +722,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notifyOnRoughEstimates: role === 'Homeowner',
         notifyOnProductUpdates: false,
         notifyOnSmsLeadAlerts: false,
+        leadCategories: [],
         ...getDerivedTrialFields(role),
         };
         setUser(userData);
@@ -760,6 +769,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       trade?: string;
       notifyOnProductUpdates?: boolean;
       notifyOnSmsLeadAlerts?: boolean;
+      leadCategories?: string[];
     }
   ) => {
     const nextProfile = profile || {};
@@ -794,6 +804,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
         trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
+        leadCategories: finalRole === 'Contractor' ? (nextProfile.leadCategories ?? []) : undefined,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         notifyOnNewProjects: finalRole === 'Contractor',
         notifyOnRoughEstimates: finalRole === 'Homeowner',
@@ -824,6 +835,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         licenseStatus: finalRole === 'Contractor' ? 'Pending' : undefined,
         isTradesman: finalRole === 'Contractor' ? nextProfile.isTradesman : undefined,
         trade: finalRole === 'Contractor' ? nextProfile.trade : undefined,
+        leadCategories: userData.leadCategories,
         subscriptionLevel: getDerivedSubscriptionLevel(finalRole),
         notifyOnNewProjects: userData.notifyOnNewProjects,
         notifyOnRoughEstimates: userData.notifyOnRoughEstimates,

@@ -140,7 +140,7 @@ service cloud.firestore {
     
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'notifyOnProductUpdates', 'notifyOnSmsLeadAlerts', 'smsConsentAt', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'leadCategories', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'notifyOnProductUpdates', 'notifyOnSmsLeadAlerts', 'smsConsentAt', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
         (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
@@ -159,6 +159,7 @@ service cloud.firestore {
         (!('licenseStatus' in data) || data.licenseStatus in ['Active', 'Pending', 'Expired', 'Invalid']) &&
         (!('isTradesman' in data) || data.isTradesman is bool) &&
         (!('trade' in data) || data.trade is string) &&
+        (!('leadCategories' in data) || (data.leadCategories is list && data.leadCategories.size() <= 32)) &&
         (!('accountPlan' in data) || data.accountPlan in ['trial', 'standard']) &&
         (!('trialStartedAt' in data) || isValidDateString(data.trialStartedAt)) &&
         (!('trialEndsAt' in data) || isValidDateString(data.trialEndsAt)) &&
