@@ -9,19 +9,36 @@ function buildProjectAlertSms({ projectTitle, category, town, startDate }) {
     `Category: ${category || 'General'}.`,
     `Area: ${town || 'Local service area'}.`,
     `Start: ${startDate || 'Not specified'}.`,
-    'Log in to your Home Pro portal to review it.',
+    'Open your Home Pro portal for details.',
   ];
 
   return parts.join(' ');
 }
 
-function matchesLeadCategory(user, category) {
-  if (!category) return true;
+function matchesLeadCategory(user, category, categoryLabel) {
+  if (!category && !categoryLabel) return true;
   if (!Array.isArray(user.leadCategories) || user.leadCategories.length === 0) {
     return true;
   }
 
-  return user.leadCategories.includes(category);
+  return user.leadCategories.includes(category || '') || user.leadCategories.includes(categoryLabel || '');
+}
+
+async function mergeUsersWithProfiles(db, accountDocs) {
+  const profileSnapshots = await Promise.all(
+    accountDocs.map((doc) => db.collection('user_profiles').doc(doc.id).get())
+  );
+  const profileMap = new Map(
+    profileSnapshots
+      .filter((doc) => doc.exists)
+      .map((doc) => [doc.id, doc.data() || {}])
+  );
+
+  return accountDocs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+    ...(profileMap.get(doc.id) || {}),
+  }));
 }
 
 export const handler = async (event) => {
@@ -29,31 +46,40 @@ export const handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const { projectTitle, category, town, startDate, description } = JSON.parse(event.body || '{}');
+  const { projectTitle, categoryId, category, town, startDate, description } = JSON.parse(event.body || '{}');
 
   try {
     const db = getAdminDb();
     const snapshot = await db.collection('users')
       .where('role', '==', 'Contractor')
-      .where('notifyOnNewProjects', '==', true)
       .where('subscriptionLevel', 'in', ['trial', 'beginner', 'junior', 'pro'])
       .get();
+    const mergedUsers = await mergeUsersWithProfiles(db, snapshot.docs);
 
-    const recipients = snapshot.docs
-      .map((doc) => doc.data())
+    const recipients = mergedUsers
       .filter((user) => typeof user.email === 'string' && user.email.length > 0)
-      .filter((user) => matchesLeadCategory(user, category));
+      .filter((user) => user.notifyOnNewProjects === true)
+      .filter((user) => matchesLeadCategory(user, categoryId, category));
 
-    const smsRecipients = snapshot.docs
-      .map((doc) => doc.data())
+    const smsRecipients = mergedUsers
       .filter(
         (user) =>
-          matchesLeadCategory(user, category) &&
+          user.notifyOnNewProjects === true &&
+          matchesLeadCategory(user, categoryId, category) &&
           user.notifyOnSmsLeadAlerts === true &&
           user.smsConsentAt &&
           typeof user.phone === 'string' &&
           user.phone.trim().length > 0
       );
+
+    console.log('[ALERTS][NEW_PROJECT]', {
+      projectTitle,
+      categoryId,
+      category,
+      contractorPool: mergedUsers.length,
+      emailRecipients: recipients.map((entry) => entry.email),
+      smsRecipients: smsRecipients.map((entry) => entry.phone),
+    });
 
     await Promise.all(
       recipients.map((recipient) =>
@@ -101,6 +127,7 @@ export const handler = async (event) => {
       body: JSON.stringify({
         success: true,
         recipients: recipients.length,
+        smsEligibleRecipients: smsRecipients.length,
         smsRecipients: smsRecipientsNotified,
       }),
     };

@@ -29,6 +29,7 @@ import {
 import { cn } from '../lib/utils';
 import { sendContractorNotification } from '../lib/contractorNotifications';
 import { useAuth } from '../AuthContext';
+import { USER_PROFILES_COLLECTION, USERS_COLLECTION } from '../lib/userDocuments';
 import { db, handleFirestoreError, OperationType, uploadFilesToStorage } from '../firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, addDoc, deleteDoc, orderBy, limit, getDoc } from 'firebase/firestore';
 import { Project, Estimate } from '../types';
@@ -141,16 +142,20 @@ function EstimateModal({ project, type, isOpen, onClose, onSuccess }: EstimateMo
 
       if (type === 'rough') {
         try {
-          const homeownerSnapshot = await getDoc(doc(db, 'users', project.uid));
+          const [homeownerSnapshot, homeownerProfileSnapshot] = await Promise.all([
+            getDoc(doc(db, USERS_COLLECTION, project.uid)),
+            getDoc(doc(db, USER_PROFILES_COLLECTION, project.uid)),
+          ]);
           const homeownerData = homeownerSnapshot.exists() ? homeownerSnapshot.data() : null;
+          const homeownerProfile = homeownerProfileSnapshot.exists() ? homeownerProfileSnapshot.data() : null;
 
-          if (homeownerData?.email && (homeownerData.notifyOnRoughEstimates ?? true)) {
+          if (homeownerData?.email && (homeownerProfile?.notifyOnRoughEstimates ?? homeownerData.notifyOnRoughEstimates ?? true)) {
             const response = await fetch('/api/send-rough-estimate-alert', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 homeownerEmail: homeownerData.email,
-                homeownerName: homeownerData.name || 'Homeowner',
+                homeownerName: homeownerProfile?.name || homeownerData.name || 'Homeowner',
                 contractorName: user.name,
                 projectTitle: project.title,
                 amount: estimate.amount,
@@ -442,8 +447,12 @@ export default function Projects() {
     const inspectionDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // Default to 2 days from now
 
     try {
-      const homeownerSnapshot = await getDoc(doc(db, 'users', selectedProject.uid));
+      const [homeownerSnapshot, homeownerProfileSnapshot] = await Promise.all([
+        getDoc(doc(db, USERS_COLLECTION, selectedProject.uid)),
+        getDoc(doc(db, USER_PROFILES_COLLECTION, selectedProject.uid)),
+      ]);
       const homeownerData = homeownerSnapshot.exists() ? homeownerSnapshot.data() : null;
+      const homeownerProfile = homeownerProfileSnapshot.exists() ? homeownerProfileSnapshot.data() : null;
 
       const updateData: any = {
         inspectionDate,
@@ -473,7 +482,7 @@ export default function Projects() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email: homeownerData.email,
-              homeownerName: homeownerData.name || 'Homeowner',
+              homeownerName: homeownerProfile?.name || homeownerData.email || 'Homeowner',
               contractorName: user.name,
               projectTitle: selectedProject.title,
               requestedVisitDate: inspectionDate

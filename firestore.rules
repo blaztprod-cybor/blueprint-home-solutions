@@ -77,7 +77,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "blaztprod@gmail.com" && request.auth.token.email_verified == true));
+          (request.auth.token.email == "blaztprod@gmail.com"));
     }
 
     function isContractor() {
@@ -138,38 +138,43 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     
-    function isValidUser(data) {
+    function isValidUserAccount(data) {
       return hasRequiredFields(['uid', 'email', 'role']) &&
-        hasOnlyAllowedFields(['uid', 'id', 'email', 'role', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'rating', 'isVerified', 'isDisabled', 'governmentIdImage', 'licenseNumber', 'licenseStatus', 'isTradesman', 'trade', 'leadCategories', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'notifyOnProductUpdates', 'notifyOnSmsLeadAlerts', 'smsConsentAt', 'createdAt', 'updatedAt']) &&
+        hasOnlyAllowedFields(['uid', 'email', 'role', 'isVerified', 'isDisabled', 'licenseStatus', 'accountPlan', 'trialStartedAt', 'trialEndsAt', 'subscriptionLevel', 'createdAt', 'updatedAt']) &&
         data.uid is string && data.uid.size() > 0 &&
-        (!('id' in data) || data.id == data.uid) &&
         data.email is string && isValidEmail(data.email) &&
         data.role in ['admin', 'Contractor', 'Homeowner'] &&
+        (!('isVerified' in data) || data.isVerified is bool) &&
+        (!('isDisabled' in data) || data.isDisabled is bool) &&
+        (!('licenseStatus' in data) || data.licenseStatus in ['Active', 'Pending', 'Expired', 'Invalid']) &&
+        (!('accountPlan' in data) || data.accountPlan in ['trial', 'standard']) &&
+        (!('trialStartedAt' in data) || isValidDateString(data.trialStartedAt)) &&
+        (!('trialEndsAt' in data) || isValidDateString(data.trialEndsAt)) &&
+        (!('subscriptionLevel' in data) || data.subscriptionLevel in ['none', 'trial', 'beginner', 'junior', 'pro']) &&
+        (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
+        (!('updatedAt' in data) || isValidDateString(data.updatedAt));
+    }
+
+    function isValidUserProfile(data) {
+      return hasRequiredFields(['uid']) &&
+        hasOnlyAllowedFields(['uid', 'name', 'phone', 'street', 'town', 'zip', 'avatar', 'governmentIdImage', 'licenseNumber', 'isTradesman', 'trade', 'leadCategories', 'notifyOnNewProjects', 'notifyOnRoughEstimates', 'notifyOnProductUpdates', 'notifyOnSmsLeadAlerts', 'smsConsentAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() > 0 &&
         (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
         (!('phone' in data) || data.phone is string) &&
         (!('street' in data) || data.street is string) &&
         (!('town' in data) || data.town is string) &&
         (!('zip' in data) || data.zip is string) &&
         (!('avatar' in data) || (data.avatar is string && data.avatar.size() < 1048576)) &&
-        (!('rating' in data) || data.rating is number) &&
-        (!('isVerified' in data) || data.isVerified is bool) &&
-        (!('isDisabled' in data) || data.isDisabled is bool) &&
         (!('governmentIdImage' in data) || (data.governmentIdImage is string && data.governmentIdImage.size() < 1048576)) &&
         (!('licenseNumber' in data) || data.licenseNumber is string) &&
-        (!('licenseStatus' in data) || data.licenseStatus in ['Active', 'Pending', 'Expired', 'Invalid']) &&
         (!('isTradesman' in data) || data.isTradesman is bool) &&
         (!('trade' in data) || data.trade is string) &&
         (!('leadCategories' in data) || (data.leadCategories is list && data.leadCategories.size() <= 32)) &&
-        (!('accountPlan' in data) || data.accountPlan in ['trial', 'standard']) &&
-        (!('trialStartedAt' in data) || isValidDateString(data.trialStartedAt)) &&
-        (!('trialEndsAt' in data) || isValidDateString(data.trialEndsAt)) &&
-        (!('subscriptionLevel' in data) || data.subscriptionLevel in ['none', 'trial', 'beginner', 'junior', 'pro']) &&
         (!('notifyOnNewProjects' in data) || data.notifyOnNewProjects is bool) &&
         (!('notifyOnRoughEstimates' in data) || data.notifyOnRoughEstimates is bool) &&
         (!('notifyOnProductUpdates' in data) || data.notifyOnProductUpdates is bool) &&
         (!('notifyOnSmsLeadAlerts' in data) || data.notifyOnSmsLeadAlerts is bool) &&
         (!('smsConsentAt' in data) || isValidDateString(data.smsConsentAt)) &&
-        (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
         (!('updatedAt' in data) || isValidDateString(data.updatedAt));
     }
     
@@ -376,11 +381,15 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isAuthenticated();
       allow list: if isAdmin();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+      allow create: if isAuthenticated() && isValidUserAccount(request.resource.data) && 
                       (isOwner(userId) && request.resource.data.role != 'admin' || isAdmin());
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
-                      (isOwner(userId) && request.resource.data.role == resource.data.role || isAdmin());
-      allow delete: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /user_profiles/{userId} {
+      allow get: if isAuthenticated();
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
     }
     
     match /projects/{projectId} {

@@ -2,6 +2,17 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from './types';
 import { auth, db, uploadDataUrlToStorage } from './firebase';
 import { sendContractorNotification } from './lib/contractorNotifications';
+import { authorizedApiFetch } from './lib/authorizedApi';
+import {
+  extractLegacyProfilePayload,
+  getDerivedSubscriptionLevel,
+  getDerivedTrialFields,
+  getInitialsAvatar,
+  mergeUserDocuments,
+  stripUndefinedFields,
+  USER_PROFILES_COLLECTION,
+  USERS_COLLECTION,
+} from './lib/userDocuments';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
@@ -14,7 +25,6 @@ import {
 } from 'firebase/auth';
 import { 
   doc, 
-  setDoc, 
   getDoc, 
   getDocFromServer,
   collection,
@@ -72,22 +82,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
-function stripUndefinedFields<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((entry) => stripUndefinedFields(entry)) as T;
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, entry]) => entry !== undefined)
-        .map(([key, entry]) => [key, stripUndefinedFields(entry)])
-    ) as T;
-  }
-
-  return value;
-}
-
 function isPermissionDeniedError(error: unknown) {
   if (!error) return false;
   if (typeof error === 'object' && error !== null && 'code' in error) {
@@ -141,7 +135,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function getUserDocWithRetry(userId: string, attempts = 8, delayMs = 250) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const userDoc = await getDoc(doc(db, 'users', userId));
+    const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
     if (userDoc.exists()) {
       return userDoc;
     }
@@ -222,59 +216,6 @@ function saveAuthRoleHint(email: string | null | undefined, role: UserRole | und
   localStorage.setItem(AUTH_ROLE_HINTS_KEY, JSON.stringify(hints));
 }
 
-const getInitialsAvatar = (name: string) => {
-  const names = name.split(' ');
-  const initials = names.map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  const colors = ['#4F46E5', '#7C3AED', '#2563EB', '#059669', '#DC2626', '#D97706'];
-  const color = colors[Math.abs(name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length];
-  
-  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-    <rect width="100" height="100" fill="${color.replace('#', '%23')}" />
-    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="white">${initials}</text>
-  </svg>`;
-};
-
-const TRIAL_DURATION_DAYS = 14;
-
-function getTrialWindow(startIso = new Date().toISOString()) {
-  const trialStartedAt = new Date(startIso);
-  const trialEndsAt = new Date(trialStartedAt);
-  trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DURATION_DAYS);
-
-  return {
-    trialStartedAt: trialStartedAt.toISOString(),
-    trialEndsAt: trialEndsAt.toISOString(),
-  };
-}
-
-function getDerivedTrialFields(role: UserRole, createdAt?: string) {
-  if (role !== 'Contractor') {
-    return {
-      accountPlan: 'standard' as const,
-      trialStartedAt: undefined,
-      trialEndsAt: undefined,
-    };
-  }
-
-  const trialSource = createdAt || new Date().toISOString();
-  const trialWindow = getTrialWindow(trialSource);
-
-  return {
-    accountPlan: 'trial' as const,
-    trialStartedAt: trialWindow.trialStartedAt,
-    trialEndsAt: trialWindow.trialEndsAt,
-  };
-}
-
-function getDerivedSubscriptionLevel(role: UserRole, createdAt?: string) {
-  if (role !== 'Contractor') return 'none' as const;
-
-  if (!createdAt) return 'trial' as const;
-
-  const trialEndsAt = new Date(getTrialWindow(createdAt).trialEndsAt).getTime();
-  return trialEndsAt > Date.now() ? ('trial' as const) : ('none' as const);
-}
-
 function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
   const cachedUser = loadCachedBlueprintUser();
   const hintedRole = getAuthRoleHint(firebaseUser.email);
@@ -323,7 +264,7 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
       : getDerivedSubscriptionLevel(role, createdAt),
     notifyOnNewProjects: cachedMatchesIdentity ? (cachedUser?.notifyOnNewProjects ?? (role === 'Contractor')) : (role === 'Contractor'),
     notifyOnRoughEstimates: cachedMatchesIdentity ? (cachedUser?.notifyOnRoughEstimates ?? (role === 'Homeowner')) : (role === 'Homeowner'),
-    notifyOnProductUpdates: cachedMatchesIdentity ? (cachedUser?.notifyOnProductUpdates ?? false) : false,
+    notifyOnProductUpdates: cachedMatchesIdentity ? (cachedUser?.notifyOnProductUpdates ?? (role === 'Contractor')) : (role === 'Contractor'),
     notifyOnSmsLeadAlerts: cachedMatchesIdentity ? (cachedUser?.notifyOnSmsLeadAlerts ?? false) : false,
     smsConsentAt: cachedMatchesIdentity ? cachedUser?.smsConsentAt : undefined,
     ...getDerivedTrialFields(role, createdAt),
@@ -332,7 +273,7 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
   return { recoveredUser, createdAt };
 }
 
-function buildFirestoreUserPayload(
+async function writeUserDocWithRecovery(
   userId: string,
   data: {
     email: string;
@@ -345,7 +286,8 @@ function buildFirestoreUserPayload(
     governmentIdImage?: string;
     avatar?: string;
     isVerified?: boolean;
-    licenseNumber?: string;
+    isDisabled?: boolean;
+    licenseNumber?: User['licenseNumber'];
     licenseStatus?: User['licenseStatus'];
     isTradesman?: boolean;
     trade?: string;
@@ -361,56 +303,46 @@ function buildFirestoreUserPayload(
     trialEndsAt?: string;
     createdAt?: string;
     updatedAt?: string;
-  },
-  options?: {
-    omitMedia?: boolean;
   }
-) {
-  return stripUndefinedFields({
-    uid: userId,
-    email: data.email,
-    name: data.name,
-    role: data.role,
-    phone: data.phone,
-    street: data.street,
-    town: data.town,
-    zip: data.zip,
-    governmentIdImage: options?.omitMedia ? undefined : data.governmentIdImage,
-    avatar: options?.omitMedia ? undefined : data.avatar,
-    isVerified: data.isVerified ?? false,
-    licenseNumber: data.licenseNumber,
-    licenseStatus: data.licenseStatus,
-    isTradesman: data.isTradesman,
-    trade: data.trade,
-    leadCategories: data.leadCategories,
-    subscriptionLevel: data.subscriptionLevel,
-    notifyOnNewProjects: data.notifyOnNewProjects,
-    notifyOnRoughEstimates: data.notifyOnRoughEstimates,
-    notifyOnProductUpdates: data.notifyOnProductUpdates,
-    notifyOnSmsLeadAlerts: data.notifyOnSmsLeadAlerts,
-    smsConsentAt: data.smsConsentAt,
-    accountPlan: data.accountPlan,
-    trialStartedAt: data.trialStartedAt,
-    trialEndsAt: data.trialEndsAt,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-  });
-}
-
-async function writeUserDocWithRecovery(
-  userId: string,
-  data: Parameters<typeof buildFirestoreUserPayload>[1]
 ) {
   try {
-    await setDoc(doc(db, 'users', userId), buildFirestoreUserPayload(userId, data));
-  } catch (error) {
-    if (!isPermissionDeniedError(error)) {
-      throw error;
+    const response = await authorizedApiFetch('/api/sync-auth-user', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, uid: userId }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to sync user record');
     }
-
-    // Retry without large inline media fields so the account can still recover into Settings.
-    await setDoc(doc(db, 'users', userId), buildFirestoreUserPayload(userId, data, { omitMedia: true }));
+  } catch (error) {
+    console.error('[AuthContext] Server-side user sync failed.', error);
+    throw error;
   }
+}
+
+async function getMergedUserDoc(userId: string, firebaseUser: FirebaseUser) {
+  const [accountDoc, profileDoc] = await Promise.all([
+    getDoc(doc(db, USERS_COLLECTION, userId)),
+    getDoc(doc(db, USER_PROFILES_COLLECTION, userId)),
+  ]);
+
+  const accountData = accountDoc.exists() ? accountDoc.data() : null;
+  const profileData = profileDoc.exists() ? profileDoc.data() : null;
+
+  if (!profileDoc.exists() && accountData) {
+    const legacyProfilePayload = extractLegacyProfilePayload(userId, accountData as Partial<User>);
+    const hasLegacyProfileFields = Object.keys(legacyProfilePayload).some((key) => key !== 'uid');
+
+    if (hasLegacyProfileFields) {
+      console.warn('[AuthContext] Legacy profile fields still live on users doc; profile backfill requires server migration.');
+    }
+  }
+
+  return {
+    accountData,
+    profileData: profileData || (accountData ? extractLegacyProfilePayload(userId, accountData as Partial<User>) : null),
+    exists: !!accountData,
+  };
 }
 
 async function sendSignupConfirmationEmail({
@@ -515,20 +447,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       });
 
-      batch.set(doc(db, 'users', nextUser.id), stripUndefinedFields({
-        uid: nextUser.id,
-        email: nextUser.email,
-        name: nextUser.name,
-        role: nextUser.role,
-        phone: nextUser.phone || submission.phone,
-        street: nextUser.street || submission.location.street,
-        town: nextUser.town || submission.location.town,
-        zip: nextUser.zip || submission.location.zip,
-        avatar: nextUser.avatar,
-        updatedAt: new Date().toISOString(),
-      }), { merge: true });
-
       await batch.commit();
+      try {
+        await authorizedApiFetch('/api/update-user-profile', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: nextUser.name,
+            phone: nextUser.phone || submission.phone,
+            street: nextUser.street || submission.location.street,
+            town: nextUser.town || submission.location.town,
+            zip: nextUser.zip || submission.location.zip,
+            avatar: nextUser.avatar,
+            notifyOnRoughEstimates: nextUser.notifyOnRoughEstimates ?? true,
+            notifyOnProductUpdates: nextUser.notifyOnProductUpdates ?? false,
+          }),
+        });
+      } catch (profileSyncError) {
+        console.error('Failed to sync claimed homeowner profile fields:', profileSyncError);
+      }
     }
 
     const remainingSubmissions = pendingSubmissions.filter(
@@ -553,41 +489,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       try {
         if (firebaseUser) {
-          const userDoc = await getUserDocWithRetry(firebaseUser.uid);
-          if (userDoc) {
-            const data = userDoc.data();
+          const { accountData, profileData, exists } = await getMergedUserDoc(firebaseUser.uid, firebaseUser);
+          if (exists && accountData) {
             const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
-            const role = isAdminEmail ? 'admin' : (data.role as UserRole);
+            const mergedAccountData = isAdminEmail
+              ? { ...accountData, role: 'admin' as const }
+              : accountData;
 
-            const userData: User = {
-              id: firebaseUser.uid,
-              name: data.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            const userData = mergeUserDocuments({
+              userId: firebaseUser.uid,
               email: firebaseUser.email || '',
-              role: role,
-              phone: data.phone,
-              street: data.street,
-              town: data.town,
-              zip: data.zip,
-              governmentIdImage: data.governmentIdImage,
-              avatar: data.avatar || firebaseUser.photoURL || getInitialsAvatar(data.name || firebaseUser.displayName || 'User'),
-              rating: role === 'Contractor' ? 4.9 : undefined,
-              isVerified: data.isVerified ?? false,
-              licenseNumber: data.licenseNumber,
-              licenseStatus: data.licenseStatus,
-              isTradesman: data.isTradesman,
-              trade: data.trade,
-              leadCategories: data.leadCategories,
-              accountPlan: data.accountPlan,
-              trialStartedAt: data.trialStartedAt,
-              trialEndsAt: data.trialEndsAt,
-              subscriptionLevel: data.subscriptionLevel || getDerivedSubscriptionLevel(role, data.createdAt),
-              notifyOnNewProjects: data.notifyOnNewProjects ?? (role === 'Contractor'),
-              notifyOnRoughEstimates: data.notifyOnRoughEstimates ?? (role === 'Homeowner'),
-              notifyOnProductUpdates: data.notifyOnProductUpdates ?? false,
-              notifyOnSmsLeadAlerts: data.notifyOnSmsLeadAlerts ?? false,
-              smsConsentAt: data.smsConsentAt,
-              ...getDerivedTrialFields(role, data.createdAt),
-            };
+              authDisplayName: firebaseUser.displayName,
+              authPhotoURL: firebaseUser.photoURL,
+              account: mergedAccountData,
+              profile: profileData,
+            });
             setUser(userData);
             localStorage.setItem('blueprint_user', JSON.stringify(userData));
             saveAuthRoleHint(userData.email, userData.role);
@@ -688,7 +604,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               cachedUser?.id === firebaseUser.uid
                 ? (cachedUser.notifyOnRoughEstimates ?? (((cachedUser.role || fallbackRole) === 'Homeowner')))
                 : fallbackRole === 'Homeowner',
-            notifyOnProductUpdates: cachedUser?.id === firebaseUser.uid ? (cachedUser.notifyOnProductUpdates ?? false) : false,
+            notifyOnProductUpdates: cachedUser?.id === firebaseUser.uid ? (cachedUser.notifyOnProductUpdates ?? (fallbackRole === 'Contractor')) : fallbackRole === 'Contractor',
             notifyOnSmsLeadAlerts: cachedUser?.id === firebaseUser.uid ? (cachedUser.notifyOnSmsLeadAlerts ?? false) : false,
             smsConsentAt: cachedUser?.id === firebaseUser.uid ? cachedUser.smsConsentAt : undefined,
             accountPlan:
@@ -766,7 +682,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const firebaseUser = userCredential.user;
       
       // Check if user doc exists, if not create it with a default role
-      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      const userDoc = await getDoc(doc(db, USERS_COLLECTION, firebaseUser.uid));
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
         const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
@@ -778,6 +694,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
         isVerified: false,
         subscriptionLevel: getDerivedSubscriptionLevel(role),
+        notifyOnProductUpdates: role === 'Contractor',
         notifyOnSmsLeadAlerts: false,
         leadCategories: [],
         accountPlan: getDerivedTrialFields(role).accountPlan,
@@ -796,7 +713,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionLevel: getDerivedSubscriptionLevel(role),
         notifyOnNewProjects: role === 'Contractor',
         notifyOnRoughEstimates: role === 'Homeowner',
-        notifyOnProductUpdates: false,
+        notifyOnProductUpdates: role === 'Contractor',
         notifyOnSmsLeadAlerts: false,
         leadCategories: [],
         ...getDerivedTrialFields(role),
@@ -942,7 +859,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Signup error:', error);
       if (error instanceof Error && error.message.includes('permission-denied')) {
-        handleFirestoreError(error, OperationType.WRITE, `users/${auth.currentUser?.uid}`);
+        handleFirestoreError(error, OperationType.WRITE, `${USERS_COLLECTION}/${auth.currentUser?.uid}`);
       }
       throw error;
     }
@@ -955,7 +872,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: data.avatar,
         governmentIdImage: data.governmentIdImage,
       });
-      const updatedUser = { ...user, ...data, ...resolvedMedia };
+      const updatedUser = {
+        ...user,
+        ...data,
+        ...resolvedMedia,
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      };
       const nextSmsOptIn =
         typeof data.notifyOnSmsLeadAlerts === 'boolean'
           ? data.notifyOnSmsLeadAlerts
@@ -963,24 +887,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedUser.smsConsentAt = nextSmsOptIn
         ? updatedUser.smsConsentAt || new Date().toISOString()
         : undefined;
-      const { id: _ignoredId, ...firestoreUserData } = updatedUser;
       
       // If name changed but no avatar provided, update initials avatar if it was using initials
       if (data.name && !data.avatar && user.avatar?.startsWith('data:image/svg+xml')) {
         updatedUser.avatar = getInitialsAvatar(data.name);
-        firestoreUserData.avatar = updatedUser.avatar;
       }
 
-      await setDoc(doc(db, 'users', user.id), stripUndefinedFields({
-        ...firestoreUserData,
-        uid: user.id, // Ensure uid is present
-        updatedAt: new Date().toISOString()
-      }), { merge: true });
+      const response = await authorizedApiFetch('/api/update-user-profile', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: updatedUser.name,
+          phone: updatedUser.phone,
+          street: updatedUser.street,
+          town: updatedUser.town,
+          zip: updatedUser.zip,
+          governmentIdImage: updatedUser.governmentIdImage,
+          avatar: updatedUser.avatar,
+          licenseNumber: updatedUser.licenseNumber,
+          isTradesman: updatedUser.isTradesman,
+          trade: updatedUser.trade,
+          leadCategories: updatedUser.leadCategories,
+          notifyOnNewProjects: updatedUser.notifyOnNewProjects,
+          notifyOnRoughEstimates: updatedUser.notifyOnRoughEstimates,
+          notifyOnProductUpdates: updatedUser.notifyOnProductUpdates,
+          notifyOnSmsLeadAlerts: updatedUser.notifyOnSmsLeadAlerts,
+          smsConsentAt: updatedUser.smsConsentAt,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update profile');
+      }
 
       setUser(updatedUser);
       localStorage.setItem('blueprint_user', JSON.stringify(updatedUser));
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${user.id}`);
+      handleFirestoreError(error, OperationType.UPDATE, `${USER_PROFILES_COLLECTION}/${user.id}`);
     }
   };
 

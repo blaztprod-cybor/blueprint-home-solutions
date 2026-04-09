@@ -16,6 +16,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, getDocs, limit, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { USER_PROFILES_COLLECTION, USERS_COLLECTION } from '../lib/userDocuments';
 import { LeadInquiry, Project, Estimate } from '../types';
 import { cn } from '../lib/utils';
 import { Toaster, toast } from 'sonner';
@@ -285,10 +286,14 @@ export default function HomeownerDashboard() {
     setAcceptingEstimateKey(estimateKey);
 
     try {
-      const contractorSnapshot = await getDoc(doc(db, 'users', estimate.contractorId));
+      const [contractorSnapshot, contractorProfileSnapshot] = await Promise.all([
+        getDoc(doc(db, USERS_COLLECTION, estimate.contractorId)),
+        getDoc(doc(db, USER_PROFILES_COLLECTION, estimate.contractorId)),
+      ]);
       const contractorData = contractorSnapshot.exists() ? contractorSnapshot.data() : null;
+      const contractorProfile = contractorProfileSnapshot.exists() ? contractorProfileSnapshot.data() : null;
       const contractorEmail = typeof contractorData?.email === 'string' ? contractorData.email : '';
-      const contractorName = (contractorData?.name as string | undefined) || estimate.contractorName;
+      const contractorName = contractorProfile?.name || estimate.contractorName;
 
       const nextStatus = estimateType === 'final' ? 'In Contract' : 'Final Estimates';
       const updatePayload: Partial<Project> & { updatedAt: string } = {

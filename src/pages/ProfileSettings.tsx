@@ -247,6 +247,7 @@ export default function ProfileSettings() {
         </div>
 
         <div className="flex-1 space-y-8">
+          {activeTab === 'profile' && (
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
             {error && (
               <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold flex items-center gap-2">
@@ -352,16 +353,16 @@ export default function ProfileSettings() {
               {user.role === 'Contractor' && (
                 <div className="md:col-span-2 space-y-6 pt-4 border-t border-slate-100">
                   <div className="space-y-4">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email Alerts</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Communication Preferences</p>
                     <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                       <input
                         type="checkbox"
-                        checked={formData.notifyOnNewProjects}
-                        onChange={(e) => setFormData({ ...formData, notifyOnNewProjects: e.target.checked })}
+                        checked={formData.notifyOnProductUpdates}
+                        onChange={(e) => setFormData({ ...formData, notifyOnProductUpdates: e.target.checked })}
                         className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
                       />
                       <span className="text-sm font-bold text-slate-600">
-                        Email me whenever a new homeowner project is submitted
+                        Opt in to email updates from Blueprint Home Solutions
                       </span>
                     </label>
                     <label className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -372,10 +373,22 @@ export default function ProfileSettings() {
                         className="mt-0.5 w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
                       />
                       <span className="text-sm font-bold text-slate-600">
-                        Text me when Blueprint has a new lead or important contractor update
+                        Opt in to text messages from Blueprint Home Solutions
                         <span className="mt-1 block text-xs font-medium text-slate-400">
                           Uses your saved phone number and requires SMS consent.
                         </span>
+                      </span>
+                    </label>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">Lead Alerts</p>
+                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={formData.notifyOnNewProjects}
+                        onChange={(e) => setFormData({ ...formData, notifyOnNewProjects: e.target.checked })}
+                        className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
+                      />
+                      <span className="text-sm font-bold text-slate-600">
+                        Email me whenever a new homeowner project is submitted
                       </span>
                     </label>
                     <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
@@ -402,17 +415,6 @@ export default function ProfileSettings() {
                         ))}
                       </div>
                     </div>
-                    <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <input
-                        type="checkbox"
-                        checked={formData.notifyOnProductUpdates}
-                        onChange={(e) => setFormData({ ...formData, notifyOnProductUpdates: e.target.checked })}
-                        className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all"
-                      />
-                      <span className="text-sm font-bold text-slate-600">
-                        Email me product updates, feature announcements, and Blueprint news
-                      </span>
-                    </label>
                   </div>
 
                   <div className="space-y-2">
@@ -544,6 +546,44 @@ export default function ProfileSettings() {
               </button>
             </div>
           </div>
+          )}
+
+          {activeTab === 'billing' && user.role === 'Contractor' && (
+            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">Billing & Plans</h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  Review your current Home Pro access level and trial status.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Subscription Level</p>
+                  <p className="mt-2 text-xl font-black text-slate-900">{(user.subscriptionLevel || 'none').toUpperCase()}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Account Plan</p>
+                  <p className="mt-2 text-xl font-black text-slate-900">{(user.accountPlan || 'standard').toUpperCase()}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Trial Ends</p>
+                  <p className="mt-2 text-xl font-black text-slate-900">
+                    {user.trialEndsAt ? new Date(user.trialEndsAt).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                <p className="text-sm font-bold text-blue-900">
+                  Billing management is display-only right now.
+                </p>
+                <p className="mt-2 text-sm font-medium leading-6 text-blue-800">
+                  Admin can update plan status from the dashboard while Stripe or direct billing workflows are still being finalized.
+                </p>
+              </div>
+            </div>
+          )}
 
         </div>
       </div>

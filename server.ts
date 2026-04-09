@@ -1,12 +1,22 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
+import fs from "node:fs";
 import path from "path";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
+import {
+  buildUserAccountPayload,
+  buildUserProfilePayload,
+  getVerifiedRequestUser,
+  RECOVERY_SEED_USERS,
+  USER_PROFILES_COLLECTION,
+  USERS_COLLECTION,
+} from "./netlify/functions/_user-records.js";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -22,6 +32,37 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
 const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+function getAdminAppInstance() {
+  if (getApps().length > 0) {
+    return getApps()[0];
+  }
+
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "blueprint-home-solutions";
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (credentialsPath && fs.existsSync(credentialsPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
+    return initializeApp({
+      credential: cert(serviceAccount),
+      projectId,
+    });
+  }
+
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+  return initializeApp(
+    clientEmail && privateKey
+      ? {
+          credential: cert({ projectId, clientEmail, privateKey }),
+          projectId,
+        }
+      : {
+          credential: applicationDefault(),
+          projectId,
+        }
+  );
+}
 
 function toAddressList(value: nodemailer.SendMailOptions["to"]) {
   if (!value) return [];
@@ -58,17 +99,54 @@ function buildProjectAlertSms({
     `Category: ${category || "General"}.`,
     `Area: ${town || "Local service area"}.`,
     `Start: ${startDate || "Not specified"}.`,
-    "Log in to your Home Pro portal to review it.",
+    "Open your Home Pro portal for details.",
   ].join(" ");
 }
 
-function matchesLeadCategory(user: { leadCategories?: string[] }, category?: string) {
-  if (!category) return true;
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function buildInboundSmsAutoReply() {
+  return [
+    "Blueprint Home Solutions does not monitor this number for live replies.",
+    "Please log in to your Home Pro portal or email info@blueprinthomesolutions.com.",
+    "Reply STOP to opt out.",
+  ].join(" ");
+}
+
+function matchesLeadCategory(user: { leadCategories?: string[] }, category?: string, categoryLabel?: string) {
+  if (!category && !categoryLabel) return true;
   if (!Array.isArray(user.leadCategories) || user.leadCategories.length === 0) {
     return true;
   }
 
-  return user.leadCategories.includes(category);
+  return user.leadCategories.includes(category || "") || user.leadCategories.includes(categoryLabel || "");
+}
+
+async function mergeAdminUserSnapshots(
+  accountDocs: Array<{ id: string; data: () => any }>,
+  db: FirebaseFirestore.Firestore
+) {
+  const profileSnapshots = await Promise.all(
+    accountDocs.map((entry) => db.collection("user_profiles").doc(entry.id).get())
+  );
+  const profileMap = new Map(
+    profileSnapshots
+      .filter((entry) => entry.exists)
+      .map((entry) => [entry.id, entry.data() || {}])
+  );
+
+  return accountDocs.map((entry) => ({
+    id: entry.id,
+    ...entry.data(),
+    ...(profileMap.get(entry.id) || {}),
+  }));
 }
 
 function getSmtpSecureSetting() {
@@ -142,6 +220,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: false }));
 
   const createTransporter = () =>
     nodemailer.createTransport({
@@ -161,23 +240,15 @@ async function startServer() {
         ? String(process.env.SMTP_USER).trim()
         : SMTP_FROM_EMAIL);
   const getAdminDb = () => {
-    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "blueprint-home-solutions";
-    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-    const app = getApps()[0] || initializeApp(
-      clientEmail && privateKey
-        ? {
-            credential: cert({ projectId, clientEmail, privateKey }),
-            projectId,
-          }
-        : {
-            credential: applicationDefault(),
-            projectId,
-          }
-    );
-
+    const app = getAdminAppInstance();
     return getAdminFirestore(app, process.env.FIREBASE_FIRESTORE_DATABASE_ID || "blueprinthomesolutionsdata");
+  };
+  const getVerifiedServerUser = async (req: express.Request) => {
+    return getVerifiedRequestUser({
+      authorizationHeader: req.headers.authorization,
+      adminAuth: getAdminAuth(getAdminAppInstance()),
+      adminDb: getAdminDb(),
+    });
   };
   const sendMail = async (options: nodemailer.SendMailOptions) => {
     if (canUseResendApi()) {
@@ -213,6 +284,209 @@ async function startServer() {
     console.log(`[MOCK EMAIL SENT] ${options.subject} -> ${options.to}`);
     return { messageId: `mock-${Date.now()}` };
   };
+  app.post("/api/sync-auth-user", async (req, res) => {
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      const createdAt = req.body.createdAt || new Date().toISOString();
+      const updatedAt = new Date().toISOString();
+      const adminDb = getAdminDb();
+
+      await Promise.all([
+        adminDb.collection(USERS_COLLECTION).doc(requestUser.uid).set(
+        buildUserAccountPayload({
+          uid: requestUser.uid,
+          email: requestUser.email,
+          role: req.body.role,
+          createdAt,
+          updatedAt,
+          isDisabled: req.body.isDisabled,
+          isVerified: req.body.isVerified,
+          licenseStatus: req.body.licenseStatus,
+          subscriptionLevel: req.body.subscriptionLevel,
+          accountPlan: req.body.accountPlan,
+          trialStartedAt: req.body.trialStartedAt,
+          trialEndsAt: req.body.trialEndsAt,
+        }),
+        { merge: true }
+      ),
+        adminDb.collection(USER_PROFILES_COLLECTION).doc(requestUser.uid).set(
+          buildUserProfilePayload({
+            uid: requestUser.uid,
+            email: requestUser.email,
+            role: req.body.role,
+            name: req.body.name,
+            phone: req.body.phone,
+            street: req.body.street,
+            town: req.body.town,
+            zip: req.body.zip,
+            avatar: req.body.avatar,
+            governmentIdImage: req.body.governmentIdImage,
+            licenseNumber: req.body.licenseNumber,
+            isTradesman: req.body.isTradesman,
+            trade: req.body.trade,
+            leadCategories: req.body.leadCategories,
+            notifyOnNewProjects: req.body.notifyOnNewProjects,
+            notifyOnRoughEstimates: req.body.notifyOnRoughEstimates,
+            notifyOnProductUpdates: req.body.notifyOnProductUpdates,
+            notifyOnSmsLeadAlerts: req.body.notifyOnSmsLeadAlerts,
+            smsConsentAt: req.body.smsConsentAt,
+            updatedAt,
+          }),
+          { merge: true }
+        ),
+      ]);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error syncing auth user:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to sync user" });
+    }
+  });
+
+  app.post("/api/update-user-profile", async (req, res) => {
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      const updatedAt = new Date().toISOString();
+      const adminDb = getAdminDb();
+      await adminDb.collection(USER_PROFILES_COLLECTION).doc(requestUser.uid).set(
+        buildUserProfilePayload({
+          uid: requestUser.uid,
+          email: requestUser.email,
+          name: req.body.name,
+          phone: req.body.phone,
+          street: req.body.street,
+          town: req.body.town,
+          zip: req.body.zip,
+          avatar: req.body.avatar,
+          governmentIdImage: req.body.governmentIdImage,
+          licenseNumber: req.body.licenseNumber,
+          isTradesman: req.body.isTradesman,
+          trade: req.body.trade,
+          leadCategories: req.body.leadCategories,
+          notifyOnNewProjects: req.body.notifyOnNewProjects,
+          notifyOnRoughEstimates: req.body.notifyOnRoughEstimates,
+          notifyOnProductUpdates: req.body.notifyOnProductUpdates,
+          notifyOnSmsLeadAlerts: req.body.notifyOnSmsLeadAlerts,
+          smsConsentAt: req.body.smsConsentAt,
+          updatedAt,
+        }),
+        { merge: true }
+      );
+      res.json({ success: true, updatedAt });
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update profile" });
+    }
+  });
+
+  app.post("/api/admin-update-user", async (req, res) => {
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const {
+        userId,
+        email,
+        role,
+        createdAt,
+        isDisabled,
+        isVerified,
+        licenseStatus,
+        subscriptionLevel,
+        accountPlan,
+        trialStartedAt,
+        trialEndsAt,
+      } = req.body;
+      if (!userId || !email || !role) {
+        return res.status(400).json({ error: "userId, email, and role are required" });
+      }
+      const adminDb = getAdminDb();
+      const existingSnapshot = await adminDb.collection(USERS_COLLECTION).doc(userId).get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() : {};
+      await adminDb.collection(USERS_COLLECTION).doc(userId).set(
+        buildUserAccountPayload({
+          uid: userId,
+          email,
+          role,
+          createdAt: createdAt || existing.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isDisabled: isDisabled ?? existing.isDisabled ?? false,
+          isVerified: isVerified ?? existing.isVerified ?? false,
+          licenseStatus: licenseStatus ?? existing.licenseStatus,
+          subscriptionLevel: subscriptionLevel ?? existing.subscriptionLevel,
+          accountPlan: accountPlan ?? existing.accountPlan,
+          trialStartedAt: trialStartedAt ?? existing.trialStartedAt,
+          trialEndsAt: trialEndsAt ?? existing.trialEndsAt,
+        }),
+        { merge: true }
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating admin user:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update user" });
+    }
+  });
+
+  app.post("/api/admin-delete-user-docs", async (req, res) => {
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      const adminDb = getAdminDb();
+      await Promise.all([
+        adminDb.collection(USERS_COLLECTION).doc(userId).delete(),
+        adminDb.collection(USER_PROFILES_COLLECTION).doc(userId).delete(),
+      ]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting user docs:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to delete user docs" });
+    }
+  });
+
+  app.post("/api/admin-recover-seed-users", async (req, res) => {
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const adminDb = getAdminDb();
+      const batch = adminDb.batch();
+      const updatedAt = new Date().toISOString();
+      for (const seedUser of RECOVERY_SEED_USERS) {
+        batch.set(
+          adminDb.collection(USERS_COLLECTION).doc(seedUser.uid),
+          buildUserAccountPayload({
+            uid: seedUser.uid,
+            email: seedUser.email,
+            createdAt: seedUser.createdAt,
+            updatedAt,
+          }),
+          { merge: true }
+        );
+        batch.set(
+          adminDb.collection(USER_PROFILES_COLLECTION).doc(seedUser.uid),
+          buildUserProfilePayload({
+            uid: seedUser.uid,
+            email: seedUser.email,
+            updatedAt,
+          }),
+          { merge: true }
+        );
+      }
+      await batch.commit();
+      res.json({ success: true, recovered: RECOVERY_SEED_USERS.length });
+    } catch (error) {
+      console.error("Error recovering seed users:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to recover seed users" });
+    }
+  });
   const renderIntroEmail = ({
     heading,
     greeting,
@@ -451,8 +725,6 @@ async function startServer() {
     }
 
     try {
-      const transporter = createTransporter();
-
       const photoHtml = (photos || []).map((photo: string, index: number) => 
         `<img src="${photo}" alt="Project Photo ${index + 1}" style="width: 150px; height: 150px; object-fit: cover; margin: 5px; border-radius: 8px;" />`
       ).join('');
@@ -501,13 +773,8 @@ async function startServer() {
         `,
       };
 
-      if (process.env.SMTP_USER && process.env.SMTP_USER !== "mock_user") {
-        await transporter.sendMail(mailOptions);
-        console.log(`[SUCCESS] Email sent to ${email}`);
-      } else {
-        console.log(`[MOCK EMAIL SENT to ${email}]: Project ${projectTitle}`);
-        console.log(`[NOTICE] To send real emails, configure SMTP_USER and SMTP_PASS in AI Studio Secrets.`);
-      }
+      const info = await sendMail(mailOptions);
+      console.log(`[SUCCESS] Email sent to ${email}`, { messageId: info?.messageId });
       
       res.json({ success: true, message: "Email processed" });
     } catch (error) {
@@ -518,6 +785,15 @@ async function startServer() {
 
   app.post("/api/send-contractor-sms-notification", async (req, res) => {
     const { contractorPhone, message, eventType } = req.body;
+
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: error instanceof Error ? error.message : "Unauthorized" });
+    }
 
     if (!contractorPhone) {
       return res.status(400).json({ error: "Contractor phone number is required" });
@@ -546,6 +822,23 @@ async function startServer() {
         eventType: eventType || "contractor_update",
       });
     }
+  });
+
+  app.post("/api/twilio-inbound-sms", (req, res) => {
+    const from = typeof req.body?.From === "string" ? req.body.From : "";
+    const body = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";
+    const replyBody = buildInboundSmsAutoReply();
+
+    console.log("[SMS][INBOUND]", {
+      from,
+      body,
+      autoReply: replyBody,
+    });
+
+    res
+      .status(200)
+      .type("text/xml")
+      .send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyBody)}</Message></Response>`);
   });
 
   app.get("/api/recent-project-posts", async (_req, res) => {
@@ -743,34 +1036,74 @@ async function startServer() {
   });
 
   app.post("/api/send-broadcast-update", async (req, res) => {
-    const { audience = "all", subject, message, sentBy } = req.body;
+    const {
+      audience = "all",
+      audienceSegments: rawAudienceSegments,
+      recipients: providedRecipients,
+      subject,
+      message,
+      sentBy,
+    } = req.body;
+
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: error instanceof Error ? error.message : "Unauthorized" });
+    }
 
     if (!subject || !message) {
       return res.status(400).json({ error: "Subject and message are required" });
     }
 
-    const audienceLabel =
-      audience === "contractors"
-        ? "Home Pros"
-        : audience === "homeowners"
-          ? "Homeowners"
-          : "Blueprint Members";
+    const audienceSegments =
+      Array.isArray(rawAudienceSegments) && rawAudienceSegments.length > 0
+        ? rawAudienceSegments
+        : [audience || "all"];
+    const audienceLabel = audienceSegments.includes("all")
+      ? "Blueprint Members"
+      : audienceSegments.join(", ");
 
     try {
-      const snapshot = await getAdminDb()
-        .collection("users")
-        .where("notifyOnProductUpdates", "==", true)
-        .get();
+      const adminDb = getAdminDb();
+      const recipients = Array.isArray(providedRecipients) && providedRecipients.length > 0
+        ? providedRecipients.filter((entry: any) => !!entry?.email && typeof entry.email === "string")
+        : (await mergeAdminUserSnapshots(
+            (await adminDb
+            .collection("users")
+            .get())
+            .docs,
+            adminDb
+          ))
+            .filter((entry: any) => {
+              if (!entry.email || typeof entry.email !== "string") return false;
+              if (entry.isDisabled) return false;
+              if (entry.notifyOnProductUpdates !== true) return false;
+              if (audienceSegments.includes("all")) {
+                return entry.role === "Contractor" || entry.role === "Homeowner";
+              }
 
-      const recipients = snapshot.docs
-        .map((doc) => doc.data())
-        .filter((entry: any) => {
-          if (!entry.email || typeof entry.email !== "string") return false;
-          if (entry.isDisabled) return false;
-          if (audience === "contractors") return entry.role === "Contractor";
-          if (audience === "homeowners") return entry.role === "Homeowner";
-          return entry.role === "Contractor" || entry.role === "Homeowner";
-        });
+              return audienceSegments.some((segment: string) => {
+                switch (segment) {
+                  case "contractors":
+                    return entry.role === "Contractor";
+                  case "homeowners":
+                    return entry.role === "Homeowner";
+                  case "verified":
+                    return !!entry.isVerified;
+                  case "unverified":
+                    return !entry.isVerified;
+                  case "licensed":
+                    return entry.role === "Contractor" && typeof entry.licenseNumber === "string" && entry.licenseNumber.trim().length > 0;
+                  case "unlicensed":
+                    return entry.role === "Contractor" && (!entry.licenseNumber || String(entry.licenseNumber).trim().length === 0);
+                  default:
+                    return false;
+                }
+              });
+            });
 
       const results = await Promise.allSettled(
         recipients.map((recipient: any) =>
@@ -780,7 +1113,7 @@ async function startServer() {
               eventType: "broadcast_update",
               recipient: recipient.email,
               metadata: {
-                audience,
+                audienceSegments,
                 recipientRole: recipient.role,
                 sentBy,
               },
@@ -811,7 +1144,7 @@ async function startServer() {
 
       res.json({
         success: true,
-        audience,
+        audienceSegments,
         recipients: recipients.length,
         sent,
         failed,
@@ -819,6 +1152,77 @@ async function startServer() {
     } catch (error) {
       console.error("Error sending broadcast update:", error);
       res.status(500).json({ error: "Failed to send broadcast update" });
+    }
+  });
+
+  app.post("/api/send-broadcast-sms", async (req, res) => {
+    const {
+      message,
+      recipients: providedRecipients,
+      sentBy,
+    } = req.body;
+
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: error instanceof Error ? error.message : "Unauthorized" });
+    }
+
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({ error: "SMS message is required" });
+    }
+
+    try {
+      const adminDb = getAdminDb();
+      const recipients = Array.isArray(providedRecipients) && providedRecipients.length > 0
+        ? providedRecipients.filter((entry: any) =>
+            typeof entry?.phone === "string" &&
+            entry.phone.trim().length > 0 &&
+            entry.role === "Contractor"
+          )
+        : (await mergeAdminUserSnapshots(
+            (await adminDb.collection("users").get()).docs,
+            adminDb
+          )).filter((entry: any) =>
+            entry.role === "Contractor" &&
+            !entry.isDisabled &&
+            entry.notifyOnSmsLeadAlerts === true &&
+            !!entry.smsConsentAt &&
+            typeof entry.phone === "string" &&
+            entry.phone.trim().length > 0
+          );
+
+      const results = await Promise.allSettled(
+        recipients.map((recipient: any) =>
+          sendSms({
+            to: recipient.phone,
+            body: message,
+          })
+        )
+      );
+
+      const sent = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - sent;
+
+      console.log("[SMS][BROADCAST]", {
+        sentBy: sentBy || "Blueprint Admin",
+        recipients: recipients.length,
+        sent,
+        failed,
+      });
+
+      res.json({
+        success: true,
+        recipients: recipients.length,
+        sent,
+        failed,
+      });
+    } catch (error) {
+      console.error("Error sending broadcast SMS:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to send broadcast SMS" });
     }
   });
 
@@ -1148,31 +1552,40 @@ async function startServer() {
   });
 
   app.post("/api/send-new-project-alerts", async (req, res) => {
-    const { projectTitle, category, town, startDate, description } = req.body;
+    const { projectTitle, categoryId, category, town, startDate, description } = req.body;
 
     try {
       const db = getAdminDb();
       const snapshot = await db.collection("users")
         .where("role", "==", "Contractor")
-        .where("notifyOnNewProjects", "==", true)
         .where("subscriptionLevel", "in", ["trial", "beginner", "junior", "pro"])
         .get();
+      const mergedUsers = await mergeAdminUserSnapshots(snapshot.docs, db);
 
-      const recipients = snapshot.docs
-        .map((entry) => entry.data())
+      const recipients = mergedUsers
         .filter((user) => typeof user.email === "string" && user.email.length > 0)
-        .filter((user: any) => matchesLeadCategory(user, category));
+        .filter((user: any) => user.notifyOnNewProjects === true)
+        .filter((user: any) => matchesLeadCategory(user, categoryId, category));
 
-      const smsRecipients = snapshot.docs
-        .map((entry) => entry.data())
+      const smsRecipients = mergedUsers
         .filter(
           (user: any) =>
-            matchesLeadCategory(user, category) &&
+            user.notifyOnNewProjects === true &&
+            matchesLeadCategory(user, categoryId, category) &&
             user.notifyOnSmsLeadAlerts === true &&
             user.smsConsentAt &&
             typeof user.phone === "string" &&
             user.phone.trim().length > 0
         );
+
+      console.log("[ALERTS][NEW_PROJECT]", {
+        projectTitle,
+        categoryId,
+        category,
+        contractorPool: mergedUsers.length,
+        emailRecipients: recipients.map((entry: any) => entry.email),
+        smsRecipients: smsRecipients.map((entry: any) => entry.phone),
+      });
 
       await Promise.all(
         recipients.map((recipient) =>

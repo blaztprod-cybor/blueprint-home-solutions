@@ -8,6 +8,7 @@ export default function ThankYou() {
   const hasProject = Boolean(location.state?.projectId);
   const pendingLeadId = location.state?.pendingLeadId as string | undefined;
   const photoUploadIssue = Boolean(location.state?.photoUploadIssue);
+  const photoUploadError = typeof location.state?.photoUploadError === 'string' ? location.state.photoUploadError : '';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -31,6 +32,11 @@ export default function ThankYou() {
               <p className="mt-2 text-sm font-medium leading-6 text-amber-900">
                 Your request was submitted, but the photo upload failed. Please try uploading the photos again from your project.
               </p>
+              {photoUploadError && (
+                <p className="mt-2 text-xs font-semibold leading-5 text-amber-800">
+                  {photoUploadError}
+                </p>
+              )}
             </div>
           )}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">

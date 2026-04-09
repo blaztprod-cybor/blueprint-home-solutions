@@ -195,6 +195,45 @@ export interface LeadInquiryHistory {
 
 export type UserRole = 'Homeowner' | 'Contractor' | 'admin';
 
+export interface UserAccount {
+  id: string;
+  uid: string;
+  email: string;
+  role: UserRole;
+  createdAt?: string;
+  updatedAt?: string;
+  rating?: number;
+  isVerified?: boolean;
+  isDisabled?: boolean;
+  licenseStatus?: 'Active' | 'Pending' | 'Expired' | 'Invalid';
+  accountPlan?: 'trial' | 'standard';
+  trialStartedAt?: string;
+  trialEndsAt?: string;
+  subscriptionLevel?: 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
+}
+
+export interface UserProfile {
+  id: string;
+  uid: string;
+  name?: string;
+  phone?: string;
+  street?: string;
+  town?: string;
+  zip?: string;
+  avatar?: string;
+  governmentIdImage?: string;
+  licenseNumber?: string;
+  isTradesman?: boolean;
+  trade?: string;
+  notifyOnNewProjects?: boolean;
+  notifyOnRoughEstimates?: boolean;
+  notifyOnProductUpdates?: boolean;
+  notifyOnSmsLeadAlerts?: boolean;
+  smsConsentAt?: string;
+  leadCategories?: string[];
+  updatedAt?: string;
+}
+
 export interface User {
   id: string;
   name: string;

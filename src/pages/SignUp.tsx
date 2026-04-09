@@ -29,7 +29,7 @@ export default function SignUp() {
   const [isTradesman, setIsTradesman] = useState(false);
   const [trade, setTrade] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>(undefined);
-  const [notifyOnProductUpdates, setNotifyOnProductUpdates] = useState(false);
+  const [notifyOnProductUpdates, setNotifyOnProductUpdates] = useState(true);
   const [notifyOnSmsLeadAlerts, setNotifyOnSmsLeadAlerts] = useState(false);
   const [leadCategories, setLeadCategories] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);

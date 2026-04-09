@@ -17,6 +17,7 @@ import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, addDoc, getDocs } from 'firebase/firestore';
 import { Project } from '../types';
+import { USER_PROFILES_COLLECTION, USERS_COLLECTION } from '../lib/userDocuments';
 
 interface Review {
   id: string;
@@ -74,10 +75,18 @@ export default function Reviews() {
 
     // Fetch potential targets for the "Add Review" demo
     const fetchTargets = async () => {
-      const usersRef = collection(db, 'users');
-      const snapshot = await getDocs(usersRef);
-      const targets = snapshot.docs
-        .map(doc => ({ id: doc.id, name: doc.data().name }))
+      const [usersSnapshot, profilesSnapshot] = await Promise.all([
+        getDocs(collection(db, USERS_COLLECTION)),
+        getDocs(collection(db, USER_PROFILES_COLLECTION)),
+      ]);
+      const profileMap = new Map(
+        profilesSnapshot.docs.map((doc) => [doc.id, doc.data()])
+      );
+      const targets = usersSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          name: profileMap.get(doc.id)?.name || doc.data().email || 'User',
+        }))
         .filter(t => t.id !== user.id);
       setPotentialTargets(targets);
     };

@@ -14,6 +14,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { USER_PROFILES_COLLECTION, USERS_COLLECTION } from '../lib/userDocuments';
 import { Project } from '../types';
 
 export default function Clients() {
@@ -49,11 +50,16 @@ export default function Clients() {
         const newDetails = { ...homeownerDetails };
         await Promise.all(uidsToFetch.map(async (uid) => {
           try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
+            const [userDoc, userProfileDoc] = await Promise.all([
+              getDoc(doc(db, USERS_COLLECTION, uid)),
+              getDoc(doc(db, USER_PROFILES_COLLECTION, uid)),
+            ]);
             if (userDoc.exists()) {
+              const userData = userDoc.data();
+              const userProfile = userProfileDoc.exists() ? userProfileDoc.data() : null;
               newDetails[uid] = { 
-                name: userDoc.data().name || 'Unknown Homeowner',
-                email: userDoc.data().email || ''
+                name: userProfile?.name || userData.email || 'Unknown Homeowner',
+                email: userData.email || ''
               };
             }
           } catch (err) {

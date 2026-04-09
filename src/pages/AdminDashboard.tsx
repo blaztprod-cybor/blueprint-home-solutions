@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Mail,
+  MessageSquare,
   Search,
   ShieldCheck,
   ShieldAlert,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../firebase';
+import { authorizedApiFetch } from '../lib/authorizedApi';
 import {
   collection,
   deleteDoc,
@@ -22,12 +24,16 @@ import {
   limit,
   orderBy,
   query,
-  setDoc,
   Timestamp,
   updateDoc,
 } from 'firebase/firestore';
 import { Project, User } from '../types';
 import { cn } from '../lib/utils';
+import {
+  mergeUserDocuments,
+  USER_PROFILES_COLLECTION,
+  USERS_COLLECTION,
+} from '../lib/userDocuments';
 
 type Review = {
   id: string;
@@ -64,9 +70,19 @@ type AdminFilter =
   | 'flagged';
 type SubscriptionLevel = 'none' | 'trial' | 'beginner' | 'junior' | 'pro';
 type UserSort = 'name' | 'newest' | 'oldest';
-type BroadcastAudience = 'all' | 'contractors' | 'homeowners';
+type BroadcastSegment = 'all' | 'homeowners' | 'contractors' | 'verified' | 'unverified' | 'licensed' | 'unlicensed';
 
 const SUBSCRIPTION_OPTIONS: SubscriptionLevel[] = ['none', 'trial', 'beginner', 'junior', 'pro'];
+const BROADCAST_SEGMENTS: BroadcastSegment[] = ['all', 'homeowners', 'contractors', 'verified', 'unverified', 'licensed', 'unlicensed'];
+const BROADCAST_SEGMENT_LABELS: Record<BroadcastSegment, string> = {
+  all: 'All',
+  homeowners: 'Homeowners',
+  contractors: 'Contractors',
+  verified: 'Verified',
+  unverified: 'Unverified',
+  licensed: 'Licensed',
+  unlicensed: 'Unlicensed',
+};
 
 function toIsoDateString(value: unknown) {
   if (!value) return undefined;
@@ -81,39 +97,6 @@ function toIsoDateString(value: unknown) {
     }
   }
   return undefined;
-}
-
-function buildUserWritePayload(user: AdminUser, overrides: Partial<AdminUser> = {}) {
-  const nextUser = { ...user, ...overrides };
-
-  return Object.fromEntries(
-    Object.entries({
-      uid: nextUser.id || nextUser.uid,
-      email: nextUser.email,
-      role: nextUser.role,
-      name: nextUser.name,
-      phone: nextUser.phone,
-      street: nextUser.street,
-      town: nextUser.town,
-      zip: nextUser.zip,
-      governmentIdImage: nextUser.governmentIdImage,
-      avatar: nextUser.avatar,
-      isVerified: nextUser.isVerified ?? false,
-      licenseNumber: nextUser.licenseNumber,
-      licenseStatus: nextUser.licenseStatus,
-      isTradesman: nextUser.isTradesman,
-      trade: nextUser.trade,
-      leadCategories: nextUser.leadCategories,
-      subscriptionLevel: nextUser.subscriptionLevel || 'none',
-      notifyOnNewProjects: nextUser.notifyOnNewProjects,
-      notifyOnRoughEstimates: nextUser.notifyOnRoughEstimates,
-      notifyOnProductUpdates: nextUser.notifyOnProductUpdates,
-      notifyOnSmsLeadAlerts: nextUser.notifyOnSmsLeadAlerts,
-      smsConsentAt: nextUser.smsConsentAt,
-      createdAt: toIsoDateString((nextUser as unknown as { createdAt?: unknown }).createdAt),
-      updatedAt: new Date().toISOString(),
-    }).filter(([, value]) => value !== undefined)
-  );
 }
 
 const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/g;
@@ -140,27 +123,63 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [userSort, setUserSort] = useState<UserSort>('name');
-  const [broadcastAudience, setBroadcastAudience] = useState<BroadcastAudience>('all');
+  const [broadcastSegments, setBroadcastSegments] = useState<BroadcastSegment[]>(['all']);
   const [broadcastSubject, setBroadcastSubject] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState('');
   const [broadcastError, setBroadcastError] = useState('');
+  const [smsMessage, setSmsMessage] = useState('');
+  const [isSendingSmsBroadcast, setIsSendingSmsBroadcast] = useState(false);
+  const [smsBroadcastResult, setSmsBroadcastResult] = useState('');
+  const [smsBroadcastError, setSmsBroadcastError] = useState('');
+  const [fetchError, setFetchError] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
+    setFetchError('');
     try {
-      const [usersSnapshot, projectsSnapshot, reviewsSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'users'))),
+      const [usersSnapshot, userProfilesSnapshot, projectsSnapshot, reviewsSnapshot] = await Promise.all([
+        getDocs(query(collection(db, USERS_COLLECTION))),
+        getDocs(query(collection(db, USER_PROFILES_COLLECTION))),
         getDocs(query(collection(db, 'projects'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'reviews'), orderBy('createdAt', 'desc'))),
       ]);
 
+      const profileMap = new Map(
+        userProfilesSnapshot.docs.map((entry) => [entry.id, entry.data()])
+      );
+
       const userDocs = usersSnapshot.docs.map((entry) => {
         const data = entry.data();
+        const profile = profileMap.get(entry.id);
+        const mergedUser = mergeUserDocuments({
+          userId: entry.id,
+          email: String(data.email || ''),
+          account: {
+            id: entry.id,
+            uid: entry.id,
+            ...data,
+            createdAt: toIsoDateString((data as { createdAt?: unknown }).createdAt),
+            updatedAt: toIsoDateString((data as { updatedAt?: unknown }).updatedAt),
+          },
+          profile: profile
+            ? {
+                id: entry.id,
+                uid: entry.id,
+                ...profile,
+              }
+            : {
+                id: entry.id,
+                uid: entry.id,
+                ...data,
+              },
+        });
+
         return {
           id: entry.id,
-          ...data,
+          ...mergedUser,
+          isDisabled: !!data.isDisabled,
           createdAt: toIsoDateString((data as { createdAt?: unknown }).createdAt),
         };
       }) as AdminUser[];
@@ -212,6 +231,7 @@ const AdminDashboard = () => {
       setReviews(reviewDocs);
     } catch (error) {
       console.error('Error fetching admin data:', error);
+      setFetchError(error instanceof Error ? error.message : 'Failed to load admin data.');
     } finally {
       setIsLoading(false);
     }
@@ -283,21 +303,87 @@ const AdminDashboard = () => {
     });
   }, [reviews, searchQuery, filter]);
 
-  const optedInAudienceCounts = useMemo(() => {
-    const optedInUsers = users.filter(
-      (entry) => entry.notifyOnProductUpdates === true && !!entry.email && !entry.isDisabled
-    );
+  const optedInUsers = useMemo(
+    () =>
+      users.filter((entry) => entry.notifyOnProductUpdates === true && !!entry.email && !entry.isDisabled),
+    [users]
+  );
 
-    return {
+  const broadcastSegmentCounts = useMemo(
+    () => ({
       all: optedInUsers.filter((entry) => entry.role === 'Contractor' || entry.role === 'Homeowner').length,
-      contractors: optedInUsers.filter((entry) => entry.role === 'Contractor').length,
       homeowners: optedInUsers.filter((entry) => entry.role === 'Homeowner').length,
-    };
-  }, [users]);
+      contractors: optedInUsers.filter((entry) => entry.role === 'Contractor').length,
+      verified: optedInUsers.filter((entry) => !!entry.isVerified).length,
+      unverified: optedInUsers.filter((entry) => !entry.isVerified).length,
+      licensed: optedInUsers.filter((entry) => entry.role === 'Contractor' && !!entry.licenseNumber?.trim()).length,
+      unlicensed: optedInUsers.filter((entry) => entry.role === 'Contractor' && !entry.licenseNumber?.trim()).length,
+    }),
+    [optedInUsers]
+  );
+
+  const selectedBroadcastRecipients = useMemo(() => {
+    const segments = broadcastSegments.includes('all') ? ['all'] : broadcastSegments;
+    return optedInUsers.filter((entry) => {
+      if (segments.includes('all')) {
+        return entry.role === 'Contractor' || entry.role === 'Homeowner';
+      }
+
+      return segments.some((segment) => {
+        switch (segment) {
+          case 'homeowners':
+            return entry.role === 'Homeowner';
+          case 'contractors':
+            return entry.role === 'Contractor';
+          case 'verified':
+            return !!entry.isVerified;
+          case 'unverified':
+            return !entry.isVerified;
+          case 'licensed':
+            return entry.role === 'Contractor' && !!entry.licenseNumber?.trim();
+          case 'unlicensed':
+            return entry.role === 'Contractor' && !entry.licenseNumber?.trim();
+          default:
+            return false;
+        }
+      });
+    });
+  }, [broadcastSegments, optedInUsers]);
+
+  const smsReadyContractors = useMemo(
+    () =>
+      users.filter(
+        (entry) =>
+          entry.role === 'Contractor' &&
+          !entry.isDisabled &&
+          entry.notifyOnSmsLeadAlerts === true &&
+          !!entry.smsConsentAt &&
+          !!entry.phone?.trim()
+      ),
+    [users]
+  );
+
+  const toggleBroadcastSegment = (segment: BroadcastSegment) => {
+    setBroadcastSegments((current) => {
+      if (segment === 'all') {
+        return current.includes('all') ? [] : ['all'];
+      }
+
+      const withoutAll = current.filter((entry) => entry !== 'all');
+      return withoutAll.includes(segment)
+        ? withoutAll.filter((entry) => entry !== segment)
+        : [...withoutAll, segment];
+    });
+  };
 
   const sendBroadcastUpdate = async () => {
     if (!broadcastSubject.trim() || !broadcastMessage.trim()) {
       setBroadcastError('Subject and message are required.');
+      return;
+    }
+
+    if (broadcastSegments.length === 0) {
+      setBroadcastError('Select at least one audience segment.');
       return;
     }
 
@@ -310,7 +396,14 @@ const AdminDashboard = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          audience: broadcastAudience,
+          audienceSegments: broadcastSegments,
+          recipients: selectedBroadcastRecipients.map((recipient) => ({
+            email: recipient.email,
+            name: recipient.name,
+            role: recipient.role,
+            isVerified: !!recipient.isVerified,
+            licenseNumber: recipient.licenseNumber || '',
+          })),
           subject: broadcastSubject.trim(),
           message: broadcastMessage.trim(),
           sentBy: 'Blueprint Admin',
@@ -323,13 +416,90 @@ const AdminDashboard = () => {
       }
 
       setBroadcastResult(
-        `Sent ${payload?.sent ?? 0} emails to opted-in ${broadcastAudience === 'all' ? 'users' : broadcastAudience}.`
+        `Sent ${payload?.sent ?? 0} emails to ${payload?.recipients ?? selectedBroadcastRecipients.length} selected opted-in recipients.`
       );
       setBroadcastMessage('');
     } catch (error) {
       setBroadcastError(error instanceof Error ? error.message : 'Failed to send broadcast update');
     } finally {
       setIsSendingBroadcast(false);
+    }
+  };
+
+  const sendSmsBroadcast = async () => {
+    if (!smsMessage.trim()) {
+      setSmsBroadcastError('SMS message is required.');
+      return;
+    }
+
+    if (smsReadyContractors.length === 0) {
+      setSmsBroadcastError('No SMS-ready contractors are available.');
+      return;
+    }
+
+    setIsSendingSmsBroadcast(true);
+    setSmsBroadcastError('');
+    setSmsBroadcastResult('');
+
+    try {
+      const response = await authorizedApiFetch('/api/send-broadcast-sms', {
+        method: 'POST',
+        body: JSON.stringify({
+          recipients: smsReadyContractors.map((recipient) => ({
+            phone: recipient.phone,
+            role: recipient.role,
+            name: recipient.name,
+          })),
+          message: smsMessage.trim(),
+          sentBy: 'Blueprint Admin',
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to send broadcast SMS');
+      }
+
+      setSmsBroadcastResult(
+        `Sent ${payload?.sent ?? 0} texts to ${payload?.recipients ?? smsReadyContractors.length} SMS-ready contractors.`
+      );
+      setSmsMessage('');
+    } catch (error) {
+      setSmsBroadcastError(error instanceof Error ? error.message : 'Failed to send broadcast SMS');
+    } finally {
+      setIsSendingSmsBroadcast(false);
+    }
+  };
+
+  const sendIndividualContractorText = async (user: AdminUser) => {
+    if (user.role !== 'Contractor') return;
+    if (!user.phone?.trim()) {
+      window.alert('This contractor does not have a saved phone number.');
+      return;
+    }
+
+    const message = window.prompt(`Send text to ${user.name || user.email || 'contractor'}:`, '');
+    if (!message || !message.trim()) return;
+
+    setUpdatingId(user.id);
+    try {
+      const response = await authorizedApiFetch('/api/send-contractor-sms-notification', {
+        method: 'POST',
+        body: JSON.stringify({
+          contractorPhone: user.phone.trim(),
+          message: message.trim(),
+          eventType: 'admin_direct_message',
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to send contractor text');
+      }
+      window.alert(`Text sent to ${user.name || user.email || user.phone}.`);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Failed to send contractor text');
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -340,13 +510,22 @@ const AdminDashboard = () => {
       if (!targetUser) return;
 
       const nextStatus = !currentStatus;
-      await setDoc(
-        doc(db, 'users', userId),
-        buildUserWritePayload(targetUser, {
+      const response = await authorizedApiFetch('/api/admin-update-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId,
+          email: targetUser.email,
+          role: targetUser.role,
+          createdAt: targetUser.createdAt,
           isVerified: nextStatus,
+          isDisabled: !!targetUser.isDisabled,
           licenseStatus: nextStatus ? 'Active' : 'Pending',
-        })
-      );
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update user');
+      }
       setUsers((current) =>
         current.map((user) =>
           user.id === userId
@@ -370,12 +549,22 @@ const AdminDashboard = () => {
 
     setUpdatingId(user.id);
     try {
-      await setDoc(
-        doc(db, 'users', user.id),
-        buildUserWritePayload(user, {
+      const response = await authorizedApiFetch('/api/admin-update-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt,
+          isVerified: !!user.isVerified,
           isDisabled: nextValue,
-        } as Partial<AdminUser>)
-      );
+          licenseStatus: user.licenseStatus,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update user');
+      }
       setUsers((current) =>
         current.map((entry) => (entry.id === user.id ? { ...entry, isDisabled: nextValue } : entry))
       );
@@ -389,12 +578,23 @@ const AdminDashboard = () => {
   const updateSubscriptionLevel = async (user: AdminUser, subscriptionLevel: SubscriptionLevel) => {
     setUpdatingId(user.id);
     try {
-      await setDoc(
-        doc(db, 'users', user.id),
-        buildUserWritePayload(user, {
+      const response = await authorizedApiFetch('/api/admin-update-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          createdAt: user.createdAt,
+          isVerified: !!user.isVerified,
+          isDisabled: !!user.isDisabled,
+          licenseStatus: user.licenseStatus,
           subscriptionLevel,
-        })
-      );
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update user');
+      }
       setUsers((current) =>
         current.map((entry) => (entry.id === user.id ? { ...entry, subscriptionLevel } : entry))
       );
@@ -413,7 +613,14 @@ const AdminDashboard = () => {
 
     setUpdatingId(user.id);
     try {
-      await deleteDoc(doc(db, 'users', user.id));
+      const response = await authorizedApiFetch('/api/admin-delete-user-docs', {
+        method: 'POST',
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to delete user docs');
+      }
       setUsers((current) => current.filter((entry) => entry.id !== user.id));
     } catch (error) {
       console.error('Error deleting user document:', error);
@@ -531,6 +738,15 @@ const AdminDashboard = () => {
           <p className="text-muted-foreground font-medium mt-1">
             Moderate users, projects, and reviews from one place.
           </p>
+          {fetchError && (
+            <div className="mt-4 space-y-2">
+              {fetchError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {fetchError}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
           {tabButton('users', 'Users')}
@@ -609,7 +825,7 @@ const AdminDashboard = () => {
       </div>
 
       {activeTab === 'users' && (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)_auto] md:items-start">
           <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-start gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
@@ -618,23 +834,34 @@ const AdminDashboard = () => {
               <div>
                 <h2 className="text-lg font-black tracking-tight text-slate-900">Broadcast Updates</h2>
                 <p className="mt-1 text-sm font-medium text-slate-500">
-                  Send one email to all opted-in contractors, homeowners, or both.
+                  Send one email to selected homeowners and contractors using checkbox filters.
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
               <label className="space-y-2">
                 <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Audience</span>
-                <select
-                  value={broadcastAudience}
-                  onChange={(event) => setBroadcastAudience(event.target.value as BroadcastAudience)}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-primary"
-                >
-                  <option value="all">All opted-in users ({optedInAudienceCounts.all})</option>
-                  <option value="contractors">Contractors only ({optedInAudienceCounts.contractors})</option>
-                  <option value="homeowners">Homeowners only ({optedInAudienceCounts.homeowners})</option>
-                </select>
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {BROADCAST_SEGMENTS.map((segment) => (
+                      <label key={segment} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+                        <input
+                          type="checkbox"
+                          checked={broadcastSegments.includes(segment)}
+                          onChange={() => toggleBroadcastSegment(segment)}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                        />
+                        <span>
+                          {BROADCAST_SEGMENT_LABELS[segment]} ({broadcastSegmentCounts[segment]})
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs font-semibold text-slate-500">
+                    {selectedBroadcastRecipients.length} opted-in recipient{selectedBroadcastRecipients.length === 1 ? '' : 's'} currently selected.
+                  </p>
+                </div>
               </label>
 
               <label className="space-y-2">
@@ -655,7 +882,7 @@ const AdminDashboard = () => {
                 onChange={(event) => setBroadcastMessage(event.target.value)}
                 rows={6}
                 className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary"
-                placeholder="Write the update you want to send to opted-in members."
+                placeholder="Write the update you want to send to the selected audience."
               />
             </label>
 
@@ -674,6 +901,57 @@ const AdminDashboard = () => {
               >
                 {isSendingBroadcast ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
                 Send Broadcast
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                <MessageSquare size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-black tracking-tight text-slate-900">Contractor SMS</h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  Send a blanket text to contractors who have a saved phone, SMS opt-in, and consent timestamp.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">SMS-Ready Contractors</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{smsReadyContractors.length}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                Only contractors with `phone`, `notifyOnSmsLeadAlerts`, and `smsConsentAt` are included.
+              </p>
+            </div>
+
+            <label className="mt-4 block space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Text Message</span>
+              <textarea
+                value={smsMessage}
+                onChange={(event) => setSmsMessage(event.target.value)}
+                rows={6}
+                className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary"
+                placeholder="Write the text message for opted-in contractors."
+              />
+            </label>
+
+            {smsBroadcastError && (
+              <p className="mt-3 text-sm font-semibold text-rose-600">{smsBroadcastError}</p>
+            )}
+            {smsBroadcastResult && (
+              <p className="mt-3 text-sm font-semibold text-emerald-600">{smsBroadcastResult}</p>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={sendSmsBroadcast}
+                disabled={isSendingSmsBroadcast}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingSmsBroadcast ? <Loader2 size={16} className="animate-spin" /> : <MessageSquare size={16} />}
+                Send Text Blast
               </button>
             </div>
           </div>
@@ -700,6 +978,13 @@ const AdminDashboard = () => {
           <div className="p-20 flex flex-col items-center justify-center gap-4">
             <Loader2 className="animate-spin text-primary" size={40} />
             <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Fetching Data...</p>
+          </div>
+        ) : fetchError ? (
+          <div className="p-10">
+            <div className="rounded-3xl border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700">
+              <p className="font-bold uppercase tracking-widest text-red-500 text-[10px]">Admin Load Error</p>
+              <p className="mt-2 font-medium">{fetchError}</p>
+            </div>
           </div>
         ) : activeTab === 'users' ? (
           filteredUsers.length > 0 ? (
@@ -796,6 +1081,13 @@ const AdminDashboard = () => {
                             className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 bg-amber-50 text-amber-700 border border-amber-100"
                           >
                             {user.isDisabled ? 'Enable' : 'Disable'}
+                          </button>
+                          <button
+                            onClick={() => sendIndividualContractorText(user)}
+                            disabled={updatingId === user.id || user.role !== 'Contractor' || !user.phone?.trim()}
+                            className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 bg-emerald-50 text-emerald-700 border border-emerald-100"
+                          >
+                            {updatingId === user.id ? <Loader2 size={14} className="animate-spin" /> : 'Text'}
                           </button>
                           <button
                             onClick={() => deleteUserDocument(user)}

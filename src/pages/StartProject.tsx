@@ -25,6 +25,7 @@ import { useAuth } from '../AuthContext';
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const PHONE_PATTERN = /(?:\+?1[\s.-]*)?(?:\(\s*\d{3}\s*\)|\d{3})[\s./-]*\d{3}[\s./-]*\d{4}\b/;
 const DIGIT_WORDS = new Set(['zero', 'oh', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']);
+const MAX_PROJECT_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
 
 const containsBlockedContactInfo = (value: string) => {
   if (!value) return false;
@@ -49,6 +50,7 @@ const containsBlockedContactInfo = (value: string) => {
 };
 
 const SUBMIT_TIMEOUT_MS = 15000;
+const POST_SUBMIT_REQUEST_TIMEOUT_MS = 8000;
 
 function getSubmissionErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -112,6 +114,7 @@ export default function StartProject() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [descriptionError, setDescriptionError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [photoUploadError, setPhotoUploadError] = useState('');
   const hasExistingAccountError = submitError.includes('already has a Blueprint account');
   const [isLoadingSavedDetails, setIsLoadingSavedDetails] = useState(false);
   const [hasPrefilledHomeownerDetails, setHasPrefilledHomeownerDetails] = useState(false);
@@ -210,13 +213,52 @@ export default function StartProject() {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
+      setPhotoUploadError('');
       const files = Array.from(e.target.files);
-      setSelectedPhotos((prev) => [...prev, ...files].slice(0, 10));
+      const acceptedFiles: File[] = [];
+      const rejectedFiles: string[] = [];
+
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          rejectedFiles.push(`${file.name} is not an image`);
+          continue;
+        }
+
+        if (file.size > MAX_PROJECT_PHOTO_SIZE_BYTES) {
+          rejectedFiles.push(`${file.name} exceeds 10MB`);
+          continue;
+        }
+
+        acceptedFiles.push(file);
+      }
+
+      if (rejectedFiles.length > 0) {
+        setSubmitError(`Some photos were skipped: ${rejectedFiles.join(', ')}.`);
+      }
+
+      setSelectedPhotos((prev) => [...prev, ...acceptedFiles].slice(0, 10));
+      e.target.value = '';
     }
   };
 
   const removePhoto = (index: number) => {
     setSelectedPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const postJsonWithTimeout = async (url: string, payload: Record<string, unknown>) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), POST_SUBMIT_REQUEST_TIMEOUT_MS);
+
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -250,6 +292,7 @@ export default function StartProject() {
     }
 
     setSubmitError('');
+    setPhotoUploadError('');
     setIsSubmitting(true);
 
     try {
@@ -276,13 +319,33 @@ export default function StartProject() {
       const photoStoragePath = `projects/${leadRef.id}/photos`;
       let uploadedPhotoUrls: string[] = [];
       let photoUploadIssue = false;
+      let photoUploadErrorMessage = '';
 
       if (selectedPhotos.length) {
         try {
-          uploadedPhotoUrls = await uploadFilesToStorage(selectedPhotos, photoStoragePath);
+          if (auth.currentUser) {
+            await auth.currentUser.getIdToken(true);
+          }
+
+          const uploadablePhotos = selectedPhotos.filter(
+            (file) => file.type.startsWith('image/') && file.size <= MAX_PROJECT_PHOTO_SIZE_BYTES
+          );
+
+          if (uploadablePhotos.length !== selectedPhotos.length) {
+            photoUploadIssue = true;
+          }
+
+          if (uploadablePhotos.length > 0) {
+            uploadedPhotoUrls = await uploadFilesToStorage(uploadablePhotos, photoStoragePath);
+          }
         } catch (error) {
           photoUploadIssue = true;
           console.error('[StartProject] Photo upload failed, continuing without photos:', error);
+          photoUploadErrorMessage =
+            error instanceof Error
+              ? error.message
+              : 'Photo upload failed before the project feed could receive preview photos.';
+          setPhotoUploadError(photoUploadErrorMessage);
         }
       }
       const projectPhotosPreview = uploadedPhotoUrls.slice(0, 3);
@@ -372,22 +435,19 @@ export default function StartProject() {
           projectId: projectRef.id,
           projectSubmitted: true,
           photoUploadIssue,
+          photoUploadError: photoUploadErrorMessage,
         },
       });
 
       void (async () => {
         try {
-          const confirmationResponse = await fetch('/api/send-project-confirmation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          const confirmationResponse = await postJsonWithTimeout('/api/send-project-confirmation', {
             email: formData.email.trim(),
             name: formData.name.trim(),
             projectTitle: selectedService?.title || 'General',
             startDate: formData.startDate,
             description,
             photos: projectPhotosPreview,
-          }),
           });
 
           if (!confirmationResponse.ok) {
@@ -399,16 +459,13 @@ export default function StartProject() {
         }
 
         try {
-          const contractorAlertResponse = await fetch('/api/send-new-project-alerts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              projectTitle: selectedService?.title || 'General',
-              category: selectedService?.title || 'General',
-              town: formData.town.trim(),
-              startDate: formData.startDate,
-              description,
-            }),
+          const contractorAlertResponse = await postJsonWithTimeout('/api/send-new-project-alerts', {
+            projectTitle: selectedService?.title || 'General',
+            categoryId: selectedService?.id || selectedCategoryId || 'general',
+            category: selectedService?.title || 'General',
+            town: formData.town.trim(),
+            startDate: formData.startDate,
+            description,
           });
 
           if (!contractorAlertResponse.ok) {

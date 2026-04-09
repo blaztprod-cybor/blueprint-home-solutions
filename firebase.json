@@ -1,10 +1,6 @@
 {
   "firestore": [
     {
-      "database": "(default)",
-      "rules": "firestore.rules"
-    },
-    {
       "database": "blueprinthomesolutionsdata",
       "rules": "firestore.rules"
     }

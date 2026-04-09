@@ -1,34 +1,13 @@
-import nodemailer from 'nodemailer';
-import { createEmailLogContext, logEmailFailure, logEmailStart, logEmailSuccess } from './_intro-email.js';
+import {
+  createEmailLogContext,
+  logEmailFailure,
+  logEmailStart,
+  logEmailSuccess,
+  sendIntroEmail,
+} from './_intro-email.js';
 
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Blueprint Home Solutions';
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || 'info@blueprinthomesolutions.com';
-
-const getSmtpSecureSetting = () => {
-  if (process.env.SMTP_SECURE) {
-    return process.env.SMTP_SECURE.toLowerCase() === 'true';
-  }
-
-  return parseInt(process.env.SMTP_PORT || '587', 10) === 465;
-};
-
-const getSmtpConfig = () => {
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass || user === 'mock_user' || pass === 'mock_pass') {
-    throw new Error('SMTP is not configured');
-  }
-
-  return {
-    host,
-    port,
-    secure: getSmtpSecureSetting(),
-    auth: { user, pass },
-  };
-};
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -49,8 +28,6 @@ export const handler = async (event) => {
       metadata: { name, projectTitle, photoCount: photos?.length || 0 },
     });
     logEmailStart(logContext);
-    const transporter = nodemailer.createTransport(getSmtpConfig());
-
     const photoHtml = (photos || []).map((photo, index) =>
       `<img src="${photo}" alt="Project Photo ${index + 1}" style="width: 150px; height: 150px; object-fit: cover; margin: 5px; border-radius: 8px;" />`
     ).join('');
@@ -82,7 +59,7 @@ export const handler = async (event) => {
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const info = await sendIntroEmail(mailOptions);
     logEmailSuccess(logContext, info);
 
     return {

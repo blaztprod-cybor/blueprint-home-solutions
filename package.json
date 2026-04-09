@@ -10,7 +10,9 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "permits:sync": "node scripts/fetch-permits.mjs",
-    "firebase:purge-users": "node scripts/purge-firebase-users.mjs"
+    "firebase:purge-users": "node scripts/purge-firebase-users.mjs",
+    "firebase:cleanup-legacy-users": "node scripts/cleanup-legacy-user-fields.mjs",
+    "firebase:recover-users": "node scripts/recover-firestore-users-from-auth.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
