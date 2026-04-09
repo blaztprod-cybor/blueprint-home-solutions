@@ -3,6 +3,22 @@ import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
+function normalizePrivateKey(value) {
+  if (!value) return '';
+
+  const trimmed = String(value).trim();
+  const withoutWrappingQuotes =
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+      ? trimmed.slice(1, -1)
+      : trimmed;
+
+  return withoutWrappingQuotes
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\\n/g, '\n');
+}
+
 function getAdminApp() {
   if (getApps().length > 0) {
     return getApps()[0];
@@ -18,7 +34,7 @@ function getAdminApp() {
   }
 
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKey = normalizePrivateKey(process.env.FIREBASE_ADMIN_PRIVATE_KEY);
 
   if (clientEmail && privateKey) {
     return initializeApp({
