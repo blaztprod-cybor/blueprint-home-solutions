@@ -41,9 +41,8 @@ function getAdminAppInstance() {
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || "blueprint-home-solutions";
   const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (credentialsPath && fs.existsSync(credentialsPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, "utf8"));
     return initializeApp({
-      credential: cert(serviceAccount),
+      credential: applicationDefault(),
       projectId,
     });
   }

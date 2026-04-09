@@ -2,13 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { initializeApp, applicationDefault, cert, getApps } from 'firebase-admin/app';
+import dotenv from 'dotenv';
+import { initializeApp, applicationDefault, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
+
+dotenv.config({ path: path.join(repoRoot, '.env.local') });
+dotenv.config();
 
 function loadJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -59,14 +63,19 @@ function loadEmailList(emailsFile) {
     .filter(Boolean);
 }
 
+function stripUndefined(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined)
+  );
+}
+
 function createAdminApp(projectId) {
   if (getApps().length) return getApps()[0];
 
   const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = loadJson(serviceAccountPath);
     return initializeApp({
-      credential: cert(serviceAccount),
+      credential: applicationDefault(),
       projectId,
     });
   }
@@ -114,7 +123,7 @@ function buildAccountPayload(authUser) {
   const trialEndsAt = new Date(createdAt);
   trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-  return {
+  return stripUndefined({
     uid: authUser.uid,
     email: authUser.email || '',
     role,
@@ -127,7 +136,7 @@ function buildAccountPayload(authUser) {
     subscriptionLevel: isContractor ? 'trial' : 'none',
     createdAt,
     updatedAt: new Date().toISOString(),
-  };
+  });
 }
 
 function buildProfilePayload(authUser) {
@@ -135,7 +144,7 @@ function buildProfilePayload(authUser) {
   const localPart = String(authUser.email || 'user').split('@')[0];
   const name = authUser.displayName || localPart;
 
-  return {
+  return stripUndefined({
     uid: authUser.uid,
     name,
     notifyOnNewProjects: role === 'Contractor',
@@ -144,7 +153,7 @@ function buildProfilePayload(authUser) {
     notifyOnSmsLeadAlerts: false,
     leadCategories: role === 'Contractor' ? [] : undefined,
     updatedAt: new Date().toISOString(),
-  };
+  });
 }
 
 function filterAuthUsers(users, { allUsers, allNonAdmin, emails }) {
