@@ -1382,7 +1382,7 @@ export default function Projects() {
                         By submitting an estimate, you agree to the terms set forth by Blueprint Home Solutions.
                       </p>
                       <p className="mt-3 text-sm font-medium leading-6 text-amber-900">
-                        After the homeowner accepts the rough estimate, they will initiate the visual inspection and share their location and contact information.
+                        After the homeowner accepts the rough estimate, they will initiate visual inspection, share their location and contact information.
                       </p>
                     </div>
                   )}

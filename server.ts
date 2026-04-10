@@ -823,6 +823,46 @@ async function startServer() {
     }
   });
 
+  app.post("/api/send-admin-sms", async (req, res) => {
+    const { phone, message, recipientType } = req.body;
+
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      if (!requestUser.isAdmin) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: error instanceof Error ? error.message : "Unauthorized" });
+    }
+
+    if (!phone) {
+      return res.status(400).json({ error: "Phone number is required" });
+    }
+
+    if (!message) {
+      return res.status(400).json({ error: "SMS message body is required" });
+    }
+
+    try {
+      const result = await sendSms({
+        to: phone,
+        body: message,
+      });
+
+      res.json({
+        success: true,
+        sid: result.sid,
+        status: result.status,
+        recipientType: recipientType || "contact",
+      });
+    } catch (error) {
+      console.error("Error sending admin SMS:", error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to send admin SMS",
+      });
+    }
+  });
+
   app.post("/api/twilio-inbound-sms", (req, res) => {
     const from = typeof req.body?.From === "string" ? req.body.From : "";
     const body = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";

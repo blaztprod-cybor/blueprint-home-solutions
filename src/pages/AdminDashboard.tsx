@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Trash2,
   User as UserIcon,
+  X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db } from '../firebase';
@@ -56,6 +57,13 @@ type AdminUser = User & {
 type AdminProject = Project & {
   contactSanitized?: boolean;
 };
+
+type ContactComposerState = {
+  mode: 'email' | 'sms';
+  user: AdminUser;
+  subject: string;
+  message: string;
+} | null;
 
 type AdminTab = 'users' | 'projects' | 'reviews';
 type AdminFilter =
@@ -134,6 +142,8 @@ const AdminDashboard = () => {
   const [smsBroadcastResult, setSmsBroadcastResult] = useState('');
   const [smsBroadcastError, setSmsBroadcastError] = useState('');
   const [fetchError, setFetchError] = useState('');
+  const [contactComposer, setContactComposer] = useState<ContactComposerState>(null);
+  const [contactComposerError, setContactComposerError] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -471,33 +481,91 @@ const AdminDashboard = () => {
     }
   };
 
-  const sendIndividualContractorText = async (user: AdminUser) => {
-    if (user.role !== 'Contractor') return;
+  const openUserSmsComposer = (user: AdminUser) => {
     if (!user.phone?.trim()) {
-      window.alert('This contractor does not have a saved phone number.');
+      window.alert('This user does not have a saved phone number.');
       return;
     }
 
-    const message = window.prompt(`Send text to ${user.name || user.email || 'contractor'}:`, '');
-    if (!message || !message.trim()) return;
+    setContactComposerError('');
+    setContactComposer({
+      mode: 'sms',
+      user,
+      subject: '',
+      message: '',
+    });
+  };
+
+  const openUserEmailComposer = (user: AdminUser) => {
+    if (!user.email?.trim()) {
+      window.alert('This user does not have a saved email address.');
+      return;
+    }
+
+    setContactComposerError('');
+    setContactComposer({
+      mode: 'email',
+      user,
+      subject: 'Blueprint Home Solutions update',
+      message: '',
+    });
+  };
+
+  const sendComposedMessage = async () => {
+    if (!contactComposer) return;
+
+    const { user, mode, subject, message } = contactComposer;
+    if (mode === 'email' && !subject.trim()) {
+      setContactComposerError('Email subject is required.');
+      return;
+    }
+    if (!message.trim()) {
+      setContactComposerError(mode === 'email' ? 'Email message is required.' : 'Text message is required.');
+      return;
+    }
 
     setUpdatingId(user.id);
+    setContactComposerError('');
     try {
-      const response = await authorizedApiFetch('/api/send-contractor-sms-notification', {
-        method: 'POST',
-        body: JSON.stringify({
-          contractorPhone: user.phone.trim(),
-          message: message.trim(),
-          eventType: 'admin_direct_message',
-        }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to send contractor text');
+      if (mode === 'email') {
+        const response = await authorizedApiFetch('/api/send-admin-message', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: user.email?.trim(),
+            name: user.name,
+            subject: subject.trim(),
+            message: message.trim(),
+            recipientType: user.role === 'Contractor' ? 'home-pro' : 'homeowner',
+          }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || payload?.message || response.statusText || `Failed to send email (${response.status})`);
+        }
+        window.alert(`Email sent to ${user.name || user.email}.`);
+      } else {
+        const response = await authorizedApiFetch('/api/send-admin-sms', {
+          method: 'POST',
+          body: JSON.stringify({
+            phone: user.phone?.trim(),
+            message: message.trim(),
+            recipientType: user.role === 'Contractor' ? 'home-pro' : 'homeowner',
+          }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(
+            payload?.error ||
+            payload?.message ||
+            response.statusText ||
+            `Failed to send text (${response.status})`
+          );
+        }
+        window.alert(`Text sent to ${user.name || user.email || user.phone}.`);
       }
-      window.alert(`Text sent to ${user.name || user.email || user.phone}.`);
+      setContactComposer(null);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Failed to send contractor text');
+      setContactComposerError(error instanceof Error ? error.message : `Failed to send ${mode === 'email' ? 'email' : 'text'}`);
     } finally {
       setUpdatingId(null);
     }
@@ -732,6 +800,113 @@ const AdminDashboard = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      {contactComposer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8">
+          <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  {contactComposer.mode === 'email' ? 'Direct Email' : 'Direct Text'}
+                </p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                  {contactComposer.mode === 'email' ? 'Compose Email' : 'Compose Text'}
+                </h2>
+                <p className="mt-2 text-sm font-medium text-slate-500">
+                  Review the recipient details before sending.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setContactComposer(null);
+                  setContactComposerError('');
+                }}
+                className="rounded-2xl border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                aria-label="Close contact composer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Recipient</p>
+                <p className="mt-2 text-sm font-bold text-slate-900">{contactComposer.user.name || 'Unnamed User'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Email</p>
+                <p className="mt-2 break-all text-sm font-medium text-slate-700">{contactComposer.user.email || 'No email saved'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Phone</p>
+                <p className="mt-2 text-sm font-medium text-slate-700">{contactComposer.user.phone || 'No phone saved'}</p>
+              </div>
+            </div>
+
+            {contactComposer.mode === 'email' && (
+              <label className="mt-5 block space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Subject</span>
+                <input
+                  value={contactComposer.subject}
+                  onChange={(event) =>
+                    setContactComposer((current) => (current ? { ...current, subject: event.target.value } : current))
+                  }
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary"
+                  placeholder="Blueprint Home Solutions update"
+                />
+              </label>
+            )}
+
+            <label className="mt-5 block space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                {contactComposer.mode === 'email' ? 'Message' : 'Text Message'}
+              </span>
+              <textarea
+                value={contactComposer.message}
+                onChange={(event) =>
+                  setContactComposer((current) => (current ? { ...current, message: event.target.value } : current))
+                }
+                rows={6}
+                className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary"
+                placeholder={
+                  contactComposer.mode === 'email'
+                    ? 'Write the email you want to send.'
+                    : 'Write the text message you want to send.'
+                }
+              />
+            </label>
+
+            {contactComposerError && (
+              <p className="mt-4 text-sm font-semibold text-rose-600">{contactComposerError}</p>
+            )}
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setContactComposer(null);
+                  setContactComposerError('');
+                }}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendComposedMessage}
+                disabled={updatingId === contactComposer.user.id}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {updatingId === contactComposer.user.id ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : contactComposer.mode === 'email' ? (
+                  <Mail size={16} />
+                ) : (
+                  <MessageSquare size={16} />
+                )}
+                Send {contactComposer.mode === 'email' ? 'Email' : 'Text'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900">Admin Dashboard</h1>
@@ -1083,8 +1258,15 @@ const AdminDashboard = () => {
                             {user.isDisabled ? 'Enable' : 'Disable'}
                           </button>
                           <button
-                            onClick={() => sendIndividualContractorText(user)}
-                            disabled={updatingId === user.id || user.role !== 'Contractor' || !user.phone?.trim()}
+                            onClick={() => openUserEmailComposer(user)}
+                            disabled={updatingId === user.id || !user.email?.trim()}
+                            className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 bg-sky-50 text-sky-700 border border-sky-100"
+                          >
+                            {updatingId === user.id ? <Loader2 size={14} className="animate-spin" /> : 'Email'}
+                          </button>
+                          <button
+                            onClick={() => openUserSmsComposer(user)}
+                            disabled={updatingId === user.id || !user.phone?.trim()}
                             className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 bg-emerald-50 text-emerald-700 border border-emerald-100"
                           >
                             {updatingId === user.id ? <Loader2 size={14} className="animate-spin" /> : 'Text'}
