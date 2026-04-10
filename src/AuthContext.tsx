@@ -231,7 +231,7 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     (cachedMatchesIdentity && cachedUser?.avatar && !cachedUser.avatar.startsWith('data:image/svg+xml')
       ? cachedUser.avatar
       : undefined) ||
-    firebaseUser.photoURL ||
+    (role !== 'Contractor' ? firebaseUser.photoURL : undefined) ||
     getInitialsAvatar(cachedUser?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User');
 
   const recoveredIsVerified =
@@ -686,12 +686,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!userDoc.exists()) {
         const isAdminEmail = firebaseUser.email?.toLowerCase() === 'blaztprod@gmail.com';
         const role: UserRole = isAdminEmail ? 'admin' : (requestedRole || 'Homeowner');
+      const nextAvatar =
+        role === 'Contractor'
+          ? getInitialsAvatar(firebaseUser.displayName || 'User')
+          : (firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'));
       saveAuthRoleHint(firebaseUser.email, role);
       await writeUserDocWithRecovery(firebaseUser.uid, {
         email: firebaseUser.email || '',
         name: firebaseUser.displayName || 'User',
         role,
-        avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
+        avatar: nextAvatar,
         isVerified: false,
         subscriptionLevel: getDerivedSubscriptionLevel(role),
         notifyOnProductUpdates: role === 'Contractor',
@@ -708,7 +712,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: firebaseUser.displayName || 'User',
           email: firebaseUser.email || '',
           role: role,
-          avatar: firebaseUser.photoURL || getInitialsAvatar(firebaseUser.displayName || 'User'),
+          avatar: nextAvatar,
           isVerified: false,
         subscriptionLevel: getDerivedSubscriptionLevel(role),
         notifyOnNewProjects: role === 'Contractor',

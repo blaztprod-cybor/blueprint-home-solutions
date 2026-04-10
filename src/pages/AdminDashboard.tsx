@@ -65,6 +65,12 @@ type ContactComposerState = {
   message: string;
 } | null;
 
+type VerificationViewerState = {
+  name: string;
+  avatar?: string;
+  governmentIdImage?: string;
+} | null;
+
 type AdminTab = 'users' | 'projects' | 'reviews';
 type AdminFilter =
   | 'all'
@@ -144,6 +150,7 @@ const AdminDashboard = () => {
   const [fetchError, setFetchError] = useState('');
   const [contactComposer, setContactComposer] = useState<ContactComposerState>(null);
   const [contactComposerError, setContactComposerError] = useState('');
+  const [verificationViewer, setVerificationViewer] = useState<VerificationViewerState>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -800,6 +807,57 @@ const AdminDashboard = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+      {verificationViewer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8">
+          <div className="w-full max-w-4xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Identity Review</p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">{verificationViewer.name}</h2>
+              </div>
+              <button
+                onClick={() => setVerificationViewer(null)}
+                className="rounded-2xl border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                aria-label="Close verification viewer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Verified Selfie</p>
+                {verificationViewer.avatar ? (
+                  <img
+                    src={verificationViewer.avatar}
+                    alt={`${verificationViewer.name} selfie`}
+                    className="h-[360px] w-full rounded-3xl border border-slate-200 object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-[360px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-sm font-medium text-slate-500">
+                    No selfie uploaded
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Government ID / Driver&apos;s License</p>
+                {verificationViewer.governmentIdImage ? (
+                  <img
+                    src={verificationViewer.governmentIdImage}
+                    alt={`${verificationViewer.name} government ID`}
+                    className="h-[360px] w-full rounded-3xl border border-slate-200 object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-[360px] items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-sm font-medium text-slate-500">
+                    No ID uploaded
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {contactComposer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8">
           <div className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
@@ -1256,6 +1314,19 @@ const AdminDashboard = () => {
                             className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 bg-amber-50 text-amber-700 border border-amber-100"
                           >
                             {user.isDisabled ? 'Enable' : 'Disable'}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setVerificationViewer({
+                                name: user.name || user.email || 'User',
+                                avatar: user.avatar,
+                                governmentIdImage: user.governmentIdImage,
+                              })
+                            }
+                            disabled={updatingId === user.id || (!user.avatar && !user.governmentIdImage)}
+                            className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 bg-violet-50 text-violet-700 border border-violet-100"
+                          >
+                            Review ID
                           </button>
                           <button
                             onClick={() => openUserEmailComposer(user)}

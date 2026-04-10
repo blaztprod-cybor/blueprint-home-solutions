@@ -280,6 +280,10 @@ export default function SignUp() {
     };
 
     const handleGoogleLogin = async () => {
+      if (role === 'Contractor') {
+        setError('Home Pro signup requires a manual selfie and government ID upload. Use the signup form instead of Google so Blueprint can verify identity.');
+        return;
+      }
       setError('');
       setIsSubmitting(true);
       try {
@@ -390,10 +394,13 @@ export default function SignUp() {
                   </div>
                   <label className="absolute -bottom-2 -right-2 p-2 bg-primary text-white rounded-xl shadow-lg cursor-pointer hover:scale-110 transition-transform">
                     <Camera size={18} />
-                    <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                    <input type="file" className="hidden" accept="image/*" capture="user" onChange={handleFileChange} />
                   </label>
                 </div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Upload Profile Photo {requiredMark}</p>
+                <p className="text-center text-xs font-medium text-slate-500">
+                  Use your front-facing camera and upload a clear selfie that matches your driver&apos;s license.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -483,14 +490,26 @@ export default function SignUp() {
                       <p className="text-sm font-bold text-slate-700">
                         {governmentIdImage ? 'Government ID uploaded' : 'Upload ID'}
                       </p>
+                      <p className="mt-1 text-xs font-medium text-slate-500">
+                        Use the rear camera when possible so the ID text stays readable.
+                      </p>
                     </div>
                     <input
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       className="hidden"
                       onChange={handleGovernmentIdChange}
                     />
                   </label>
+                  {governmentIdImage && (
+                    <img
+                      src={governmentIdImage}
+                      alt="Government ID preview"
+                      className="mt-3 h-32 w-full rounded-2xl border border-slate-200 object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
@@ -694,6 +713,11 @@ export default function SignUp() {
               </svg>
               <span>Sign up with Google</span>
             </button>
+            {role === 'Contractor' && (
+              <p className="text-center text-xs font-medium text-slate-500">
+                Google signup is disabled for Home Pros because identity verification requires a live selfie and government ID capture during onboarding.
+              </p>
+            )}
           </form>
 
           <div className="mt-8 pt-8 border-t border-slate-100 text-center">

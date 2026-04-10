@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   Loader2,
   ShieldCheck,
-  Hammer
+  Hammer,
+  X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
@@ -21,6 +22,7 @@ export default function ProfileSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [error, setError] = useState('');
+  const [viewerImage, setViewerImage] = useState<{ src: string; label: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -222,6 +224,35 @@ export default function ProfileSettings() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      <AnimatePresence>
+        {viewerImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-8"
+          >
+            <div className="w-full max-w-3xl rounded-[28px] bg-white p-4 shadow-2xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-black text-slate-900">{viewerImage.label}</h2>
+                <button
+                  onClick={() => setViewerImage(null)}
+                  className="rounded-2xl border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                  aria-label="Close image viewer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <img
+                src={viewerImage.src}
+                alt={viewerImage.label}
+                className="max-h-[75vh] w-full rounded-2xl border border-slate-200 object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground mt-1">Manage your account preferences and subscription.</p>
@@ -271,13 +302,37 @@ export default function ProfileSettings() {
                   type="file" 
                   ref={fileInputRef} 
                   className="hidden" 
-                  accept="image/*" 
+                  accept="image/*"
+                  capture="user"
                   onChange={handleFileChange} 
                 />
                 {user.role === 'Contractor' && (
-                  <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Profile Photo
-                  </p>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Verified Selfie
+                    </p>
+                    <p className="text-xs font-medium text-slate-500">
+                      Keep this selfie current and make sure it matches your driver&apos;s license.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        Update Selfie
+                      </button>
+                      {user.avatar && (
+                        <button
+                          type="button"
+                          onClick={() => setViewerImage({ src: user.avatar!, label: 'Verified Selfie' })}
+                          className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          View Selfie
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
               <div className="flex-1 space-y-1">
@@ -427,15 +482,45 @@ export default function ProfileSettings() {
                         <p className="text-sm font-bold text-slate-700">
                           {formData.governmentIdImage ? 'Government ID uploaded' : 'Upload ID'}
                         </p>
+                        <p className="mt-1 text-xs font-medium text-slate-500">
+                          Keep the full card visible and readable for manual verification.
+                        </p>
                       </div>
                       <input
                         type="file"
                         ref={governmentIdInputRef}
                         className="hidden"
                         accept="image/*"
+                        capture="environment"
                         onChange={handleGovernmentIdChange}
                       />
                     </label>
+                    {formData.governmentIdImage && (
+                      <div className="space-y-3">
+                        <img
+                          src={formData.governmentIdImage}
+                          alt="Government ID preview"
+                          className="h-40 w-full rounded-2xl border border-slate-200 object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setViewerImage({ src: formData.governmentIdImage, label: "Government ID / Driver's License" })}
+                            className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            View Uploaded ID
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => governmentIdInputRef.current?.click()}
+                            className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            Replace ID
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
