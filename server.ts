@@ -28,10 +28,8 @@ const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
-const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID;
+const TEXTBELT_API_KEY = process.env.TEXTBELT_API_KEY;
+const TEXTBELT_SENDER = process.env.TEXTBELT_SENDER || "Blueprint Home Solutions";
 
 function getAdminAppInstance() {
   if (getApps().length > 0) {
@@ -102,15 +100,6 @@ function buildProjectAlertSms({
   ].join(" ");
 }
 
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 function buildInboundSmsAutoReply() {
   return [
     "Blueprint Home Solutions does not monitor this number for live replies.",
@@ -163,33 +152,40 @@ async function sendSms({
   to: string;
   body: string;
 }) {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || (!TWILIO_FROM_NUMBER && !TWILIO_MESSAGING_SERVICE_SID)) {
+  if (!TEXTBELT_API_KEY) {
     throw new Error("SMS provider is not configured");
   }
 
+  const normalizeUsPhoneNumber = (value: string) => {
+    const digits = String(value || "").replace(/\D/g, "");
+
+    if (digits.length === 10) return `+1${digits}`;
+    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+
+    return String(value || "").trim();
+  };
+
   const params = new URLSearchParams({
-    To: to,
-    Body: body,
+    phone: normalizeUsPhoneNumber(to),
+    message: body,
+    key: TEXTBELT_API_KEY,
   });
 
-  if (TWILIO_MESSAGING_SERVICE_SID) {
-    params.set("MessagingServiceSid", TWILIO_MESSAGING_SERVICE_SID);
-  } else if (TWILIO_FROM_NUMBER) {
-    params.set("From", TWILIO_FROM_NUMBER);
+  if (TEXTBELT_SENDER) {
+    params.set("sender", TEXTBELT_SENDER);
   }
 
-  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+  const response = await fetch("https://textbelt.com/text", {
     method: "POST",
     headers: {
-      Authorization: `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64")}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: params.toString(),
   });
 
   const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.message || "Failed to send SMS notification");
+  if (!response.ok || !data?.success) {
+    throw new Error(data?.error || "Failed to send SMS notification");
   }
 
   return data;
@@ -810,8 +806,8 @@ async function startServer() {
 
       res.json({
         success: true,
-        sid: result.sid,
-        status: result.status,
+        textId: result.textId,
+        quotaRemaining: result.quotaRemaining,
         eventType: eventType || "contractor_update",
       });
     } catch (error) {
@@ -851,8 +847,8 @@ async function startServer() {
 
       res.json({
         success: true,
-        sid: result.sid,
-        status: result.status,
+        textId: result.textId,
+        quotaRemaining: result.quotaRemaining,
         recipientType: recipientType || "contact",
       });
     } catch (error) {
@@ -863,9 +859,9 @@ async function startServer() {
     }
   });
 
-  app.post("/api/twilio-inbound-sms", (req, res) => {
-    const from = typeof req.body?.From === "string" ? req.body.From : "";
-    const body = typeof req.body?.Body === "string" ? req.body.Body.trim() : "";
+  app.post("/api/textbelt-inbound-sms", (req, res) => {
+    const from = typeof req.body?.fromNumber === "string" ? req.body.fromNumber : "";
+    const body = typeof req.body?.text === "string" ? req.body.text.trim() : "";
     const replyBody = buildInboundSmsAutoReply();
 
     console.log("[SMS][INBOUND]", {
@@ -874,10 +870,7 @@ async function startServer() {
       autoReply: replyBody,
     });
 
-    res
-      .status(200)
-      .type("text/xml")
-      .send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyBody)}</Message></Response>`);
+    res.status(200).json({ autoReply: replyBody });
   });
 
   app.get("/api/recent-project-posts", async (_req, res) => {
@@ -1653,7 +1646,7 @@ async function startServer() {
       );
 
       let smsRecipientsNotified = 0;
-      if ((TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID) && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && smsRecipients.length > 0) {
+      if (TEXTBELT_API_KEY && smsRecipients.length > 0) {
         const smsBody = buildProjectAlertSms({ projectTitle, category, town, startDate });
         const smsResults = await Promise.allSettled(
           smsRecipients.map((recipient: any) =>

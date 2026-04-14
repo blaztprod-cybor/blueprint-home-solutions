@@ -229,11 +229,17 @@ export default function Landing() {
           >
             <div className="flex flex-col gap-4 items-center text-center">
               <div>
+                <p className="text-xs font-black uppercase tracking-[0.26em] text-slate-500">
+                  Operated by Dzyn Indie Films LLC
+                </p>
                 <p className="text-2xl font-black leading-tight text-slate-900 sm:text-3xl md:text-4xl">
                   Home Improvement Marketplace
                 </p>
                 <p className="mt-4 text-2xl font-black tracking-tight text-slate-700 sm:text-3xl">
                   Select a Category to Start / Describe / Upload Photos / Get Estimates
+                </p>
+                <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-slate-600 sm:text-base">
+                  Blueprint Home Solutions routes homeowner project requests to relevant contractors and supports transactional account notifications for opted-in professionals.
                 </p>
               </div>
             </div>

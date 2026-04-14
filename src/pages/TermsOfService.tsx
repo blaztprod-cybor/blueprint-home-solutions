@@ -52,6 +52,13 @@ export default function TermsOfService() {
           
           <div className="prose prose-slate max-w-none space-y-8 text-slate-600">
             <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">Business Identity</h2>
+              <p>
+                These Terms govern the use of Blueprint Home Solutions, a DBA operated by Dzyn Indie Films LLC, located at 132-23 Bennett Court, Jamaica, NY 11434.
+              </p>
+            </section>
+
+            <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">1. Acceptance of Terms</h2>
               <p>
                 By accessing or using Blueprint Home Solutions (“BHS”, “we”, or “our platform”), you agree to be bound by these Terms of Service (“Terms”). If you do not agree, do not use our platform.
@@ -145,6 +152,9 @@ export default function TermsOfService() {
               <p>
                 Your use of the platform is governed by our Privacy Policy, which explains how we collect, use, and protect personal data.
               </p>
+              <p>
+                Contractors who opt in may receive transactional project-alert notifications, including SMS where enabled, regarding homeowner project requests relevant to their account settings. These notifications are operational communications tied to platform activity.
+              </p>
             </section>
 
             <section>
@@ -161,6 +171,13 @@ export default function TermsOfService() {
                 <li>Any disputes arising from use of BHS should first attempt to be resolved via mediation or arbitration.</li>
                 <li>BHS reserves the right to pursue legal action in cases of non-circumvention, harassment, or reputational harm.</li>
               </ul>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">11. Contact</h2>
+              <p>
+                Contact Blueprint Home Solutions at info@blueprinthomesolutions.com or 718-701-9090.
+              </p>
             </section>
           </div>
 

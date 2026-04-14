@@ -1,5 +1,5 @@
 import { getAdminAuth, getAdminDb } from './_firebase-admin.js';
-import { sendSms } from './_twilio.js';
+import { sendSms } from './_sms.js';
 import { getVerifiedRequestUser } from './_user-records.js';
 
 export const handler = async (event) => {
@@ -51,8 +51,8 @@ export const handler = async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        sid: result.sid,
-        status: result.status,
+        textId: result.textId,
+        quotaRemaining: result.quotaRemaining,
         recipientType: recipientType || 'contact',
       }),
     };

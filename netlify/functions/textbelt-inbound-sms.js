@@ -1,11 +1,3 @@
-const escapeXml = (value) =>
-  String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
 const buildInboundSmsAutoReply = () =>
   [
     'Blueprint Home Solutions does not monitor this number for live replies.',
@@ -18,9 +10,9 @@ export const handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const params = new URLSearchParams(event.body || '');
-  const from = params.get('From') || '';
-  const body = (params.get('Body') || '').trim();
+  const payload = JSON.parse(event.body || '{}');
+  const from = typeof payload?.fromNumber === 'string' ? payload.fromNumber : '';
+  const body = typeof payload?.text === 'string' ? payload.text.trim() : '';
   const replyBody = buildInboundSmsAutoReply();
 
   console.log('[SMS][INBOUND]', {
@@ -31,7 +23,7 @@ export const handler = async (event) => {
 
   return {
     statusCode: 200,
-    headers: { 'Content-Type': 'text/xml' },
-    body: `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(replyBody)}</Message></Response>`,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ autoReply: replyBody }),
   };
 };

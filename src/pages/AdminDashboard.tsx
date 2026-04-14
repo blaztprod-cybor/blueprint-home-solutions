@@ -127,6 +127,23 @@ function hasSensitiveText(value: string | undefined) {
   return PHONE_DETECT_PATTERN.test(value) || EMAIL_DETECT_PATTERN.test(value);
 }
 
+function buildSmsHref(phone: string, body: string) {
+  const trimmedPhone = String(phone || '').trim();
+  const trimmedBody = String(body || '').trim();
+  if (!trimmedPhone) return '';
+
+  if (!trimmedBody) {
+    return `sms:${trimmedPhone}`;
+  }
+
+  const isAppleDevice =
+    typeof navigator !== 'undefined' &&
+    /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const separator = isAppleDevice ? '&' : '?';
+
+  return `sms:${trimmedPhone}${separator}body=${encodeURIComponent(trimmedBody)}`;
+}
+
 const AdminDashboard = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [projects, setProjects] = useState<AdminProject[]>([]);
@@ -578,6 +595,17 @@ const AdminDashboard = () => {
     }
   };
 
+  const openMessagingApp = () => {
+    if (!contactComposer || contactComposer.mode !== 'sms') return;
+    const smsHref = buildSmsHref(contactComposer.user.phone || '', contactComposer.message);
+    if (!smsHref) {
+      setContactComposerError('This user does not have a saved phone number.');
+      return;
+    }
+
+    window.location.href = smsHref;
+  };
+
   const toggleVerification = async (userId: string, currentStatus: boolean) => {
     setUpdatingId(userId);
     try {
@@ -938,6 +966,14 @@ const AdminDashboard = () => {
             )}
 
             <div className="mt-6 flex items-center justify-end gap-3">
+              {contactComposer.mode === 'sms' && (
+                <button
+                  onClick={openMessagingApp}
+                  className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                >
+                  Open Messaging App
+                </button>
+              )}
               <button
                 onClick={() => {
                   setContactComposer(null);

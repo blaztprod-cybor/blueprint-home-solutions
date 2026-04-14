@@ -15,10 +15,9 @@ View your app in AI Studio: https://ai.studio/apps/0535c480-1012-4655-a793-62fed
 1. Install dependencies:
    `npm install`
 2. Set the `GEMINI_API_KEY` in `.env.local` to your Gemini API key
-3. If you want contractor SMS alerts enabled through Twilio, add these environment variables in Netlify and your local shell or `.env.local`:
-   `TWILIO_ACCOUNT_SID`
-   `TWILIO_AUTH_TOKEN`
-   `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID`
+3. If you want contractor SMS alerts enabled through Textbelt, add these environment variables in Netlify and your local shell or `.env.local`:
+   `TEXTBELT_API_KEY`
+   `TEXTBELT_SENDER` (optional)
 4. If you want vendor and homeowner emails to send from `info@blueprinthomesolutions.com`, set these environment variables in Netlify and your local shell or `.env.local`:
    `SMTP_HOST`
    `SMTP_PORT`
@@ -37,6 +36,7 @@ View your app in AI Studio: https://ai.studio/apps/0535c480-1012-4655-a793-62fed
    `npm run dev`
 
 Contractor SMS alerts are sent only for contractors who have `notifyOnSmsLeadAlerts` enabled, a saved phone number, and an `smsConsentAt` timestamp on their user record.
+If you enable reply webhooks in Textbelt, point them at `/api/textbelt-inbound-sms` locally or `/.netlify/functions/textbelt-inbound-sms` on Netlify.
 
 ## Internal Docs
 

@@ -1,6 +1,6 @@
 import { getAdminDb } from './_firebase-admin.js';
 import { getAdminEmail, renderIntroEmail, sendIntroEmail } from './_intro-email.js';
-import { isTwilioConfigured, sendSms } from './_twilio.js';
+import { isSmsConfigured, sendSms } from './_sms.js';
 
 function buildProjectAlertSms({ projectTitle, category, town, startDate }) {
   const parts = [
@@ -107,7 +107,7 @@ export const handler = async (event) => {
     );
 
     let smsRecipientsNotified = 0;
-    if (isTwilioConfigured() && smsRecipients.length > 0) {
+    if (isSmsConfigured() && smsRecipients.length > 0) {
       const smsBody = buildProjectAlertSms({ projectTitle, category, town, startDate });
       const smsResults = await Promise.allSettled(
         smsRecipients.map((recipient) =>

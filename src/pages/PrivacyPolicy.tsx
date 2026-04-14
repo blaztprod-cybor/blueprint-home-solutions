@@ -31,6 +31,13 @@ export default function PrivacyPolicy() {
 
           <div className="prose prose-slate max-w-none space-y-8 text-slate-600">
             <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-3">Business Identity</h2>
+              <p>
+                Blueprint Home Solutions is a DBA operated by Dzyn Indie Films LLC, located at 132-23 Bennett Court, Jamaica, NY 11434. Questions about this policy may be sent to info@blueprinthomesolutions.com or directed to 718-701-9090.
+              </p>
+            </section>
+
+            <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">1. Information We Collect</h2>
               <p>
                 Blueprint Home Solutions may collect information you provide directly, including your name, email address, phone number, property details, project details, account profile information, and any documents or photos you upload.
@@ -59,6 +66,9 @@ export default function PrivacyPolicy() {
               <h2 className="text-xl font-bold text-slate-900 mb-3">4. Communications</h2>
               <p>
                 By using the platform, you consent to receive service-related communications, including project updates, account notices, and transactional emails or messages. Marketing communications may be sent where permitted and can be opted out of where applicable.
+              </p>
+              <p>
+                Contractors who choose SMS notifications in their account settings may receive transactional lead-alert messages related to homeowner project requests that match their trade and service area. Message frequency varies based on homeowner submissions and contractor preferences. Recipients may opt out of SMS notifications through platform settings and applicable reply keywords such as STOP where supported.
               </p>
             </section>
 
@@ -107,7 +117,7 @@ export default function PrivacyPolicy() {
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">11. Contact</h2>
               <p>
-                Questions about this Privacy Policy may be directed through Blueprint Home Solutions platform contact channels.
+                Questions about this Privacy Policy may be directed to Dzyn Indie Films LLC, doing business as Blueprint Home Solutions, at info@blueprinthomesolutions.com or 718-701-9090.
               </p>
             </section>
           </div>

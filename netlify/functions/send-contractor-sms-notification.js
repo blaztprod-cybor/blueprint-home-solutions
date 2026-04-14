@@ -1,4 +1,4 @@
-import { sendSms } from './_twilio.js';
+import { sendSms } from './_sms.js';
 
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -33,8 +33,8 @@ export const handler = async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        sid: result.sid,
-        status: result.status,
+        textId: result.textId,
+        quotaRemaining: result.quotaRemaining,
         eventType: eventType || 'contractor_update',
       }),
     };
