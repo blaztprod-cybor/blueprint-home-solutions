@@ -10,9 +10,7 @@ import {
   Loader2,
   ShieldCheck,
   Hammer,
-  X,
-  Image as ImageIcon,
-  Trash2
+  X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
@@ -26,7 +24,6 @@ export default function ProfileSettings() {
   const [error, setError] = useState('');
   const [viewerImage, setViewerImage] = useState<{ src: string; label: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const portfolioInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: user?.name || '',
@@ -36,7 +33,6 @@ export default function ProfileSettings() {
     town: user?.town || '',
     zip: user?.zip || '',
     governmentIdImage: user?.governmentIdImage || '',
-    portfolioImages: user?.portfolioImages || [],
     licenseNumber: user?.licenseNumber || '',
     isTradesman: user?.isTradesman || false,
     trade: user?.trade || '',
@@ -57,7 +53,6 @@ export default function ProfileSettings() {
       town: user?.town || '',
       zip: user?.zip || '',
       governmentIdImage: user?.governmentIdImage || '',
-      portfolioImages: user?.portfolioImages || [],
       licenseNumber: user?.licenseNumber || '',
       isTradesman: user?.isTradesman || false,
       trade: user?.trade || ''
@@ -116,7 +111,6 @@ export default function ProfileSettings() {
         town: formData.town,
         zip: formData.zip,
         governmentIdImage: formData.governmentIdImage,
-        portfolioImages: formData.portfolioImages,
         licenseNumber: formData.licenseNumber,
         isTradesman: formData.isTradesman,
         trade: formData.trade
@@ -212,61 +206,6 @@ export default function ProfileSettings() {
     reader.readAsDataURL(file);
   };
 
-  const handlePortfolioChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const availableSlots = Math.max(0, 6 - formData.portfolioImages.length);
-    const acceptedFiles = files.slice(0, availableSlots);
-
-    if (acceptedFiles.length === 0) {
-      setError('Portfolio is limited to 6 images.');
-      return;
-    }
-
-    try {
-      const nextImages = await Promise.all(
-        acceptedFiles.map(
-          (file) =>
-            new Promise<string>((resolve, reject) => {
-              if (file.size > 5 * 1024 * 1024) {
-                reject(new Error(`${file.name} exceeds 5MB`));
-                return;
-              }
-
-              const reader = new FileReader();
-              reader.onloadend = async () => {
-                try {
-                  const compressed = await compressImage(reader.result as string);
-                  resolve(compressed);
-                } catch (compressionError) {
-                  reject(compressionError);
-                }
-              };
-              reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-              reader.readAsDataURL(file);
-            })
-        )
-      );
-
-      setFormData((current) => ({
-        ...current,
-        portfolioImages: [...current.portfolioImages, ...nextImages].slice(0, 6),
-      }));
-      setError('');
-    } catch (portfolioError: any) {
-      setError(portfolioError.message || 'Failed to add portfolio images');
-    } finally {
-      e.target.value = '';
-    }
-  };
-
-  const removePortfolioImage = (index: number) => {
-    setFormData((current) => ({
-      ...current,
-      portfolioImages: current.portfolioImages.filter((_, imageIndex) => imageIndex !== index),
-    }));
-  };
 
   const toggleLeadCategory = (categoryId: string) => {
     setFormData((current) => ({
@@ -584,70 +523,6 @@ export default function ProfileSettings() {
                     </div>
                   )}
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Past Work Gallery</label>
-                        <p className="mt-1 text-xs font-medium text-slate-500">
-                          Show homeowners examples of your completed work while keeping direct contact behind Blueprint.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => portfolioInputRef.current?.click()}
-                        className="rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-white shadow-lg shadow-blue-500/20"
-                      >
-                        Add Work Photos
-                      </button>
-                      <input
-                        ref={portfolioInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handlePortfolioChange}
-                      />
-                    </div>
-
-                    {formData.portfolioImages.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                        {formData.portfolioImages.map((image, index) => (
-                          <div key={`${image}-${index}`} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                            <img
-                              src={image}
-                              alt={`Portfolio example ${index + 1}`}
-                              className="h-full w-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="absolute inset-x-0 bottom-0 flex justify-between bg-gradient-to-t from-slate-950/70 to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
-                              <button
-                                type="button"
-                                onClick={() => setViewerImage({ src: image, label: `Past Work ${index + 1}` })}
-                                className="rounded-xl bg-white/90 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-800"
-                              >
-                                View
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removePortfolioImage(index)}
-                                className="rounded-xl bg-rose-500/90 px-3 py-2 text-white"
-                                aria-label={`Remove portfolio image ${index + 1}`}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                        <ImageIcon size={24} className="mx-auto text-slate-300" />
-                        <p className="mt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-                          No portfolio images uploaded yet
-                        </p>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                   <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">

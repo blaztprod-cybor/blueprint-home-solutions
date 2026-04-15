@@ -17,7 +17,8 @@ import {
   LogOut,
   Star,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
@@ -35,6 +36,7 @@ import Projects from './pages/Projects';
 import Invoices from './pages/Invoices';
 import ProfileSettings from './pages/ProfileSettings';
 import Reviews from './pages/Reviews';
+import PortfolioGallery from './pages/PortfolioGallery';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLeads from './pages/AdminLeads';
 import Services from './pages/Services';
@@ -159,6 +161,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
     { to: hasPaidContractorAccess ? "/permit-feed" : "/contractor-paywall", icon: Building2, label: hasPaidContractorAccess ? "Permit Feed" : "Permit Feed Locked" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
+    { to: "/portfolio-gallery", icon: ImageIcon, label: "Gallery" },
     { to: "/invoices", icon: FileText, label: "Invoices" },
   ];
 
@@ -406,6 +409,7 @@ export default function App() {
                 <Route path="/permit-map" element={<ContractorSubscriptionRoute><PermitMap /></ContractorSubscriptionRoute>} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/reviews" element={<Reviews />} />
+                <Route path="/portfolio-gallery" element={<PortfolioGallery />} />
                 <Route path="/invoices" element={<Invoices />} />
                 <Route path="/settings" element={<ProfileSettings />} />
                 <Route path="/services" element={<Services />} />

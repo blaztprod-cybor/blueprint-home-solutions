@@ -19,9 +19,9 @@ export default function DOBLeads() {
   const [sortOrder, setSortOrder] = useState<'none' | 'zip-asc' | 'zip-desc'>('none');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [copyLabel, setCopyLabel] = useState('Copy For Paste');
   const [emailLabel, setEmailLabel] = useState('Email Selected To Me');
   const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
+  const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -93,6 +93,9 @@ export default function DOBLeads() {
     currentPage * ITEMS_PER_PAGE
   );
   const allVisibleSelected = paginatedPermits.length > 0 && paginatedPermits.every((permit) => selectedPermitIds.includes(permit.id));
+  const permitsToEmail = selectedPermitIds.length > 0
+    ? permits.filter((permit) => selectedPermitIds.includes(permit.id)).slice(0, 25)
+    : paginatedPermits.slice(0, 25);
 
   const formatPermitDate = (value: string) => {
     if (!value) return 'N/A';
@@ -119,38 +122,7 @@ export default function DOBLeads() {
     }
   );
 
-  const handleCopyForPaste = async () => {
-    const permitsToCopy = selectedPermitIds.length > 0
-      ? paginatedPermits.filter((permit) => selectedPermitIds.includes(permit.id))
-      : paginatedPermits;
-
-    const lines = [
-      ['Borough', 'Address', 'ZIP', 'Work Type', 'Status', 'Date Issued', 'Job Description', 'Company', 'Applicant License', 'Contact Name', 'Phone'].join('\t'),
-      ...permitsToCopy.map((permit) => ([
-        permit.borough,
-        permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' '),
-        permit.zip_code || 'Unavailable',
-        permit.job_type,
-        permit.permit_status,
-        formatPermitDate(permit.issuance_date),
-        permit.job_description.replace(/\s+/g, ' ').trim(),
-        permit.owner_business_name || permit.owner_name || 'Unavailable',
-        permit.applicant_license || 'Unavailable',
-        permit.contact_name || 'Not added yet',
-        permit.phone || 'Not added yet',
-      ].join('\t')))
-    ];
-
-    await navigator.clipboard.writeText(lines.join('\n'));
-    setCopyLabel('Copied');
-    window.setTimeout(() => setCopyLabel('Copy For Paste'), 2000);
-  };
-
   const handleEmailSelected = async () => {
-    const permitsToEmail = selectedPermitIds.length > 0
-      ? permits.filter((permit) => selectedPermitIds.includes(permit.id))
-      : paginatedPermits;
-
     if (permitsToEmail.length === 0) {
       window.alert('Select at least one permit first.');
       return;
@@ -171,11 +143,21 @@ export default function DOBLeads() {
       }
 
       setEmailLabel('Sent');
+      setIsEmailPreviewOpen(false);
       window.setTimeout(() => setEmailLabel('Email Selected To Me'), 2000);
     } catch (emailError: any) {
       setEmailLabel('Email Selected To Me');
       window.alert(emailError.message || 'Could not email the selected permits right now.');
     }
+  };
+
+  const openEmailPreview = () => {
+    if (permitsToEmail.length === 0) {
+      window.alert('Select at least one permit first.');
+      return;
+    }
+
+    setIsEmailPreviewOpen(true);
   };
 
   const togglePermitSelection = (permitId: string) => {
@@ -210,17 +192,10 @@ export default function DOBLeads() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={handleCopyForPaste}
-          className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
-        >
-          {copyLabel}
-        </button>
         {user?.email && (
           <button
             type="button"
-            onClick={() => void handleEmailSelected()}
+            onClick={openEmailPreview}
             className="h-11 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-transform hover:scale-[1.01]"
           >
             {emailLabel}
@@ -487,6 +462,69 @@ export default function DOBLeads() {
           </div>
         )}
       </div>
+
+      {isEmailPreviewOpen && user?.email && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4">
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="border-b border-slate-100 px-6 py-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email Preview</p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Send selected permits to yourself</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                This email will be sent to <span className="font-semibold text-slate-700">{user.email}</span>.
+                {' '}You can forward it afterward if needed.
+              </p>
+            </div>
+
+            <div className="max-h-[52vh] space-y-4 overflow-y-auto px-6 py-5">
+              {permitsToEmail.map((permit) => (
+                <div key={permit.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' ') || 'Address unavailable'}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        {permit.borough || 'N/A'} · ZIP {permit.zip_code || 'Unavailable'}
+                      </p>
+                    </div>
+                    <span className="inline-flex rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600">
+                      {formatPermitDate(permit.issuance_date)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-slate-700">
+                    {permit.job_type || 'N/A'} · {permit.owner_business_name || permit.owner_name || 'Unavailable'}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {permit.job_description || 'No job description available.'}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-5 md:flex-row md:items-center md:justify-between">
+              <p className="text-xs font-semibold text-slate-500">
+                {permitsToEmail.length} permit{permitsToEmail.length === 1 ? '' : 's'} ready to send
+              </p>
+              <div className="flex flex-col gap-3 md:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setIsEmailPreviewOpen(false)}
+                  className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleEmailSelected()}
+                  className="h-11 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-transform hover:scale-[1.01]"
+                >
+                  {emailLabel === 'Sending...' ? 'Sending...' : 'Send To My Email'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
