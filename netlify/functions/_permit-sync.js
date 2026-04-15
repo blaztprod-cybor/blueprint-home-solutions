@@ -9,7 +9,7 @@ const BOROUGHS = [
   'STATEN ISLAND',
 ];
 
-const DEFAULT_LIMIT = Number(process.env.DOB_LIMIT || 1000);
+const DEFAULT_LIMIT = Number(process.env.DOB_LIMIT || 5000);
 const BASE_URL = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
 
 function formatDate(date) {

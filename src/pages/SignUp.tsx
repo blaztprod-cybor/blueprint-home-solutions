@@ -397,7 +397,10 @@ export default function SignUp() {
                     <input type="file" className="hidden" accept="image/*" capture="user" onChange={handleFileChange} />
                   </label>
                 </div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Upload Profile Photo {requiredMark}</p>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20 transition-transform hover:scale-[1.01]">
+                  Upload Profile Photo {requiredMark}
+                  <input type="file" className="hidden" accept="image/*" capture="user" onChange={handleFileChange} />
+                </label>
                 <p className="text-center text-xs font-medium text-slate-500">
                   Use your front-facing camera and upload a clear selfie that matches your driver&apos;s license.
                 </p>
