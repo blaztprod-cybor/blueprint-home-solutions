@@ -483,7 +483,7 @@ export default function SignUp() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Upload Government ID / Driver's License {requiredMark}</label>
                   <label className="flex min-h-[72px] cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition-colors hover:border-primary/40 hover:bg-slate-100/70">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-sm shadow-purple-500/20">
                       <Camera size={20} />
                     </div>
                     <div className="flex-1">
