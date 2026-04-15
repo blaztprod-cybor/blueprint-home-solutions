@@ -5,8 +5,11 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
 import { cn } from '../lib/utils';
+import { authorizedApiFetch } from '../lib/authorizedApi';
+import { useAuth } from '../AuthContext';
 
 export default function DOBLeads() {
+  const { user } = useAuth();
   const ITEMS_PER_PAGE = 100;
   const PERMIT_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
   const [permits, setPermits] = useState<DOBPermit[]>([]);
@@ -17,6 +20,7 @@ export default function DOBLeads() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [copyLabel, setCopyLabel] = useState('Copy For Paste');
+  const [emailLabel, setEmailLabel] = useState('Email Selected To Me');
   const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -142,6 +146,38 @@ export default function DOBLeads() {
     window.setTimeout(() => setCopyLabel('Copy For Paste'), 2000);
   };
 
+  const handleEmailSelected = async () => {
+    const permitsToEmail = selectedPermitIds.length > 0
+      ? permits.filter((permit) => selectedPermitIds.includes(permit.id))
+      : paginatedPermits;
+
+    if (permitsToEmail.length === 0) {
+      window.alert('Select at least one permit first.');
+      return;
+    }
+
+    try {
+      setEmailLabel('Sending...');
+      const response = await authorizedApiFetch('/api/email-selected-permits', {
+        method: 'POST',
+        body: JSON.stringify({
+          permits: permitsToEmail.slice(0, 25),
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to email selected permits');
+      }
+
+      setEmailLabel('Sent');
+      window.setTimeout(() => setEmailLabel('Email Selected To Me'), 2000);
+    } catch (emailError: any) {
+      setEmailLabel('Email Selected To Me');
+      window.alert(emailError.message || 'Could not email the selected permits right now.');
+    }
+  };
+
   const togglePermitSelection = (permitId: string) => {
     setSelectedPermitIds((current) =>
       current.includes(permitId)
@@ -181,6 +217,15 @@ export default function DOBLeads() {
         >
           {copyLabel}
         </button>
+        {user?.email && (
+          <button
+            type="button"
+            onClick={() => void handleEmailSelected()}
+            className="h-11 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition-transform hover:scale-[1.01]"
+          >
+            {emailLabel}
+          </button>
+        )}
 
         <button
           type="button"

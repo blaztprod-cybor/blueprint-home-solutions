@@ -222,6 +222,7 @@ export interface UserProfile {
   zip?: string;
   avatar?: string;
   governmentIdImage?: string;
+  portfolioImages?: string[];
   licenseNumber?: string;
   isTradesman?: boolean;
   trade?: string;
@@ -244,6 +245,7 @@ export interface User {
   town?: string;
   zip?: string;
   avatar?: string;
+  portfolioImages?: string[];
   rating?: number;
   isVerified?: boolean;
   governmentIdImage?: string;

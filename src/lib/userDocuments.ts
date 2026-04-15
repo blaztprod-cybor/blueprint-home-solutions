@@ -120,6 +120,7 @@ export function buildUserProfilePayload(
     zip?: string;
     avatar?: string;
     governmentIdImage?: string;
+    portfolioImages?: string[];
     licenseNumber?: string;
     isTradesman?: boolean;
     trade?: string;
@@ -144,6 +145,7 @@ export function buildUserProfilePayload(
     zip: data.zip,
     avatar: options?.omitMedia ? undefined : data.avatar,
     governmentIdImage: options?.omitMedia ? undefined : data.governmentIdImage,
+    portfolioImages: options?.omitMedia ? undefined : data.portfolioImages,
     licenseNumber: data.licenseNumber,
     isTradesman: data.isTradesman,
     trade: data.trade,
@@ -166,6 +168,7 @@ export function extractLegacyProfilePayload(userId: string, legacy: LegacyUserLi
     zip: legacy.zip,
     avatar: legacy.avatar,
     governmentIdImage: legacy.governmentIdImage,
+    portfolioImages: legacy.portfolioImages,
     licenseNumber: legacy.licenseNumber,
     isTradesman: legacy.isTradesman,
     trade: legacy.trade,
@@ -212,6 +215,7 @@ export function mergeUserDocuments({
     town: profile?.town,
     zip: profile?.zip,
     avatar: profile?.avatar || authPhotoURL || getInitialsAvatar(name),
+    portfolioImages: profile?.portfolioImages,
     rating: role === 'Contractor' ? 4.9 : undefined,
     isVerified: account?.isVerified ?? false,
     governmentIdImage: profile?.governmentIdImage,

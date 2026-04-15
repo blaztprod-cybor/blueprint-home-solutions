@@ -29,6 +29,7 @@ export const handler = async (event) => {
         zip: payload.zip,
         avatar: payload.avatar,
         governmentIdImage: payload.governmentIdImage,
+        portfolioImages: payload.portfolioImages,
         licenseNumber: payload.licenseNumber,
         isTradesman: payload.isTradesman,
         trade: payload.trade,

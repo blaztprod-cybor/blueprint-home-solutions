@@ -379,6 +379,7 @@ async function resolveProfileMediaUrls(
   media: {
     avatar?: string;
     governmentIdImage?: string;
+    portfolioImages?: string[];
   }
 ) {
   const nextMedia = { ...media };
@@ -391,6 +392,21 @@ async function resolveProfileMediaUrls(
     nextMedia.governmentIdImage = await uploadDataUrlToStorage(
       nextMedia.governmentIdImage,
       `profiles/${userId}/government-id.jpg`
+    );
+  }
+
+  if (Array.isArray(nextMedia.portfolioImages)) {
+    nextMedia.portfolioImages = await Promise.all(
+      nextMedia.portfolioImages.map((entry, index) => {
+        if (!entry?.startsWith('data:image')) {
+          return Promise.resolve(entry);
+        }
+
+        return uploadDataUrlToStorage(
+          entry,
+          `profiles/${userId}/portfolio/${Date.now()}-${index}.jpg`
+        );
+      })
     );
   }
 
@@ -760,6 +776,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       town?: string;
       zip?: string;
       governmentIdImage?: string;
+      portfolioImages?: string[];
       licenseNumber?: string;
       avatar?: string;
       isTradesman?: boolean;
@@ -778,6 +795,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const uploadedMedia = await resolveProfileMediaUrls(firebaseUser.uid, {
         avatar: nextProfile.avatar,
         governmentIdImage: nextProfile.governmentIdImage,
+        portfolioImages: nextProfile.portfolioImages,
       });
       const finalAvatar = uploadedMedia.avatar || getInitialsAvatar(name);
 
@@ -794,6 +812,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         town: nextProfile.town,
         zip: nextProfile.zip,
         avatar: finalAvatar,
+        portfolioImages: finalRole === 'Contractor' ? uploadedMedia.portfolioImages : undefined,
         rating: finalRole === 'Contractor' ? 4.9 : undefined,
         isVerified: false,
         governmentIdImage: finalRole === 'Contractor' ? uploadedMedia.governmentIdImage : undefined,
@@ -826,6 +845,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         town: nextProfile.town,
         zip: nextProfile.zip,
         avatar: finalAvatar,
+        portfolioImages: finalRole === 'Contractor' ? uploadedMedia.portfolioImages : undefined,
         isVerified: false,
         governmentIdImage: finalRole === 'Contractor' ? uploadedMedia.governmentIdImage : undefined,
         licenseNumber: finalRole === 'Contractor' ? nextProfile.licenseNumber : undefined,
@@ -875,6 +895,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const resolvedMedia = await resolveProfileMediaUrls(user.id, {
         avatar: data.avatar,
         governmentIdImage: data.governmentIdImage,
+        portfolioImages: data.portfolioImages,
       });
       const updatedUser = {
         ...user,
@@ -907,6 +928,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           zip: updatedUser.zip,
           governmentIdImage: updatedUser.governmentIdImage,
           avatar: updatedUser.avatar,
+          portfolioImages: updatedUser.portfolioImages,
           licenseNumber: updatedUser.licenseNumber,
           isTradesman: updatedUser.isTradesman,
           trade: updatedUser.trade,

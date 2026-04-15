@@ -39,6 +39,7 @@ export default function HomeownerDashboard() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectPhotos, setProjectPhotos] = useState<{ id: string; url: string }[]>([]);
   const [introSummaries, setIntroSummaries] = useState<Record<string, LeadInquiry[]>>({});
+  const [contractorProfiles, setContractorProfiles] = useState<Record<string, { name?: string; portfolioImages?: string[] }>>({});
   const [acceptingEstimateKey, setAcceptingEstimateKey] = useState('');
 
   useEffect(() => {
@@ -124,6 +125,52 @@ export default function HomeownerDashboard() {
     });
 
     return () => unsubscribe();
+  }, [selectedProject]);
+
+  useEffect(() => {
+    if (!selectedProject) {
+      setContractorProfiles({});
+      return;
+    }
+
+    const estimateContractorIds = Array.from(
+      new Set(
+        [...(selectedProject.roughEstimates || []), ...(selectedProject.finalEstimates || [])]
+          .map((estimate) => estimate.contractorId)
+          .filter(Boolean)
+      )
+    );
+
+    if (estimateContractorIds.length === 0) {
+      setContractorProfiles({});
+      return;
+    }
+
+    let isMounted = true;
+
+    void (async () => {
+      const entries = await Promise.all(
+        estimateContractorIds.map(async (contractorId) => {
+          const snapshot = await getDoc(doc(db, USER_PROFILES_COLLECTION, contractorId)).catch(() => null);
+          const data = snapshot?.exists() ? snapshot.data() : null;
+          return [
+            contractorId,
+            {
+              name: data?.name,
+              portfolioImages: Array.isArray(data?.portfolioImages) ? data.portfolioImages : [],
+            },
+          ] as const;
+        })
+      );
+
+      if (isMounted) {
+        setContractorProfiles(Object.fromEntries(entries));
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedProject]);
 
   useEffect(() => {
@@ -399,6 +446,28 @@ export default function HomeownerDashboard() {
                   )}
                 </div>
               </div>
+              {(contractorProfiles[estimate.contractorId]?.portfolioImages || []).length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                    Past Work Gallery
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {contractorProfiles[estimate.contractorId]!.portfolioImages!.slice(0, 3).map((image, index) => (
+                      <div key={`${estimate.contractorId}-${index}`} className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                        <img
+                          src={image}
+                          alt={`${estimate.contractorName} past work ${index + 1}`}
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Blueprint keeps direct contact details private until you accept an estimate.
+                  </p>
+                </div>
+              )}
             </div>
           );
         })}
