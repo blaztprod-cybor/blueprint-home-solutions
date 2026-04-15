@@ -2,6 +2,7 @@ import { DOBPermit } from '../types';
 
 // NYC Open Data API for DOB NOW permit issuance feed
 const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
+const NETLIFY_PERMIT_FEED = '/api/dob-permits';
 const STATIC_PERMIT_FEED = '/data/permits.json';
 const LICENSE_LOOKUP_FEED = '/data/license-lookup.json';
 
@@ -45,6 +46,27 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
               }
             ])
         );
+      }
+    }
+
+    const liveResponse = await fetch(`${NETLIFY_PERMIT_FEED}?limit=${limit}`, { cache: 'no-store' });
+
+    if (liveResponse.ok) {
+      const payload = await liveResponse.json();
+      const livePermits = Array.isArray(payload) ? payload : payload.permits;
+
+      if (Array.isArray(livePermits) && livePermits.length > 0) {
+        return livePermits.map((permit) => {
+          const lookup =
+            licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
+            businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+
+          return {
+            ...permit,
+            contact_name: permit.contact_name || lookup?.contact_name || '',
+            phone: permit.phone || lookup?.phone || '',
+          };
+        });
       }
     }
 

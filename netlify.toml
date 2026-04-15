@@ -7,6 +7,12 @@
   command = "npm run dev"
   port = 3000
 
+[functions]
+  directory = "netlify/functions"
+
+[functions."sync-permits"]
+  schedule = "@daily"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
