@@ -34,8 +34,8 @@ function mapPermit(row) {
     owner_name: row.owner_name || 'Private Owner',
     owner_business_name: row.owner_business_name || row.applicant_business_name || 'N/A',
     applicant_license: row.applicant_license || '',
-    contact_name: row.contact_name || '',
-    phone: row.phone || '',
+    contact_name: '',
+    phone: '',
   };
 }
 
@@ -65,8 +65,6 @@ export const handler = async (event) => {
         owner_business_name,
         applicant_business_name,
         applicant_license,
-        contact_name,
-        phone,
         updated_at
       `)
       .order('issued_date', { ascending: false })
