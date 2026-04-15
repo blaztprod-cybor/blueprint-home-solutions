@@ -201,11 +201,17 @@ export async function syncPermitsToSupabase(permits) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const rows = permits.map(toSupabaseRow);
+  const dedupedRows = Array.from(
+    new Map(
+      permits
+        .map(toSupabaseRow)
+        .map((row) => [row.id, row])
+    ).values()
+  );
   const chunkSize = 500;
 
-  for (let index = 0; index < rows.length; index += chunkSize) {
-    const chunk = rows.slice(index, index + chunkSize);
+  for (let index = 0; index < dedupedRows.length; index += chunkSize) {
+    const chunk = dedupedRows.slice(index, index + chunkSize);
     const { error } = await supabase
       .from('dob_permits')
       .upsert(chunk, { onConflict: 'id' });
