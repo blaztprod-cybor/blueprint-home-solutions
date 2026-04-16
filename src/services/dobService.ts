@@ -47,48 +47,42 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
       }
     }
 
-    const liveResponse = await fetch(`${NETLIFY_PERMIT_FEED}?limit=${limit}`, { cache: 'no-store' });
+    const enrichPermits = (permits: DOBPermit[]) =>
+      permits.map((permit) => {
+        const lookup =
+          licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
+          businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
 
-    if (liveResponse.ok) {
-      const payload = await liveResponse.json();
-      const livePermits = Array.isArray(payload) ? payload : payload.permits;
+        return {
+          ...permit,
+          contact_name: permit.contact_name || lookup?.contact_name || '',
+          phone: permit.phone || lookup?.phone || '',
+        };
+      });
 
-      if (Array.isArray(livePermits) && livePermits.length > 0) {
-        return livePermits.map((permit) => {
-          const lookup =
-            licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
-            businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+    const [liveResponse, staticResponse] = await Promise.all([
+      fetch(`${NETLIFY_PERMIT_FEED}?limit=${limit}`, { cache: 'no-store' }).catch(() => null),
+      fetch(STATIC_PERMIT_FEED, { cache: 'no-store' }).catch(() => null),
+    ]);
 
-          return {
-            ...permit,
-            contact_name: permit.contact_name || lookup?.contact_name || '',
-            phone: permit.phone || lookup?.phone || '',
-          };
-        });
-      }
+    const livePayload = liveResponse?.ok ? await liveResponse.json() : null;
+    const livePermits = Array.isArray(livePayload) ? livePayload : livePayload?.permits;
+    const enrichedLivePermits = Array.isArray(livePermits) ? enrichPermits(livePermits) : [];
+
+    const staticPayload = staticResponse?.ok ? await staticResponse.json() : null;
+    const staticPermits = Array.isArray(staticPayload) ? staticPayload : staticPayload?.permits;
+    const enrichedStaticPermits = Array.isArray(staticPermits) ? enrichPermits(staticPermits).slice(0, limit) : [];
+
+    if (enrichedStaticPermits.length > enrichedLivePermits.length) {
+      return enrichedStaticPermits;
     }
 
-    const staticResponse = await fetch(STATIC_PERMIT_FEED, { cache: 'no-store' });
+    if (enrichedLivePermits.length > 0) {
+      return enrichedLivePermits;
+    }
 
-    if (staticResponse.ok) {
-      const payload = await staticResponse.json();
-      const staticPermits = Array.isArray(payload) ? payload : payload.permits;
-
-      if (Array.isArray(staticPermits) && staticPermits.length > 0) {
-        return staticPermits
-          .map((permit) => {
-            const lookup =
-              licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
-              businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
-
-            return {
-              ...permit,
-              contact_name: permit.contact_name || lookup?.contact_name || '',
-              phone: permit.phone || lookup?.phone || '',
-            };
-          })
-          .slice(0, limit);
-      }
+    if (enrichedStaticPermits.length > 0) {
+      return enrichedStaticPermits;
     }
 
     return getMockData(limit);
