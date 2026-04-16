@@ -10,6 +10,14 @@ function normalizeLicenseKey(value: string | number | null | undefined): string 
   return stripped || digitsOnly || '';
 }
 
+function normalizeBusinessKey(value: string | null | undefined): string {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[.,#&/\\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
   try {
     const licenseLookupResponse = await fetch(LICENSE_LOOKUP_FEED, { cache: 'no-store' });
@@ -37,7 +45,7 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
           records
             .filter((record: any) => String(record.business_name || '').trim())
             .map((record: any) => [
-              String(record.business_name || '').trim().toUpperCase(),
+              normalizeBusinessKey(record.business_name),
               {
                 contact_name: record.contact_name || '',
                 phone: record.phone || '',
@@ -51,7 +59,9 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
       permits.map((permit) => {
         const lookup =
           licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
-          businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+          businessLookup.get(normalizeBusinessKey(permit.owner_business_name)) ||
+          businessLookup.get(normalizeBusinessKey(permit.applicant_business_name)) ||
+          businessLookup.get(normalizeBusinessKey(permit.owner_name));
 
         return {
           ...permit,
