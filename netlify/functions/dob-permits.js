@@ -5,7 +5,7 @@ function createSupabaseAdminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    throw new Error('Supabase credentials are missing for permit feed.');
+    throw new Error('Supabase credentials are missing for filing feed.');
   }
 
   return createClient(url, key, {
@@ -33,9 +33,11 @@ function mapPermit(row) {
     job_description: row.job_description || 'No description provided',
     owner_name: row.owner_name || 'Private Owner',
     owner_business_name: row.owner_business_name || row.applicant_business_name || 'N/A',
+    estimated_job_costs: typeof row.estimated_job_costs === 'number' ? row.estimated_job_costs : Number(row.estimated_job_costs || 0),
     applicant_license: row.applicant_license || '',
     contact_name: '',
     phone: '',
+    source: row.source || '',
   };
 }
 
@@ -65,9 +67,11 @@ export const handler = async (event) => {
         owner_business_name,
         applicant_business_name,
         applicant_license,
+        estimated_job_costs,
+        source,
         updated_at
       `)
-      .order('issued_date', { ascending: false })
+      .order('approved_date', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -75,7 +79,7 @@ export const handler = async (event) => {
     }
 
     const permits = Array.isArray(data) ? data.map(mapPermit) : [];
-    const latestIssuedDate = permits[0]?.issuance_date || null;
+    const latestIssuedDate = permits[0]?.filing_date || null;
     const latestUpdatedAt = Array.isArray(data) && data[0]?.updated_at ? data[0].updated_at : null;
 
     return {
@@ -96,7 +100,7 @@ export const handler = async (event) => {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : 'Failed to load permit feed from Supabase',
+        error: error instanceof Error ? error.message : 'Failed to load filing feed from Supabase',
       }),
     };
   }

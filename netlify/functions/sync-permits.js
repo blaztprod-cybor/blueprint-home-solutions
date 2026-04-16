@@ -9,7 +9,7 @@ export default async () => {
     const payload = await syncDobPermits();
     console.log('[PERMIT SYNC][DAILY]', {
       count: payload.count,
-      latestIssuedDate: payload.permits[0]?.issuance_date || null,
+      latestIssuedDate: payload.permits[0]?.filing_date || null,
       generatedAt: payload.generatedAt,
       startDate: payload.startDate,
     });

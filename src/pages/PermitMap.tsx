@@ -129,14 +129,14 @@ export default function PermitMap() {
           <div className="space-y-2">
             <Link to="/permit-feed" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary">
               <ChevronLeft size={18} />
-              Back to Permit Feed
+              Back to Filing Feed
             </Link>
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20">
                 <MapPinned size={22} />
               </div>
               <div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-950">Permit Map</h1>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950">Filing Map</h1>
                               </div>
             </div>
           </div>
@@ -193,13 +193,13 @@ export default function PermitMap() {
           <div className="flex min-h-[420px] items-center justify-center rounded-[2rem] border border-slate-200 bg-white/90 shadow-sm backdrop-blur-sm">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="animate-spin text-primary" size={40} />
-              <p className="font-bold text-slate-500">Loading permit map...</p>
+              <p className="font-bold text-slate-500">Loading filing map...</p>
             </div>
           </div>
         ) : filteredPermits.length === 0 ? (
           <div className="flex min-h-[420px] items-center justify-center rounded-[2rem] border border-slate-200 bg-white/90 shadow-sm backdrop-blur-sm">
             <div className="text-center">
-              <p className="text-lg font-bold text-slate-700">No mapped permits found</p>
+              <p className="text-lg font-bold text-slate-700">No mapped filings found</p>
               <p className="mt-2 text-sm text-slate-500">Try another borough filter.</p>
             </div>
           </div>
@@ -207,8 +207,8 @@ export default function PermitMap() {
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_380px]">
             <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white/88 shadow-xl shadow-slate-200/50 backdrop-blur-sm">
               <div className="border-b border-slate-100 px-6 py-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mapped Permits</p>
-                <p className="mt-1 text-sm font-semibold text-slate-600">{filteredPermits.length} permits issued in the last 14 days</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Mapped Filings</p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">{filteredPermits.length} filings in the current feed</p>
               </div>
               <div className="p-4">
                 <div className="relative h-[640px] overflow-hidden rounded-[1.5rem] border border-slate-100 bg-slate-100">
@@ -247,7 +247,8 @@ export default function PermitMap() {
                               <div className="text-xs text-slate-500">{permit.borough}</div>
                               <div><span className="font-semibold">Code:</span> {permit.job_type || 'N/A'}</div>
                               <div><span className="font-semibold">Status:</span> {permit.permit_status || 'N/A'}</div>
-                              <div><span className="font-semibold">Issued:</span> {formatPermitDate(permit.issuance_date)}</div>
+                              <div><span className="font-semibold">Filed:</span> {formatPermitDate(permit.filing_date)}</div>
+                              <div><span className="font-semibold">Projected Cost:</span> {Number(permit.estimated_job_costs || 0) > 0 ? Number(permit.estimated_job_costs || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : 'Unavailable'}</div>
                               <div><span className="font-semibold">Lat/Lng:</span> {latitude.toFixed(5)}, {longitude.toFixed(5)}</div>
                             </div>
                           </Popup>
@@ -262,8 +263,8 @@ export default function PermitMap() {
 
             <aside className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white/88 shadow-xl shadow-slate-200/50 backdrop-blur-sm">
               <div className="border-b border-slate-100 px-6 py-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Selected Permit</p>
-                <p className="mt-1 text-sm font-semibold text-slate-600">Tap a point to inspect permit details.</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Selected Filing</p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">Tap a point to inspect filing details.</p>
               </div>
 
               {selectedPermit ? (
@@ -280,12 +281,20 @@ export default function PermitMap() {
                       <p className="mt-2 text-sm font-bold text-slate-700">{selectedPermit.job_type}</p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Date Issued</p>
-                      <p className="mt-2 text-sm font-bold text-slate-700">{formatPermitDate(selectedPermit.issuance_date)}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Date Filed</p>
+                      <p className="mt-2 text-sm font-bold text-slate-700">{formatPermitDate(selectedPermit.filing_date)}</p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Status</p>
                       <p className="mt-2 text-sm font-bold text-slate-700">{selectedPermit.permit_status}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Projected Cost</p>
+                      <p className="mt-2 text-sm font-bold text-slate-700">
+                        {Number(selectedPermit.estimated_job_costs || 0) > 0
+                          ? Number(selectedPermit.estimated_job_costs || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+                          : 'Unavailable'}
+                      </p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Borough</p>
@@ -297,12 +306,12 @@ export default function PermitMap() {
                     to="/permit-feed"
                     className="block rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-center text-xs font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
                   >
-                    Return to Permit Feed
+                    Return to Filing Feed
                   </Link>
                 </div>
               ) : (
                 <div className="p-6">
-                  <p className="text-sm font-medium text-slate-500">Select a permit point to view details.</p>
+                  <p className="text-sm font-medium text-slate-500">Select a filing point to view details.</p>
                 </div>
               )}
             </aside>

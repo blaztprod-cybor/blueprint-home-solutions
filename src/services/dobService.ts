@@ -1,7 +1,5 @@
 import { DOBPermit } from '../types';
 
-// NYC Open Data API for DOB NOW permit issuance feed
-const NYC_DATA_API = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
 const NETLIFY_PERMIT_FEED = '/api/dob-permits';
 const STATIC_PERMIT_FEED = '/data/permits.json';
 const LICENSE_LOOKUP_FEED = '/data/license-lookup.json';
@@ -78,49 +76,22 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
 
       if (Array.isArray(staticPermits) && staticPermits.length > 0) {
         return staticPermits
-            .map((permit) => {
-              const lookup =
-                licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
-                businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+          .map((permit) => {
+            const lookup =
+              licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
+              businessLookup.get(String(permit.owner_business_name || '').trim().toUpperCase());
+
             return {
               ...permit,
-              contact_name: lookup?.contact_name || '',
-              phone: lookup?.phone || '',
+              contact_name: permit.contact_name || lookup?.contact_name || '',
+              phone: permit.phone || lookup?.phone || '',
             };
           })
           .slice(0, limit);
       }
     }
 
-    const params = new URLSearchParams({
-      '$limit': limit.toString(),
-      '$order': 'issued_date DESC'
-    });
-    
-    const url = `${NYC_DATA_API}?${params.toString()}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`NYC DOB API Error (${response.status}):`, errorText);
-      
-      // Fallback: try without ordering if it fails (sometimes ordering on certain fields fails)
-      if (response.status === 400) {
-        const fallbackUrl = `${NYC_DATA_API}?$limit=${limit}`;
-        const fallbackResponse = await fetch(fallbackUrl);
-        if (fallbackResponse.ok) {
-          const data = await fallbackResponse.json();
-          return transformData(data, licenseLookup, businessLookup);
-        }
-      }
-      
-      // If API is down or 404, return mock data so the UI isn't empty
-      console.warn('Using mock data as fallback for NYC DOB API');
-      return getMockData(limit);
-    }
-    
-    const data = await response.json();
-    return transformData(data, licenseLookup, businessLookup);
+    return getMockData(limit);
   } catch (error) {
     console.error('Error fetching DOB permits:', error);
     return getMockData(limit);
@@ -138,44 +109,13 @@ function getMockData(limit: number): DOBPermit[] {
     house_number: Math.floor(Math.random() * 2000).toString(),
     street_name: streets[Math.floor(Math.random() * streets.length)],
     job_type: jobTypes[Math.floor(Math.random() * jobTypes.length)],
-    permit_status: 'ISSUED',
+    permit_status: 'Filed',
     filing_date: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
     issuance_date: new Date(Date.now() - Math.random() * 1000000000).toISOString(),
     job_description: 'Renovation of existing structure including plumbing and electrical work.',
     owner_name: 'Property Owner LLC',
-    owner_business_name: 'Real Estate Management'
+    owner_business_name: 'Real Estate Management',
+    estimated_job_costs: Math.round(Math.random() * 500000),
+    source: 'Mock DOB filing data',
   }));
-}
-
-function transformData(
-  data: any[],
-  licenseLookup: Map<string, { contact_name?: string; phone?: string }>,
-  businessLookup: Map<string, { contact_name?: string; phone?: string }>
-): DOBPermit[] {
-  return data.map((item: any) => {
-    const houseNum = item.house_no || '';
-    const streetName = item.street_name || '';
-    const bizName = item.applicant_business_name || item.owner_business_name || 'N/A';
-    const applicantLicense = item.applicant_license || '';
-    const lookup =
-      licenseLookup.get(normalizeLicenseKey(applicantLicense)) ||
-      businessLookup.get(String(bizName).trim().toUpperCase());
-    
-    return {
-      id: item.job_filing_number || item.work_permit || Math.random().toString(36).substr(2, 9),
-      borough: item.borough || 'N/A',
-      house_number: houseNum,
-      street_name: streetName,
-      job_type: item.work_type || 'N/A',
-      permit_status: item.permit_status || 'N/A',
-      filing_date: item.approved_date || '',
-      issuance_date: item.issued_date || '',
-      job_description: item.job_description || 'No description provided',
-      owner_name: item.owner_name || 'Private Owner',
-      owner_business_name: bizName,
-      applicant_license: applicantLicense,
-      contact_name: lookup?.contact_name || '',
-      phone: lookup?.phone || ''
-    };
-  });
 }

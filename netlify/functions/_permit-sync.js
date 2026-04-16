@@ -10,7 +10,8 @@ const BOROUGHS = [
 ];
 
 const DEFAULT_LIMIT = Number(process.env.DOB_LIMIT || 5000);
-const BASE_URL = 'https://data.cityofnewyork.us/resource/rbx6-tga4.json';
+const BIS_FILING_URL = 'https://data.cityofnewyork.us/resource/ic3t-wcy2.json';
+const DOB_NOW_FILING_URL = 'https://data.cityofnewyork.us/resource/w9ak-ipjd.json';
 
 function formatDate(date) {
   return date.toISOString().slice(0, 10);
@@ -33,17 +34,29 @@ function getBusinessDaysBackDate(daysBack) {
 }
 
 function getDefaultStartDate() {
-  return process.env.DOB_START_DATE || getBusinessDaysBackDate(10);
+  return process.env.DOB_START_DATE || getBusinessDaysBackDate(20);
 }
 
-function buildUrl(borough, startDate) {
+function buildBisUrl(borough, startDate) {
   const params = new URLSearchParams({
-    '$where': `borough='${borough}' AND issued_date >= '${startDate}'`,
-    '$order': 'issued_date DESC',
+    '$select': 'job__,doc__,borough,house__,street_name,job_type,job_status,job_status_descrp,latest_action_date,initial_cost,owner_s_business_name,owner_s_first_name,owner_s_last_name,applicant_license__,other_description,zip,gis_latitude,gis_longitude,community___board,gis_council_district,gis_census_tract,gis_nta_name,pre__filing_date',
+    '$where': `borough='${borough}'`,
+    '$order': 'pre__filing_date DESC',
     '$limit': String(DEFAULT_LIMIT),
   });
 
-  return `${BASE_URL}?${params.toString()}`;
+  return `${BIS_FILING_URL}?${params.toString()}`;
+}
+
+function buildDobNowUrl(borough, startDate) {
+  const params = new URLSearchParams({
+    '$select': 'job_filing_number,filing_status,house_no,street_name,borough,job_type,filing_date,current_status_date,first_permit_date,approved_date,initial_cost,owner_s_business_name,applicant_license,work_on_floor,building_type,zip,latitude,longitude,commmunity_board,council_district,census_tract,nta',
+    '$where': `borough='${borough}' AND filing_date >= '${startDate}'`,
+    '$order': 'filing_date DESC',
+    '$limit': String(DEFAULT_LIMIT),
+  });
+
+  return `${DOB_NOW_FILING_URL}?${params.toString()}`;
 }
 
 function excelSerialToIso(value) {
@@ -67,37 +80,79 @@ function normalizeDate(value) {
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
 }
 
-function normalizePermit(row) {
+function normalizeCurrencyNumber(value) {
+  const normalized = String(value || '').replace(/[^0-9.-]/g, '');
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeBisFiling(row) {
+  const ownerName = [row.owner_s_first_name, row.owner_s_last_name].filter(Boolean).join(' ').trim();
+
   return {
-    id: row.job_filing_number || row.work_permit || randomUUID(),
+    id: `bis-${row.job__ || randomUUID()}-${row.doc__ || '01'}`,
+    jobFilingNumber: row.job__ || '',
+    workPermit: '',
+    sequenceNumber: row.doc__ || '',
+    filingReason: '',
+    borough: row.borough || 'N/A',
+    house_number: row.house__ || '',
+    street_name: row.street_name || '',
+    address: [row.house__, row.street_name].filter(Boolean).join(' '),
+    job_type: row.job_type || 'N/A',
+    permit_status: row.job_status_descrp || row.job_status || 'N/A',
+    filing_date: normalizeDate(row.pre__filing_date),
+    issuance_date: normalizeDate(row.latest_action_date),
+    expiration_date: '',
+    job_description: row.other_description || 'No description provided',
+    estimated_job_costs: normalizeCurrencyNumber(row.initial_cost),
+    owner_name: ownerName || 'Private Owner',
+    owner_business_name: row.owner_s_business_name || ownerName || 'N/A',
+    applicant_business_name: row.owner_s_business_name || ownerName || 'N/A',
+    applicant_license: row.applicant_license__ || '',
+    zip_code: row.zip || '',
+    latitude: row.gis_latitude ? Number(row.gis_latitude) : null,
+    longitude: row.gis_longitude ? Number(row.gis_longitude) : null,
+    community_board: row.community___board || '',
+    council_district: row.gis_council_district || '',
+    bbl: '',
+    census_tract: row.gis_census_tract || '',
+    nta: row.gis_nta_name || '',
+    source: 'NYC DOB Job Application Filings',
+  };
+}
+
+function normalizeDobNowFiling(row) {
+  return {
+    id: `dob-now-${row.job_filing_number || randomUUID()}`,
     jobFilingNumber: row.job_filing_number || '',
-    workPermit: row.work_permit || '',
-    sequenceNumber: row.sequence_number || '',
-    filingReason: row.filing_reason || '',
+    workPermit: '',
+    sequenceNumber: '',
+    filingReason: '',
     borough: row.borough || 'N/A',
     house_number: row.house_no || '',
     street_name: row.street_name || '',
     address: [row.house_no, row.street_name].filter(Boolean).join(' '),
-    job_type: row.work_type || 'N/A',
-    permit_status: row.permit_status || 'N/A',
-    filing_date: normalizeDate(row.approved_date),
-    issuance_date: normalizeDate(row.issued_date),
-    expiration_date: normalizeDate(row.expired_date),
-    job_description: row.job_description || 'No description provided',
-    estimated_job_costs: Number(row.estimated_job_costs || 0),
-    owner_name: row.owner_name || 'Private Owner',
-    owner_business_name: row.applicant_business_name || row.owner_business_name || 'N/A',
-    applicant_business_name: row.applicant_business_name || row.owner_business_name || 'N/A',
+    job_type: row.job_type || 'N/A',
+    permit_status: row.filing_status || 'N/A',
+    filing_date: normalizeDate(row.filing_date),
+    issuance_date: normalizeDate(row.current_status_date || row.first_permit_date || row.approved_date),
+    expiration_date: '',
+    job_description: [row.building_type, row.work_on_floor].filter(Boolean).join(' | ') || 'No description provided',
+    estimated_job_costs: normalizeCurrencyNumber(row.initial_cost),
+    owner_name: row.owner_s_business_name || 'Private Owner',
+    owner_business_name: row.owner_s_business_name || 'N/A',
+    applicant_business_name: row.owner_s_business_name || 'N/A',
     applicant_license: row.applicant_license || '',
-    zip_code: row.zip_code || '',
+    zip_code: row.zip || '',
     latitude: row.latitude ? Number(row.latitude) : null,
     longitude: row.longitude ? Number(row.longitude) : null,
-    community_board: row.community_board || '',
+    community_board: row.commmunity_board || '',
     council_district: row.council_district || '',
-    bbl: row.bbl || '',
+    bbl: '',
     census_tract: row.census_tract || '',
     nta: row.nta || '',
-    source: 'NYC DOB NOW Build Approved Permits',
+    source: 'NYC DOB NOW Build Job Application Filings',
   };
 }
 
@@ -113,7 +168,7 @@ function buildDedupeKey(permit) {
     normalizeText(permit.borough),
     normalizeText(permit.address),
     Number(permit.estimated_job_costs || 0),
-    permit.issuance_date || '',
+    permit.filing_date || '',
     normalizeText(permit.job_description),
   ].join('|');
 }
@@ -141,17 +196,35 @@ function dedupePermits(permits) {
   return Array.from(deduped.values());
 }
 
-async function fetchBoroughPermits(borough, startDate) {
-  const url = buildUrl(borough, startDate);
-  const response = await fetch(url);
+async function fetchBisFilingsForBorough(borough, startDate) {
+  const response = await fetch(buildBisUrl(borough, startDate));
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`DOB fetch failed for ${borough}: ${response.status} ${body}`);
+    throw new Error(`DOB BIS filing fetch failed for ${borough}: ${response.status} ${body}`);
   }
 
   const data = await response.json();
-  return data.map(normalizePermit);
+  const minDate = new Date(startDate).getTime();
+
+  return data
+    .map(normalizeBisFiling)
+    .filter((filing) => {
+      const filingTime = new Date(filing.filing_date).getTime();
+      return Number.isFinite(filingTime) && filingTime >= minDate;
+    });
+}
+
+async function fetchDobNowFilingsForBorough(borough, startDate) {
+  const response = await fetch(buildDobNowUrl(borough, startDate));
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`DOB NOW filing fetch failed for ${borough}: ${response.status} ${body}`);
+  }
+
+  const data = await response.json();
+  return data.map(normalizeDobNowFiling);
 }
 
 function toSupabaseRow(permit) {
@@ -224,10 +297,16 @@ export async function syncPermitsToSupabase(permits) {
 
 export async function fetchAndNormalizePermits() {
   const startDate = getDefaultStartDate();
-  const boroughResults = await Promise.all(BOROUGHS.map((borough) => fetchBoroughPermits(borough, startDate)));
+  const boroughResults = await Promise.all(
+    BOROUGHS.flatMap((borough) => [
+      fetchBisFilingsForBorough(borough, startDate),
+      fetchDobNowFilingsForBorough(borough, startDate),
+    ])
+  );
+
   const permits = dedupePermits(boroughResults.flat())
     .sort((a, b) => {
-      const dateDiff = new Date(b.issuance_date).getTime() - new Date(a.issuance_date).getTime();
+      const dateDiff = new Date(b.filing_date).getTime() - new Date(a.filing_date).getTime();
       if (dateDiff !== 0) return dateDiff;
 
       const sequenceDiff = Number(b.sequenceNumber || 0) - Number(a.sequenceNumber || 0);
@@ -238,7 +317,7 @@ export async function fetchAndNormalizePermits() {
 
   return {
     generatedAt: new Date().toISOString(),
-    source: 'NYC DOB NOW Build Approved Permits',
+    source: 'NYC DOB Job Application Filings',
     startDate,
     boroughs: BOROUGHS,
     count: permits.length,

@@ -82,9 +82,11 @@ export interface DOBPermit {
   job_description: string;
   owner_name: string;
   owner_business_name: string;
+  estimated_job_costs?: number;
   applicant_license?: string;
   contact_name?: string;
   phone?: string;
+  source?: string;
 }
 
 export interface Lead {

@@ -43,12 +43,12 @@ export const handler = async (event) => {
       }),
       mail: {
         to: requestUser.email,
-        subject: `Blueprint permit feed selection (${trimmedPermits.length})`,
+        subject: `Blueprint filing feed selection (${trimmedPermits.length})`,
         html: renderIntroEmail({
-          heading: 'Your Blueprint permit selection',
+          heading: 'Your Blueprint filing selection',
           greeting: `Hi ${requestUser.email.split('@')[0]},`,
           bodyLines: [
-            'Here is the permit list you selected from the live Blueprint feed.',
+            'Here is the filing list you selected from the live Blueprint feed.',
             'Direct homeowner contact remains coordinated through Blueprint.',
           ],
           detailLines: trimmedPermits.map((permit) => [
@@ -56,7 +56,8 @@ export const handler = async (event) => {
             `${permit.address || [permit.house_number, permit.street_name].filter(Boolean).join(' ') || 'Address unavailable'}`,
             `ZIP: ${permit.zip_code || 'Unavailable'}`,
             `Work Type: ${permit.job_type || 'N/A'}`,
-            `Issued: ${formatPermitDate(permit.issuance_date)}`,
+            `Filed: ${formatPermitDate(permit.filing_date)}`,
+            `Projected Cost: $${Number(permit.estimated_job_costs || 0).toLocaleString()}`,
             `Company: ${permit.owner_business_name || permit.owner_name || 'Unavailable'}`,
           ].join('<br/>')),
         }),
@@ -72,7 +73,7 @@ export const handler = async (event) => {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to email selected permits' }),
+      body: JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to email selected filings' }),
     };
   }
 };

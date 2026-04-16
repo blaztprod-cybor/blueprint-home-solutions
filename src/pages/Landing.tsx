@@ -412,7 +412,8 @@ export default function Landing() {
                       <tr>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Borough</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Street</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Issue Date</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Filing Date</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Projected Cost</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Job Description</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Status</th>
                       </tr>
@@ -420,7 +421,7 @@ export default function Landing() {
                     <tbody className="divide-y divide-slate-50">
                       {loading ? (
                         <tr>
-                          <td colSpan={5} className="px-4 py-16 text-center">
+                          <td colSpan={6} className="px-4 py-16 text-center">
                             <div className="flex flex-col items-center justify-center">
                               <Loader2 className="animate-spin text-primary mb-4" size={28} />
                               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Fetching Live Data...</p>
@@ -434,14 +435,19 @@ export default function Landing() {
                             <td className="px-4 py-3 text-sm font-medium text-slate-500">{row.street_name}</td>
                             <td className="px-4 py-3 text-sm font-medium text-slate-500">
                               <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold">
-                                {formatPermitDate(row.issuance_date)}
+                                {formatPermitDate(row.filing_date)}
                               </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm font-medium text-slate-500">
+                              {Number(row.estimated_job_costs || 0) > 0
+                                ? Number(row.estimated_job_costs || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+                                : 'Unavailable'}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium text-slate-600 italic whitespace-nowrap">{row.job_description}</td>
                             <td className="px-4 py-3 text-sm font-medium">
                               <span className={cn(
                                 "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                                row.permit_status === 'Permit Issued' || row.permit_status === 'ISSUED'
+                                row.permit_status === 'Approved' || row.permit_status === 'Permit Entire' || row.permit_status === 'Filed'
                                   ? "bg-emerald-50 text-emerald-600"
                                   : "bg-slate-50 text-slate-600"
                               )}>
@@ -458,7 +464,7 @@ export default function Landing() {
               {!loading && permitData.length > 0 && (
                 <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-semibold text-slate-500">
-                    {filteredPermitData.length.toLocaleString()} permits in live feed
+                    {filteredPermitData.length.toLocaleString()} filings in live feed
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button

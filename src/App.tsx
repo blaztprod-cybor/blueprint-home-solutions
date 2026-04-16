@@ -158,7 +158,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
 
   const contractorLinks = [
     { to: "/projects", icon: Briefcase, label: "Project Leads" },
-    { to: hasPaidContractorAccess ? "/permit-feed" : "/contractor-paywall", icon: Building2, label: hasPaidContractorAccess ? "Permit Feed" : "Permit Feed Locked" },
+    { to: hasPaidContractorAccess ? "/permit-feed" : "/contractor-paywall", icon: Building2, label: hasPaidContractorAccess ? "Filing Feed" : "Filing Feed Locked" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
     { to: "/portfolio-gallery", icon: ImageIcon, label: "Gallery" },

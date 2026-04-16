@@ -30,6 +30,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TEXTBELT_API_KEY = process.env.TEXTBELT_API_KEY;
 const TEXTBELT_SENDER = process.env.TEXTBELT_SENDER || "Blueprint Home Solutions";
+const LOCAL_PERMIT_FEED_PATH = path.join(process.cwd(), "public", "data", "permits.json");
 
 function getAdminAppInstance() {
   if (getApps().length > 0) {
@@ -210,12 +211,44 @@ async function syncPermitFeed() {
   }
 }
 
+function readLocalPermitFeed(limit: number) {
+  if (!fs.existsSync(LOCAL_PERMIT_FEED_PATH)) {
+    return [];
+  }
+
+  const payload = JSON.parse(fs.readFileSync(LOCAL_PERMIT_FEED_PATH, "utf8"));
+  const permits = Array.isArray(payload) ? payload : payload.permits || [];
+  return permits.slice(0, limit);
+}
+
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || "3000", 10);
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: false }));
+  app.use(express.static(path.join(process.cwd(), "public")));
+
+  app.get("/api/dob-permits", (req, res) => {
+    const limitParam = Number.parseInt(String(req.query.limit || "20"), 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
+
+    try {
+      const permits = readLocalPermitFeed(limit);
+      res.json({
+        permits,
+        meta: {
+          source: "local-file",
+          count: permits.length,
+          latestIssuedDate: permits[0]?.filing_date || null,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load local filing feed",
+      });
+    }
+  });
 
   const createTransporter = () =>
     nodemailer.createTransport({

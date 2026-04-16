@@ -111,6 +111,12 @@ export default function DOBLeads() {
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
   };
 
+  const formatProjectedCost = (value?: number) => {
+    const amount = Number(value || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return 'Unavailable';
+    return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  };
+
   const visiblePages = Array.from(
     { length: Math.min(5, totalPages) },
     (_, index) => {
@@ -124,7 +130,7 @@ export default function DOBLeads() {
 
   const handleEmailSelected = async () => {
     if (permitsToEmail.length === 0) {
-      window.alert('Select at least one permit first.');
+      window.alert('Select at least one filing first.');
       return;
     }
 
@@ -139,7 +145,7 @@ export default function DOBLeads() {
       const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to email selected permits');
+        throw new Error(payload?.error || 'Failed to email selected filings');
       }
 
       setEmailLabel('Sent');
@@ -147,13 +153,13 @@ export default function DOBLeads() {
       window.setTimeout(() => setEmailLabel('Email Selected To Me'), 2000);
     } catch (emailError: any) {
       setEmailLabel('Email Selected To Me');
-      window.alert(emailError.message || 'Could not email the selected permits right now.');
+      window.alert(emailError.message || 'Could not email the selected filings right now.');
     }
   };
 
   const openEmailPreview = () => {
     if (permitsToEmail.length === 0) {
-      window.alert('Select at least one permit first.');
+      window.alert('Select at least one filing first.');
       return;
     }
 
@@ -183,7 +189,7 @@ export default function DOBLeads() {
   const PaginationControls = () => (
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Permit Feed Pages</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Filing Feed Pages</p>
         <p className="mt-1 text-sm font-semibold text-slate-600">
           Showing {filteredPermits.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1}
           {' '}-{' '}
@@ -246,17 +252,17 @@ export default function DOBLeads() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-3xl font-bold tracking-tight">Permit Feed</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Filing Feed</h1>
             <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest">Live Feed</span>
           </div>
-          <p className="text-muted-foreground">Real-time construction permits issued by the NYC Department of Buildings.</p>
+          <p className="text-muted-foreground">Live NYC DOB job filings with projected cost for early lead discovery.</p>
         </div>
         <Link
           to="/permit-map"
           className="block rounded-2xl border border-slate-200 bg-white px-5 py-3 text-right shadow-sm transition-colors hover:bg-slate-50"
         >
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Map Setup</p>
-          <p className="mt-1 text-xs font-bold text-slate-600">Open permit map view</p>
+          <p className="mt-1 text-xs font-bold text-slate-600">Open filing map view</p>
         </Link>
       </div>
 
@@ -322,7 +328,7 @@ export default function DOBLeads() {
         </div>
 
         <div className="overflow-x-scroll pb-3">
-          <table className="w-full text-left border-collapse min-w-[2050px]">
+          <table className="w-full text-left border-collapse min-w-[2080px]">
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -330,7 +336,7 @@ export default function DOBLeads() {
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleVisibleSelections}
-                    aria-label="Select all visible permit rows"
+                    aria-label="Select all visible filing rows"
                     className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                   />
                 </th>
@@ -338,7 +344,8 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ZIP</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Type / Status</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Issued</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Filed</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Projected Cost</th>
                 <th className="w-[195px] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Company</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
@@ -349,18 +356,18 @@ export default function DOBLeads() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-20 text-center">
+                  <td colSpan={12} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
-                      <p className="font-bold text-slate-500">Processing NYC DOB Data...</p>
+                      <p className="font-bold text-slate-500">Processing NYC DOB filings...</p>
                     </div>
                   </td>
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-20 text-center">
+                  <td colSpan={12} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <p className="text-lg font-bold text-slate-700">No permits match these filters</p>
+                      <p className="text-lg font-bold text-slate-700">No filings match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
                     </div>
                   </td>
@@ -379,7 +386,7 @@ export default function DOBLeads() {
                         type="checkbox"
                         checked={selectedPermitIds.includes(permit.id)}
                         onChange={() => togglePermitSelection(permit.id)}
-                        aria-label={`Select permit ${permit.address || permit.street_name}`}
+                        aria-label={`Select filing ${permit.address || permit.street_name}`}
                         className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                       />
                     </td>
@@ -403,7 +410,7 @@ export default function DOBLeads() {
                         </span>
                         <span className={cn(
                           "inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                          permit.permit_status === 'Permit Issued' || permit.permit_status === 'ISSUED'
+                          permit.permit_status === 'Approved' || permit.permit_status === 'Permit Entire' || permit.permit_status === 'Filed'
                             ? "bg-emerald-50 text-emerald-600"
                             : "bg-slate-50 text-slate-600"
                         )}>
@@ -413,7 +420,12 @@ export default function DOBLeads() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-[10px] font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-lg uppercase tracking-widest whitespace-nowrap">
-                        {formatPermitDate(permit.issuance_date)}
+                        {formatPermitDate(permit.filing_date)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
+                        {formatProjectedCost(permit.estimated_job_costs)}
                       </span>
                     </td>
                     <td className="w-[195px] px-6 py-4 align-top">
@@ -468,7 +480,7 @@ export default function DOBLeads() {
           <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="border-b border-slate-100 px-6 py-5">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Email Preview</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Send selected permits to yourself</h2>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Send selected filings to yourself</h2>
               <p className="mt-2 text-sm text-slate-500">
                 This email will be sent to <span className="font-semibold text-slate-700">{user.email}</span>.
                 {' '}You can forward it afterward if needed.
@@ -488,11 +500,11 @@ export default function DOBLeads() {
                       </p>
                     </div>
                     <span className="inline-flex rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600">
-                      {formatPermitDate(permit.issuance_date)}
+                      {formatPermitDate(permit.filing_date)}
                     </span>
                   </div>
                   <p className="mt-3 text-sm font-semibold text-slate-700">
-                    {permit.job_type || 'N/A'} · {permit.owner_business_name || permit.owner_name || 'Unavailable'}
+                    {permit.job_type || 'N/A'} · {formatProjectedCost(permit.estimated_job_costs)} · {permit.owner_business_name || permit.owner_name || 'Unavailable'}
                   </p>
                   <p className="mt-2 text-sm text-slate-500">
                     {permit.job_description || 'No job description available.'}
@@ -503,7 +515,7 @@ export default function DOBLeads() {
 
             <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-5 md:flex-row md:items-center md:justify-between">
               <p className="text-xs font-semibold text-slate-500">
-                {permitsToEmail.length} permit{permitsToEmail.length === 1 ? '' : 's'} ready to send
+                {permitsToEmail.length} filing{permitsToEmail.length === 1 ? '' : 's'} ready to send
               </p>
               <div className="flex flex-col gap-3 md:flex-row">
                 <button
