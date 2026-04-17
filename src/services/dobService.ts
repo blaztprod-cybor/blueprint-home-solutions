@@ -3,6 +3,7 @@ import { DOBPermit } from '../types';
 const NETLIFY_PERMIT_FEED = '/api/dob-permits';
 const STATIC_PERMIT_FEED = '/data/permits.json';
 const LICENSE_LOOKUP_FEED = '/data/license-lookup.json';
+const CONTACT_OVERRIDE_FEED = '/data/permit-contact-overrides.json';
 
 function normalizeLicenseKey(value: string | number | null | undefined): string {
   const digitsOnly = String(value || '').replace(/\D/g, '');
@@ -10,19 +11,16 @@ function normalizeLicenseKey(value: string | number | null | undefined): string 
   return stripped || digitsOnly || '';
 }
 
-function normalizeBusinessKey(value: string | null | undefined): string {
-  return String(value || '')
-    .toUpperCase()
-    .replace(/[.,#&/\\-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+function buildPermitOverrideKey(jobFilingNumber?: string, address?: string): string {
+  return `${String(jobFilingNumber || '').trim().toUpperCase()}|${String(address || '').trim().toUpperCase()}`;
 }
 
 export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
   try {
     const licenseLookupResponse = await fetch(LICENSE_LOOKUP_FEED, { cache: 'no-store' });
-    let licenseLookup = new Map<string, { contact_name?: string; phone?: string }>();
-    let businessLookup = new Map<string, { contact_name?: string; phone?: string }>();
+    const contactOverrideResponse = await fetch(CONTACT_OVERRIDE_FEED, { cache: 'no-store' }).catch(() => null);
+    let licenseLookup = new Map<string, { contact_name?: string; phone?: string; business_name?: string; license_status?: string; license_type?: string }>();
+    let contactOverrides = new Map<string, Partial<DOBPermit>>();
 
     if (licenseLookupResponse.ok) {
       const lookupPayload = await licenseLookupResponse.json();
@@ -37,36 +35,72 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
               {
                 contact_name: record.contact_name || '',
                 phone: record.phone || '',
-              }
-            ])
-        );
-
-        businessLookup = new Map(
-          records
-            .filter((record: any) => String(record.business_name || '').trim())
-            .map((record: any) => [
-              normalizeBusinessKey(record.business_name),
-              {
-                contact_name: record.contact_name || '',
-                phone: record.phone || '',
+                business_name: record.business_name || '',
+                license_status: record.license_status || '',
+                license_type: record.license_type || '',
               }
             ])
         );
       }
     }
 
+    if (contactOverrideResponse?.ok) {
+      const overridePayload = await contactOverrideResponse.json();
+      const overrideRecords = Array.isArray(overridePayload) ? overridePayload : overridePayload.records;
+
+      if (Array.isArray(overrideRecords)) {
+        contactOverrides = new Map(
+          overrideRecords.map((record: any) => [
+            buildPermitOverrideKey(record.job_filing_number, record.address),
+            {
+              owner_name: record.owner_name || '',
+              owner_business_name: record.owner_business_name || '',
+              applicant_business_name: record.applicant_business_name || '',
+              potential_owner_name: record.potential_owner_name || '',
+              potential_owner_phone: record.potential_owner_phone || '',
+              owner_path_source: record.owner_path_source || '',
+            },
+          ])
+        );
+      }
+    }
+
     const enrichPermits = (permits: DOBPermit[]) =>
       permits.map((permit) => {
-        const lookup =
-          licenseLookup.get(normalizeLicenseKey(permit.applicant_license)) ||
-          businessLookup.get(normalizeBusinessKey(permit.owner_business_name)) ||
-          businessLookup.get(normalizeBusinessKey(permit.applicant_business_name)) ||
-          businessLookup.get(normalizeBusinessKey(permit.owner_name));
+        const override =
+          contactOverrides.get(buildPermitOverrideKey((permit as any).jobFilingNumber, permit.address)) ||
+          contactOverrides.get(buildPermitOverrideKey((permit as any).jobFilingNumber, [permit.house_number, permit.street_name].filter(Boolean).join(' ')));
+        const lookup = licenseLookup.get(normalizeLicenseKey(permit.applicant_license));
+        const licensedContactName = lookup?.contact_name || '';
+        const licensedPhone = lookup?.phone || '';
+        const potentialOwnerName = override?.potential_owner_name || '';
+        const potentialOwnerPhone = override?.potential_owner_phone || '';
+        const contact_confidence =
+          licensedContactName || licensedPhone
+            ? 'Verified Contact'
+            : potentialOwnerName || potentialOwnerPhone
+              ? 'Owner Path'
+              : permit.applicant_license
+                ? 'License Only'
+                : 'Unresolved';
 
         return {
           ...permit,
-          contact_name: permit.contact_name || lookup?.contact_name || '',
-          phone: permit.phone || lookup?.phone || '',
+          jobFilingNumber: (permit as any).jobFilingNumber || permit.id,
+          owner_name: override?.owner_name || permit.owner_name,
+          owner_business_name: override?.owner_business_name || permit.owner_business_name,
+          applicant_business_name: override?.applicant_business_name || (permit as any).applicant_business_name,
+          contact_name: licensedContactName,
+          phone: licensedPhone,
+          licensed_business_name: lookup?.business_name || '',
+          licensed_contact_name: licensedContactName,
+          licensed_phone: licensedPhone,
+          license_status: lookup?.license_status || '',
+          license_type: lookup?.license_type || '',
+          potential_owner_name: potentialOwnerName,
+          potential_owner_phone: potentialOwnerPhone,
+          owner_path_source: override?.owner_path_source || '',
+          contact_confidence,
         };
       });
 
@@ -119,7 +153,17 @@ function getMockData(limit: number): DOBPermit[] {
     job_description: 'Renovation of existing structure including plumbing and electrical work.',
     owner_name: 'Property Owner LLC',
     owner_business_name: 'Real Estate Management',
+    applicant_business_name: 'Real Estate Management',
     estimated_job_costs: Math.round(Math.random() * 500000),
+    licensed_business_name: '',
+    licensed_contact_name: '',
+    licensed_phone: '',
+    license_status: '',
+    license_type: '',
+    potential_owner_name: '',
+    potential_owner_phone: '',
+    owner_path_source: '',
+    contact_confidence: 'Unresolved',
     source: 'Mock DOB filing data',
   }));
 }

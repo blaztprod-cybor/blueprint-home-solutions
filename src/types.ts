@@ -68,6 +68,7 @@ export interface Invoice {
 
 export interface DOBPermit {
   id: string;
+  jobFilingNumber?: string;
   borough: string;
   house_number: string;
   street_name: string;
@@ -82,10 +83,20 @@ export interface DOBPermit {
   job_description: string;
   owner_name: string;
   owner_business_name: string;
+  applicant_business_name?: string;
   estimated_job_costs?: number;
   applicant_license?: string;
   contact_name?: string;
   phone?: string;
+  licensed_business_name?: string;
+  licensed_contact_name?: string;
+  licensed_phone?: string;
+  license_status?: string;
+  license_type?: string;
+  potential_owner_name?: string;
+  potential_owner_phone?: string;
+  owner_path_source?: string;
+  contact_confidence?: 'Verified Contact' | 'License Only' | 'Owner Path' | 'Unresolved';
   source?: string;
 }
 

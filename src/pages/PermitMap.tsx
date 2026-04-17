@@ -129,7 +129,7 @@ export default function PermitMap() {
           <div className="space-y-2">
             <Link to="/permit-feed" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary">
               <ChevronLeft size={18} />
-              Back to Filing Feed
+              Back to Filing Leads
             </Link>
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20">
@@ -306,7 +306,7 @@ export default function PermitMap() {
                     to="/permit-feed"
                     className="block rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-3 text-center text-xs font-black uppercase tracking-[0.18em] text-white shadow-lg shadow-blue-500/20"
                   >
-                    Return to Filing Feed
+                    Return to Filing Leads
                   </Link>
                 </div>
               ) : (

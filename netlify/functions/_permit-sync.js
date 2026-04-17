@@ -50,7 +50,7 @@ function buildBisUrl(borough, startDate) {
 
 function buildDobNowUrl(borough, startDate) {
   const params = new URLSearchParams({
-    '$select': 'job_filing_number,filing_status,house_no,street_name,borough,job_type,filing_date,current_status_date,first_permit_date,approved_date,initial_cost,owner_s_business_name,applicant_license,work_on_floor,building_type,zip,latitude,longitude,commmunity_board,council_district,census_tract,nta',
+    '$select': 'job_filing_number,filing_status,house_no,street_name,borough,job_type,filing_date,current_status_date,first_permit_date,approved_date,initial_cost,owner_s_business_name,applicant_license,work_on_floor,building_type,zip,postcode,latitude,longitude,commmunity_board,council_district,census_tract,nta',
     '$where': `borough='${borough}' AND filing_date >= '${startDate}'`,
     '$order': 'filing_date DESC',
     '$limit': String(DEFAULT_LIMIT),
@@ -110,7 +110,7 @@ function normalizeBisFiling(row) {
     owner_business_name: row.owner_s_business_name || ownerName || 'N/A',
     applicant_business_name: row.owner_s_business_name || ownerName || 'N/A',
     applicant_license: row.applicant_license__ || '',
-    zip_code: row.zip || '',
+    zip_code: row.postcode || row.zip || '',
     latitude: row.gis_latitude ? Number(row.gis_latitude) : null,
     longitude: row.gis_longitude ? Number(row.gis_longitude) : null,
     community_board: row.community___board || '',
