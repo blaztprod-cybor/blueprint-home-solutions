@@ -96,7 +96,7 @@ export interface DOBPermit {
   potential_owner_name?: string;
   potential_owner_phone?: string;
   owner_path_source?: string;
-  contact_confidence?: 'Verified Contact' | 'License Only' | 'Owner Path' | 'Unresolved';
+  contact_confidence?: 'Verified' | 'License Only' | 'Unresolved';
   source?: string;
 }
 

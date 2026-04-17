@@ -76,13 +76,11 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
         const potentialOwnerName = override?.potential_owner_name || '';
         const potentialOwnerPhone = override?.potential_owner_phone || '';
         const contact_confidence =
-          licensedContactName || licensedPhone
-            ? 'Verified Contact'
-            : potentialOwnerName || potentialOwnerPhone
-              ? 'Owner Path'
-              : permit.applicant_license
-                ? 'License Only'
-                : 'Unresolved';
+          licensedContactName || licensedPhone || potentialOwnerName || potentialOwnerPhone
+            ? 'Verified'
+            : permit.applicant_license
+              ? 'License Only'
+              : 'Unresolved';
 
         return {
           ...permit,
