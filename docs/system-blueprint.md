@@ -218,6 +218,14 @@ The following areas should be simplified or rebuilt:
 
 Blueprint started with a simpler lead-generation model, but the platform now clearly wants to become a true two-sided marketplace.
 
+## Filing Intelligence
+
+Blueprint also needs a filing-intelligence layer for contractor-facing opportunity discovery.
+
+That layer should not rely on raw DOB filings alone. It should use a reusable contact crosswalk between DOB records and outside contact/licensing sources.
+
+See [`docs/filing-contact-crosswalk.md`](/Users/shawnraynor/Downloads/blueprint-home-solutions/docs/filing-contact-crosswalk.md).
+
 The product should therefore move toward:
 
 - clear client path

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "updated_at": "2026-04-18T00:00:00.000Z",
+  "records": [
+    {
+      "business_name": "Classic Consulting Group",
+      "phone": "7189320712",
+      "address": "2612 Borough Pl, Woodside, NY 11377",
+      "source_name": "Search-discovered business listing",
+      "source_type": "Search Discovery",
+      "status": "candidate",
+      "notes": "Example candidate record discovered from a manual business-name search."
+    }
+  ]
+}

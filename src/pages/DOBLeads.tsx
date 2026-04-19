@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchDOBPermits } from '../services/dobService';
+import { fetchDOBPermits, isPublicAgencyPermit } from '../services/dobService';
 import { DOBPermit } from '../types';
 import { cn } from '../lib/utils';
 import { authorizedApiFetch } from '../lib/authorizedApi';
@@ -22,6 +22,7 @@ export default function DOBLeads() {
   const [emailLabel, setEmailLabel] = useState('Email Selected To Me');
   const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
   const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
+  const [showPublicAgencyFilings, setShowPublicAgencyFilings] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,6 +55,7 @@ export default function DOBLeads() {
 
   const filteredPermits = permits
     .filter((permit) => {
+      const matchesAgencyFilter = showPublicAgencyFilings || !isPublicAgencyPermit(permit);
       const matchesBorough = boroughFilter === 'All Boroughs' || permit.borough === boroughFilter;
       const matchesWorkType = workTypeFilter === 'All Work Types' || permit.job_type === workTypeFilter;
       const haystack = [
@@ -74,7 +76,7 @@ export default function DOBLeads() {
         .join(' ')
         .toLowerCase();
       const matchesSearch = haystack.includes(searchQuery.toLowerCase());
-      return matchesBorough && matchesWorkType && matchesSearch;
+      return matchesAgencyFilter && matchesBorough && matchesWorkType && matchesSearch;
     })
     .sort((a, b) => {
       if (sortOrder === 'none') return 0;
@@ -85,7 +87,7 @@ export default function DOBLeads() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [boroughFilter, workTypeFilter, searchQuery, sortOrder]);
+  }, [boroughFilter, workTypeFilter, searchQuery, sortOrder, showPublicAgencyFilings]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPermits.length / ITEMS_PER_PAGE));
   const paginatedPermits = filteredPermits.slice(
@@ -127,6 +129,8 @@ export default function DOBLeads() {
       return startPage + index;
     }
   );
+
+  const publicAgencyPermitCount = permits.filter((permit) => isPublicAgencyPermit(permit)).length;
 
   const handleEmailSelected = async () => {
     if (permitsToEmail.length === 0) {
@@ -322,13 +326,31 @@ export default function DOBLeads() {
         </label>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-5 py-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Lead Scope</p>
+          <p className="mt-1 text-sm font-semibold text-slate-700">
+            Public-agency filings are hidden by default because they are usually procurement-driven rather than direct outbound leads.
+          </p>
+        </div>
+        <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+          <input
+            type="checkbox"
+            checked={showPublicAgencyFilings}
+            onChange={(event) => setShowPublicAgencyFilings(event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+          />
+          Show public agency filings ({publicAgencyPermitCount})
+        </label>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4">
           <PaginationControls />
         </div>
 
         <div className="overflow-x-scroll pb-3">
-          <table className="w-full text-left border-collapse min-w-[1980px]">
+          <table className="w-full text-left border-collapse min-w-[2380px]">
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -347,6 +369,8 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Filed</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Projected Cost</th>
                 <th className="w-[195px] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Business Name</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Business Phone</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Licensed Contact</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Licensed Phone</th>
@@ -356,7 +380,7 @@ export default function DOBLeads() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-20 text-center">
+                  <td colSpan={14} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB filings...</p>
@@ -365,7 +389,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-6 py-20 text-center">
+                  <td colSpan={14} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No filings match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -394,14 +418,28 @@ export default function DOBLeads() {
                       <span className="text-sm font-bold text-slate-700">{permit.borough}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
-                        {[permit.house_number, permit.street_name].filter(Boolean).join(' ') || 'Unavailable'}
-                      </span>
+                      <div className="space-y-1">
+                        <span className="text-sm font-bold text-slate-700 whitespace-nowrap">
+                          {[permit.house_number, permit.street_name].filter(Boolean).join(' ') || 'Unavailable'}
+                        </span>
+                        {(permit.related_filing_count || 0) > 1 && (
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                            {permit.related_filing_count} related filings collapsed
+                          </p>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
-                        {permit.zip_code || 'Unavailable'}
-                      </span>
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                          {permit.zip_code || 'Unavailable'}
+                        </span>
+                        {permit.zip_conflict && (
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500">
+                            ZIP conflict: {(permit.alternate_zip_codes || []).join(', ')}
+                          </p>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-2">
@@ -442,6 +480,23 @@ export default function DOBLeads() {
                       </p>
                     </td>
                     <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-600">
+                        {permit.owner_business_name || permit.applicant_business_name || permit.owner_name || 'Unavailable'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                          {permit.business_phone || 'Unavailable'}
+                        </span>
+                        {permit.business_phone_source && (
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                            {permit.business_phone_source}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                       <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
                         {permit.applicant_license || 'Unavailable'}
                       </span>
@@ -461,6 +516,12 @@ export default function DOBLeads() {
                         "inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap",
                         permit.contact_confidence === 'Verified'
                           ? "bg-emerald-50 text-emerald-600"
+                          : permit.contact_confidence === 'Public Agency'
+                            ? "bg-amber-50 text-amber-700"
+                          : permit.contact_confidence === 'Business Only'
+                            ? "bg-violet-50 text-violet-600"
+                            : permit.contact_confidence === 'Conflict'
+                              ? "bg-rose-50 text-rose-600"
                           : permit.contact_confidence === 'License Only'
                             ? "bg-blue-50 text-blue-600"
                             : "bg-slate-50 text-slate-600"

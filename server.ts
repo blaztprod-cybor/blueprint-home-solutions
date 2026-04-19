@@ -9,6 +9,8 @@ import { promisify } from "node:util";
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
+import { fetchPermitRows } from "./netlify/functions/_dob-filings.js";
+import { fetchPassportPublicContracts } from "./netlify/functions/_passport-public.js";
 import {
   buildUserAccountPayload,
   buildUserProfilePayload,
@@ -24,6 +26,8 @@ dotenv.config();
 const execFileAsync = promisify(execFile);
 const PERMIT_SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const ENABLE_DEV_PERMIT_SYNC = process.env.ENABLE_DEV_PERMIT_SYNC === "true";
+const ENABLE_SERVER_PERMIT_SYNC = process.env.ENABLE_SERVER_PERMIT_SYNC === "true";
+const PERMIT_SYNC_SECRET = process.env.PERMIT_SYNC_SECRET || "";
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
@@ -31,6 +35,15 @@ const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TEXTBELT_API_KEY = process.env.TEXTBELT_API_KEY;
 const TEXTBELT_SENDER = process.env.TEXTBELT_SENDER || "Blueprint Home Solutions";
 const LOCAL_PERMIT_FEED_PATH = path.join(process.cwd(), "public", "data", "permits.json");
+
+function isOccupancyJobType(jobType: string | undefined) {
+  const normalized = String(jobType || "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized === "CO" || normalized.includes(" CO") || normalized.includes("CO ") || normalized.includes("OCCUPANCY");
+}
 
 function getAdminAppInstance() {
   if (getApps().length > 0) {
@@ -221,6 +234,40 @@ function readLocalPermitFeed(limit: number) {
   return permits.slice(0, limit);
 }
 
+function canUseSupabasePermitFeed() {
+  return Boolean(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function readPermitFeed(limit: number, occupancyOnly = false) {
+  if (canUseSupabasePermitFeed()) {
+    return fetchPermitRows({ limit, occupancyOnly });
+  }
+
+  const permits = occupancyOnly
+    ? readLocalPermitFeed(5000).filter((permit) => isOccupancyJobType(permit?.job_type)).slice(0, limit)
+    : readLocalPermitFeed(limit);
+
+  return {
+    permits,
+    meta: {
+      source: "local-file",
+      count: permits.length,
+      latestIssuedDate: permits[0]?.filing_date || null,
+      occupancyOnly,
+    },
+  };
+}
+
+function isAuthorizedPermitSyncRequest(req: express.Request) {
+  if (!PERMIT_SYNC_SECRET) return false;
+
+  const authorization = String(req.headers.authorization || "");
+  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
+  const queryToken = String(req.query.secret || "");
+
+  return bearerToken === PERMIT_SYNC_SECRET || queryToken === PERMIT_SYNC_SECRET;
+}
+
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -229,23 +276,63 @@ async function startServer() {
   app.use(express.urlencoded({ extended: false }));
   app.use(express.static(path.join(process.cwd(), "public")));
 
-  app.get("/api/dob-permits", (req, res) => {
+  app.get("/api/dob-permits", async (req, res) => {
     const limitParam = Number.parseInt(String(req.query.limit || "20"), 10);
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
 
     try {
-      const permits = readLocalPermitFeed(limit);
+      const payload = await readPermitFeed(limit);
+      res.json(payload);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load filing feed",
+      });
+    }
+  });
+
+  app.get("/api/recent-occupancy-filings", async (req, res) => {
+    const limitParam = Number.parseInt(String(req.query.limit || "20"), 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
+
+    try {
+      const payload = await readPermitFeed(limit, true);
+      const filings = payload.permits;
+
       res.json({
-        permits,
-        meta: {
-          source: "local-file",
-          count: permits.length,
-          latestIssuedDate: permits[0]?.filing_date || null,
-        },
+        filings,
+        permits: filings,
+        meta: payload.meta,
       });
     } catch (error) {
       res.status(500).json({
-        error: error instanceof Error ? error.message : "Failed to load local filing feed",
+        error: error instanceof Error ? error.message : "Failed to load occupancy filing feed",
+      });
+    }
+  });
+
+  app.get("/api/public-contracts", async (_req, res) => {
+    try {
+      const payload = await fetchPassportPublicContracts();
+      res.json(payload);
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load public contract feed",
+      });
+    }
+  });
+
+  app.post("/api/admin/sync-permits", async (req, res) => {
+    if (!isAuthorizedPermitSyncRequest(req)) {
+      res.status(401).json({ error: "Unauthorized permit sync request" });
+      return;
+    }
+
+    try {
+      await syncPermitFeed();
+      res.json({ ok: true, message: "Permit sync completed" });
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Permit sync failed",
       });
     }
   });
@@ -1718,14 +1805,14 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 
-  const shouldRunPermitSync = process.env.NODE_ENV === "production" || ENABLE_DEV_PERMIT_SYNC;
+  const shouldRunPermitSync = ENABLE_SERVER_PERMIT_SYNC || (process.env.NODE_ENV !== "production" && ENABLE_DEV_PERMIT_SYNC);
   if (shouldRunPermitSync) {
     void syncPermitFeed();
     setInterval(() => {
       void syncPermitFeed();
     }, PERMIT_SYNC_INTERVAL_MS);
   } else {
-    console.log("[PERMIT SYNC] Skipped automatic permit sync in local dev. Set ENABLE_DEV_PERMIT_SYNC=true to enable it.");
+    console.log("[PERMIT SYNC] Automatic sync disabled. Use ENABLE_SERVER_PERMIT_SYNC=true for server-side polling or call POST /api/admin/sync-permits with PERMIT_SYNC_SECRET.");
   }
 }
 

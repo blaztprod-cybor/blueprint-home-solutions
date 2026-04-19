@@ -95,9 +95,98 @@ export interface DOBPermit {
   license_type?: string;
   potential_owner_name?: string;
   potential_owner_phone?: string;
+  business_phone?: string;
+  business_phone_source?: string;
   owner_path_source?: string;
-  contact_confidence?: 'Verified' | 'License Only' | 'Unresolved';
+  contact_confidence?: 'Verified' | 'Business Only' | 'Public Agency' | 'License Only' | 'Conflict' | 'Unresolved';
+  entity_type?: FilingEntityType;
+  lead_path?: FilingLeadPath;
+  crosswalk_confidence?: CrosswalkConfidence;
+  crosswalk_source_type?: CrosswalkSourceType;
+  crosswalk_last_verified_at?: string;
   source?: string;
+  related_filing_count?: number;
+  zip_conflict?: boolean;
+  alternate_zip_codes?: string[];
+  duplicate_group_key?: string;
+}
+
+export type FilingEntityType =
+  | 'Contractor'
+  | 'Architect / Engineer'
+  | 'Expediter'
+  | 'Developer / Owner'
+  | 'Business / Organization'
+  | 'Public Agency'
+  | 'Unknown';
+
+export type FilingLeadPath = 'Direct' | 'Indirect' | 'Procurement' | 'Noise' | 'Unknown';
+
+export type CrosswalkConfidence = 'High' | 'Medium' | 'Low' | 'Unresolved';
+
+export type CrosswalkSourceType =
+  | 'Contractor Database'
+  | 'Professional License'
+  | 'Business Registry'
+  | 'Property Record'
+  | 'Internal Override'
+  | 'Search Discovery'
+  | 'User Verified'
+  | 'Unknown';
+
+export type CrosswalkRecordStatus = 'candidate' | 'verified' | 'rejected';
+
+export interface FilingContactCrosswalkRecord {
+  id: string;
+  applicant_license?: string;
+  normalized_applicant_name?: string;
+  normalized_business_name?: string;
+  normalized_address?: string;
+  borough?: string;
+  zip_code?: string;
+  entity_type: FilingEntityType;
+  lead_path: FilingLeadPath;
+  contact_name?: string;
+  business_name?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  source_name?: string;
+  source_type: CrosswalkSourceType;
+  source_record_id?: string;
+  status: CrosswalkRecordStatus;
+  confidence: CrosswalkConfidence;
+  match_score?: number;
+  matched_on?: string[];
+  last_verified_at?: string;
+  notes?: string;
+}
+
+export interface PublicContractOpportunity {
+  id: string;
+  source: 'PASSPort';
+  record_type: 'open_bid' | 'awarded_contract';
+  title: string;
+  agency: string;
+  status: string;
+  industry?: string;
+  main_commodity?: string;
+  procurement_method?: string;
+  contract_id?: string;
+  epin?: string;
+  vendor_name?: string;
+  vendor_phone?: string;
+  vendor_address?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  amount?: number | null;
+  estimated_value?: number | null;
+  due_date?: string;
+  award_date?: string;
+  registration_date?: string;
+  source_url?: string;
+  improvement_types?: string[];
 }
 
 export interface Lead {

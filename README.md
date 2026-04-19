@@ -24,16 +24,18 @@ That architecture fits Railway directly. Netlify config is still in the repo as 
 4. Build the frontend bundle when you want to verify production assets:
    `npm run build`
 
-## Netlify Permit Feed
+## Permit Feed
 
 The permit feed no longer needs a daily site redeploy to stay current.
 
-- Netlify serves live permit reads through `/api/dob-permits`
-- a scheduled Netlify function `sync-permits` runs `@daily`
-- the scheduled job refreshes `dob_permits` in Supabase
-- the frontend falls back to `public/data/permits.json` only if the live source is unavailable
+- Railway serves live permit reads through `/api/dob-permits`
+- Railway serves recent occupancy-only reads through `/api/recent-occupancy-filings`
+- both routes read from Supabase when `VITE_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured
+- both routes fall back to `public/data/permits.json` if Supabase is unavailable
 
-Required Netlify environment variables for the permit feed:
+`/api/recent-occupancy-filings` is derived from the same synced `dob_permits` table and filters for occupancy-style job types such as `CO`, `Alteration CO`, and related DOB values.
+
+Required permit-feed environment variables:
 
 - `VITE_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -55,6 +57,7 @@ Required environment variables depend on which features you need enabled:
 - `FIREBASE_FIRESTORE_DATABASE_ID` if you are not using the default database
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_SECURE`
@@ -71,8 +74,17 @@ Optional:
 
 - `RESEND_API_KEY` if you want Resend API delivery instead of SMTP fallback
 - `ENABLE_DEV_PERMIT_SYNC=true` for local permit sync testing
+- `PERMIT_SYNC_SECRET` if you want Railway or another scheduler to trigger `POST /api/admin/sync-permits`
+- `ENABLE_SERVER_PERMIT_SYNC=true` only if you intentionally want the web server to poll and sync permits on an interval
 
 `PORT` is provided by Railway automatically. The server already listens on `process.env.PORT`.
+
+For scheduled permit refreshes on Railway, prefer a cron job or external scheduler that calls:
+
+- `POST /api/admin/sync-permits`
+- Header: `Authorization: Bearer <PERMIT_SYNC_SECRET>`
+
+This is safer than relying on the web server to run background polling on every production instance.
 
 If you enable reply webhooks in Textbelt, point them at:
 

@@ -5,19 +5,23 @@ export const handler = async (event) => {
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
 
   try {
-    const payload = await fetchPermitRows({ limit });
+    const payload = await fetchPermitRows({ limit, occupancyOnly: true });
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        filings: payload.permits,
+        permits: payload.permits,
+        meta: payload.meta,
+      }),
     };
   } catch (error) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : 'Failed to load filing feed from Supabase',
+        error: error instanceof Error ? error.message : 'Failed to load recent occupancy filings from Supabase',
       }),
     };
   }

@@ -11,6 +11,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "permits:sync": "node scripts/fetch-permits.mjs",
+    "crosswalk:build": "node scripts/build-filing-crosswalk.mjs",
     "firebase:purge-users": "node scripts/purge-firebase-users.mjs",
     "firebase:cleanup-legacy-users": "node scripts/cleanup-legacy-user-fields.mjs",
     "firebase:recover-users": "node scripts/recover-firestore-users-from-auth.mjs"

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "updated_at": "2026-04-19T02:28:44.193Z",
+  "records": [
+    {
+      "id": "classic-consulting-group-45983",
+      "applicant_license": "045983",
+      "normalized_applicant_name": "CLASSIC CONSULTING GROUP",
+      "normalized_business_name": "CLASSIC CONSULTING GROUP",
+      "normalized_address": "105 WEST 108 STREET",
+      "borough": "MANHATTAN",
+      "zip_code": "08873",
+      "entity_type": "Contractor",
+      "lead_path": "Direct",
+      "contact_name": "",
+      "business_name": "Classic Consulting Group",
+      "phone": "7189320712",
+      "email": "",
+      "address": "2612 Borough Pl, Woodside, NY 11377",
+      "source_name": "Search-discovered business listing",
+      "source_type": "Search Discovery",
+      "source_record_id": "",
+      "status": "candidate",
+      "confidence": "Medium",
+      "match_score": 65,
+      "matched_on": [
+        "business_name",
+        "phone_present"
+      ],
+      "last_verified_at": "",
+      "notes": "Example candidate record discovered from a manual business-name search."
+    },
+    {
+      "id": "classic-consulting-group-84781",
+      "applicant_license": "084781",
+      "normalized_applicant_name": "CLASSIC CONSULTING GROUP",
+      "normalized_business_name": "CLASSIC CONSULTING GROUP",
+      "normalized_address": "1745 WEST FARMS ROAD",
+      "borough": "BRONX",
+      "zip_code": "08840",
+      "entity_type": "Contractor",
+      "lead_path": "Direct",
+      "contact_name": "",
+      "business_name": "Classic Consulting Group",
+      "phone": "7189320712",
+      "email": "",
+      "address": "2612 Borough Pl, Woodside, NY 11377",
+      "source_name": "Search-discovered business listing",
+      "source_type": "Search Discovery",
+      "source_record_id": "",
+      "status": "candidate",
+      "confidence": "Medium",
+      "match_score": 65,
+      "matched_on": [
+        "business_name",
+        "phone_present"
+      ],
+      "last_verified_at": "",
+      "notes": "Example candidate record discovered from a manual business-name search."
+    }
+  ]
+}
