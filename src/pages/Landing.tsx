@@ -147,6 +147,7 @@ export default function Landing() {
             </div>
             <div className="hidden md:flex items-center gap-8">
               <Link to="/how-it-works" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">How it Works</Link>
+              <Link to="/api-intelligence" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">API Product</Link>
               <Link to={primaryAccountCta.to} className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">{primaryAccountCta.label}</Link>
               <div className="flex items-center gap-4">
                 {!user && (
@@ -181,6 +182,12 @@ export default function Landing() {
               className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-600 transition-colors hover:bg-slate-50"
             >
               {primaryAccountCta.label}
+            </Link>
+            <Link
+              to="/api-intelligence"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              API Product
             </Link>
             {!user && (
               <Link
@@ -601,6 +608,7 @@ export default function Landing() {
               <h4 className="font-bold mb-6 uppercase tracking-widest text-xs text-slate-500">Platform</h4>
               <ul className="space-y-4 text-sm font-bold text-slate-300">
                 <li><Link to="/how-it-works" className="hover:text-white transition-colors">How it Works</Link></li>
+                <li><Link to="/api-intelligence" className="hover:text-white transition-colors">Blueprint DOB Intelligence API</Link></li>
               </ul>
             </div>
             <div>

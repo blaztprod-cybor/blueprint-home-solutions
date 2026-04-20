@@ -33,7 +33,7 @@ export default function PrivacyPolicy() {
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">Business Identity</h2>
               <p>
-                Blueprint Home Solutions is a DBA operated by Dzyn Indie Films LLC, located at 132-23 Bennett Court, Jamaica, NY 11434. Questions about this policy may be sent to info@blueprinthomesolutions.com or directed to 718-701-9090.
+                Blueprint Home Solutions, LLC is located at 132-23 Bennett Court, Jamaica, NY 11434. Questions about this policy may be sent to info@blueprinthomesolutions.com or directed to 718-701-9090.
               </p>
             </section>
 
@@ -117,7 +117,7 @@ export default function PrivacyPolicy() {
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">11. Contact</h2>
               <p>
-                Questions about this Privacy Policy may be directed to Dzyn Indie Films LLC, doing business as Blueprint Home Solutions, at info@blueprinthomesolutions.com or 718-701-9090.
+                Questions about this Privacy Policy may be directed to Blueprint Home Solutions, LLC at info@blueprinthomesolutions.com or 718-701-9090.
               </p>
             </section>
           </div>

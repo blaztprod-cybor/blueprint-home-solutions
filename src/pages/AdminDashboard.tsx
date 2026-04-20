@@ -87,6 +87,7 @@ type UserSort = 'name' | 'newest' | 'oldest';
 type BroadcastSegment = 'all' | 'homeowners' | 'contractors' | 'verified' | 'unverified' | 'licensed' | 'unlicensed';
 
 const SUBSCRIPTION_OPTIONS: SubscriptionLevel[] = ['none', 'trial', 'beginner', 'junior', 'pro'];
+const API_ENABLED_SUBSCRIPTION_LEVELS = new Set<SubscriptionLevel>(['trial', 'beginner', 'junior', 'pro']);
 const BROADCAST_SEGMENTS: BroadcastSegment[] = ['all', 'homeowners', 'contractors', 'verified', 'unverified', 'licensed', 'unlicensed'];
 const BROADCAST_SEGMENT_LABELS: Record<BroadcastSegment, string> = {
   all: 'All',
@@ -708,6 +709,17 @@ const AdminDashboard = () => {
     }
   };
 
+  const toggleApiAccess = async (user: AdminUser) => {
+    const hasApiAccess = API_ENABLED_SUBSCRIPTION_LEVELS.has((user.subscriptionLevel || 'none') as SubscriptionLevel);
+    const nextSubscriptionLevel: SubscriptionLevel = hasApiAccess ? 'none' : ((user.subscriptionLevel || 'trial') === 'none' ? 'trial' : (user.subscriptionLevel as SubscriptionLevel));
+    const confirmed = window.confirm(
+      `${hasApiAccess ? 'Disable' : 'Enable'} API access for ${user.name || user.email || 'this user'}?`
+    );
+    if (!confirmed) return;
+
+    await updateSubscriptionLevel(user, nextSubscriptionLevel);
+  };
+
   const deleteUserDocument = async (user: AdminUser) => {
     const confirmed = window.confirm(
       `Delete the Firestore account record for ${user.name || user.email || user.id}? This does not remove Firebase Auth credentials.`
@@ -1266,6 +1278,7 @@ const AdminDashboard = () => {
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Role / License</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Verification</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subscription</th>
+                    <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">API Access</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1333,6 +1346,33 @@ const AdminDashboard = () => {
                               </option>
                             ))}
                           </select>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="space-y-2">
+                          <div
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold',
+                              API_ENABLED_SUBSCRIPTION_LEVELS.has((user.subscriptionLevel || 'none') as SubscriptionLevel)
+                                ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                                : 'border-slate-200 bg-slate-100 text-slate-600'
+                            )}
+                          >
+                            {API_ENABLED_SUBSCRIPTION_LEVELS.has((user.subscriptionLevel || 'none') as SubscriptionLevel) ? <CheckCircle2 size={14} /> : <Ban size={14} />}
+                            {API_ENABLED_SUBSCRIPTION_LEVELS.has((user.subscriptionLevel || 'none') as SubscriptionLevel) ? 'Enabled' : 'Disabled'}
+                          </div>
+                          <button
+                            onClick={() => void toggleApiAccess(user)}
+                            disabled={updatingId === user.id}
+                            className={cn(
+                              'px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50',
+                              API_ENABLED_SUBSCRIPTION_LEVELS.has((user.subscriptionLevel || 'none') as SubscriptionLevel)
+                                ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            )}
+                          >
+                            {API_ENABLED_SUBSCRIPTION_LEVELS.has((user.subscriptionLevel || 'none') as SubscriptionLevel) ? 'Disable API' : 'Enable API'}
+                          </button>
                         </div>
                       </td>
                       <td className="px-8 py-5 text-right">

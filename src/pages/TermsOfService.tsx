@@ -54,7 +54,7 @@ export default function TermsOfService() {
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">Business Identity</h2>
               <p>
-                These Terms govern the use of Blueprint Home Solutions, a DBA operated by Dzyn Indie Films LLC, located at 132-23 Bennett Court, Jamaica, NY 11434.
+                These Terms govern the use of Blueprint Home Solutions, LLC, located at 132-23 Bennett Court, Jamaica, NY 11434.
               </p>
             </section>
 

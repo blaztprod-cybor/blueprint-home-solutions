@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
+const CERTIFICATE_OF_OCCUPANCY_FILTER = 'certificate_of_occupancy';
+
 export function createSupabaseAdminClient() {
   const url = process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -50,7 +52,51 @@ export function isOccupancyJobType(jobType) {
   return normalized === 'CO' || normalized.includes(' CO') || normalized.includes('CO ') || normalized.includes('OCCUPANCY');
 }
 
-export async function fetchPermitRows({ limit, occupancyOnly = false }) {
+/**
+ * @param {any} query
+ * @param {string | null | undefined} filter
+ */
+function applyPermitFilterQuery(query, filter) {
+  if (filter === CERTIFICATE_OF_OCCUPANCY_FILTER) {
+    return query.or('work_type.eq.CO,work_type.ilike.%CO%,work_type.ilike.%occupancy%');
+  }
+
+  return query;
+}
+
+/**
+ * @param {{ job_type?: string }} permit
+ * @param {string | null | undefined} filter
+ */
+function matchesRequestedPermitFilter(permit, filter) {
+  if (filter === CERTIFICATE_OF_OCCUPANCY_FILTER) {
+    return isOccupancyJobType(permit.job_type);
+  }
+
+  return true;
+}
+
+/**
+ * @param {Array<{ filing_date?: string }>} permits
+ * @param {Array<{ updated_at?: string }> | null | undefined} data
+ * @param {string | null | undefined} filter
+ */
+function buildPermitFeedMeta(permits, data, filter) {
+  return {
+    source: 'supabase',
+    count: permits.length,
+    latestIssuedDate: permits[0]?.filing_date || null,
+    latestUpdatedAt: Array.isArray(data) && data[0]?.updated_at ? data[0].updated_at : null,
+    occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
+    filter: filter || 'all',
+  };
+}
+
+/**
+ * @param {{ limit?: number; occupancyOnly?: boolean; filter?: string | null }} [options]
+ */
+export async function fetchPermitRows({ limit = 20, occupancyOnly = false, filter } = {}) {
+  const normalizedFilter = filter || (occupancyOnly ? CERTIFICATE_OF_OCCUPANCY_FILTER : null);
   const supabase = createSupabaseAdminClient();
   let query = supabase
     .from('dob_permits')
@@ -78,9 +124,7 @@ export async function fetchPermitRows({ limit, occupancyOnly = false }) {
     `)
     .order('approved_date', { ascending: false });
 
-  if (occupancyOnly) {
-    query = query.or('work_type.eq.CO,work_type.ilike.%CO%,work_type.ilike.%occupancy%');
-  }
+  query = applyPermitFilterQuery(query, normalizedFilter);
 
   const { data, error } = await query.limit(limit);
 
@@ -89,18 +133,10 @@ export async function fetchPermitRows({ limit, occupancyOnly = false }) {
   }
 
   const permits = Array.isArray(data) ? data.map(mapPermit) : [];
-  const filteredPermits = occupancyOnly ? permits.filter((permit) => isOccupancyJobType(permit.job_type)) : permits;
-  const latestIssuedDate = filteredPermits[0]?.filing_date || null;
-  const latestUpdatedAt = Array.isArray(data) && data[0]?.updated_at ? data[0].updated_at : null;
+  const filteredPermits = permits.filter((permit) => matchesRequestedPermitFilter(permit, normalizedFilter));
 
   return {
     permits: filteredPermits,
-    meta: {
-      source: 'supabase',
-      count: filteredPermits.length,
-      latestIssuedDate,
-      latestUpdatedAt,
-      occupancyOnly,
-    },
+    meta: buildPermitFeedMeta(filteredPermits, data, normalizedFilter),
   };
 }

@@ -13,6 +13,17 @@ const VERIFIED_CONTACT_BOOK_FEED = '/data/verified-contact-book.json';
 const CONTACT_OVERRIDE_FEED = '/data/permit-contact-overrides.json';
 const BUSINESS_CONTACT_OVERRIDE_FEED = '/data/business-contact-overrides.json';
 
+async function readJsonResponse(response: Response | null) {
+  if (!response?.ok) return null;
+
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  if (!contentType.includes('application/json')) {
+    return null;
+  }
+
+  return response.json().catch(() => null);
+}
+
 function normalizeLicenseKey(value: string | number | null | undefined): string {
   const digitsOnly = String(value || '').replace(/\D/g, '');
   const stripped = digitsOnly.replace(/^0+/, '');
@@ -350,11 +361,11 @@ export async function fetchDOBPermits(limit = 20): Promise<DOBPermit[]> {
       fetch(STATIC_PERMIT_FEED, { cache: 'no-store' }).catch(() => null),
     ]);
 
-    const livePayload = liveResponse?.ok ? await liveResponse.json() : null;
+    const livePayload = await readJsonResponse(liveResponse);
     const livePermits = Array.isArray(livePayload) ? livePayload : livePayload?.permits;
     const enrichedLivePermits = Array.isArray(livePermits) ? enrichPermits(livePermits) : [];
 
-    const staticPayload = staticResponse?.ok ? await staticResponse.json() : null;
+    const staticPayload = await readJsonResponse(staticResponse);
     const staticPermits = Array.isArray(staticPayload) ? staticPayload : staticPayload?.permits;
     const enrichedStaticPermits = Array.isArray(staticPermits) ? enrichPermits(staticPermits).slice(0, limit) : [];
 

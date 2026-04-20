@@ -29,16 +29,25 @@ That architecture fits Railway directly. Netlify config is still in the repo as 
 The permit feed no longer needs a daily site redeploy to stay current.
 
 - Railway serves live permit reads through `/api/dob-permits`
+- Railway serves certificate-of-occupancy reads through `/api/dob-certificate-of-occupancy-filings`
 - Railway serves recent occupancy-only reads through `/api/recent-occupancy-filings`
 - both routes read from Supabase when `VITE_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured
 - both routes fall back to `public/data/permits.json` if Supabase is unavailable
 
-`/api/recent-occupancy-filings` is derived from the same synced `dob_permits` table and filters for occupancy-style job types such as `CO`, `Alteration CO`, and related DOB values.
+`/api/dob-certificate-of-occupancy-filings` is the explicit certificate-of-occupancy feed. `/api/recent-occupancy-filings` remains available as a compatibility alias. Both are derived from the same synced `dob_permits` table and filter for occupancy-style job types such as `CO`, `Alteration CO`, and related DOB values.
 
 Required permit-feed environment variables:
 
 - `VITE_SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+API key management:
+
+- `GET /api/api-keys` lists the signed-in customer's API keys
+- `POST /api/api-keys` creates a new API key for the signed-in customer
+- `POST /api/api-keys/:keyId/revoke` revokes an existing API key
+- `/api/dob-certificate-of-occupancy-filings` accepts `x-api-key: <key>` or `Authorization: Bearer <key>`
+- `/api/recent-occupancy-filings` is a protected compatibility alias and accepts the same API key auth
 
 For manual backfills, run:
 `npm run permits:sync`

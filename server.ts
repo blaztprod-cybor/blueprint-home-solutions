@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import fs from "node:fs";
 import path from "path";
+import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { execFile } from "node:child_process";
@@ -11,6 +12,15 @@ import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { fetchPermitRows } from "./netlify/functions/_dob-filings.js";
 import { fetchPassportPublicContracts } from "./netlify/functions/_passport-public.js";
+import {
+  API_KEYS_COLLECTION,
+  buildApiKeyRecord,
+  createApiKeySecret,
+  hashApiKey,
+  isApiKeyToken,
+  maskApiKey,
+  parseApiKeyToken,
+} from "./netlify/functions/_api-keys.js";
 import {
   buildUserAccountPayload,
   buildUserProfilePayload,
@@ -30,11 +40,13 @@ const ENABLE_SERVER_PERMIT_SYNC = process.env.ENABLE_SERVER_PERMIT_SYNC === "tru
 const PERMIT_SYNC_SECRET = process.env.PERMIT_SYNC_SECRET || "";
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
+const CERTIFICATE_OF_OCCUPANCY_FILTER = "certificate_of_occupancy";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TEXTBELT_API_KEY = process.env.TEXTBELT_API_KEY;
 const TEXTBELT_SENDER = process.env.TEXTBELT_SENDER || "Blueprint Home Solutions";
 const LOCAL_PERMIT_FEED_PATH = path.join(process.cwd(), "public", "data", "permits.json");
+const API_ENABLED_SUBSCRIPTION_LEVELS = new Set(["trial", "beginner", "junior", "pro"]);
 
 function isOccupancyJobType(jobType: string | undefined) {
   const normalized = String(jobType || "")
@@ -238,12 +250,20 @@ function canUseSupabasePermitFeed() {
   return Boolean(process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-async function readPermitFeed(limit: number, occupancyOnly = false) {
+async function readPermitFeed(limit: number, filter?: string | null) {
   if (canUseSupabasePermitFeed()) {
-    return fetchPermitRows({ limit, occupancyOnly });
+    try {
+      return await fetchPermitRows({
+        limit,
+        filter: filter || undefined,
+        occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
+      });
+    } catch (error) {
+      console.warn("[PERMIT FEED FALLBACK] Supabase read failed, using local permit file.", error);
+    }
   }
 
-  const permits = occupancyOnly
+  const permits = filter === CERTIFICATE_OF_OCCUPANCY_FILTER
     ? readLocalPermitFeed(5000).filter((permit) => isOccupancyJobType(permit?.job_type)).slice(0, limit)
     : readLocalPermitFeed(limit);
 
@@ -253,7 +273,8 @@ async function readPermitFeed(limit: number, occupancyOnly = false) {
       source: "local-file",
       count: permits.length,
       latestIssuedDate: permits[0]?.filing_date || null,
-      occupancyOnly,
+      occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
+      filter: filter || "all",
     },
   };
 }
@@ -266,6 +287,40 @@ function isAuthorizedPermitSyncRequest(req: express.Request) {
   const queryToken = String(req.query.secret || "");
 
   return bearerToken === PERMIT_SYNC_SECRET || queryToken === PERMIT_SYNC_SECRET;
+}
+
+function getApiKeyCandidateFromRequest(req: express.Request) {
+  const xApiKey = String(req.headers["x-api-key"] || "").trim();
+  if (xApiKey) return xApiKey;
+
+  const authorization = String(req.headers.authorization || "").trim();
+  if (/^Bearer\s+/i.test(authorization)) {
+    const token = authorization.replace(/^Bearer\s+/i, "").trim();
+    if (isApiKeyToken(token)) {
+      return token;
+    }
+  }
+
+  return "";
+}
+
+function hasApiSubscriptionAccess(userAccount: any, requestUser?: { isAdmin?: boolean }) {
+  if (requestUser?.isAdmin) return true;
+  if (!userAccount) return false;
+  if (userAccount.role === "admin") return true;
+
+  return API_ENABLED_SUBSCRIPTION_LEVELS.has(String(userAccount.subscriptionLevel || ""));
+}
+
+function safeEqualHexDigest(left: string, right: string) {
+  const leftBuffer = Buffer.from(String(left || ""), "hex");
+  const rightBuffer = Buffer.from(String(right || ""), "hex");
+
+  if (leftBuffer.length === 0 || rightBuffer.length === 0 || leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 async function startServer() {
@@ -290,12 +345,13 @@ async function startServer() {
     }
   });
 
-  app.get("/api/recent-occupancy-filings", async (req, res) => {
+  async function handleProtectedCertificateOfOccupancyFeed(req: express.Request, res: express.Response) {
     const limitParam = Number.parseInt(String(req.query.limit || "20"), 10);
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
 
     try {
-      const payload = await readPermitFeed(limit, true);
+      await getApiKeyAuthContext(req);
+      const payload = await readPermitFeed(limit, CERTIFICATE_OF_OCCUPANCY_FILTER);
       const filings = payload.permits;
 
       res.json({
@@ -304,11 +360,15 @@ async function startServer() {
         meta: payload.meta,
       });
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : "Failed to load occupancy filing feed",
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to load certificate of occupancy filing feed",
       });
     }
-  });
+  }
+
+  app.get("/api/dob-certificate-of-occupancy-filings", handleProtectedCertificateOfOccupancyFeed);
+  app.get("/api/recent-occupancy-filings", handleProtectedCertificateOfOccupancyFeed);
 
   app.get("/api/public-contracts", async (_req, res) => {
     try {
@@ -364,6 +424,97 @@ async function startServer() {
       adminAuth: getAdminAuth(getAdminAppInstance()),
       adminDb: getAdminDb(),
     });
+  };
+  const getUserAccountByUid = async (uid: string) => {
+    if (!uid) return null;
+
+    const snapshot = await getAdminDb().collection(USERS_COLLECTION).doc(uid).get().catch(() => null);
+    return snapshot?.exists ? snapshot.data() : null;
+  };
+  const requireSignedInApiManager = async (req: express.Request) => {
+    const requestUser = await getVerifiedServerUser(req);
+    const userAccount = await getUserAccountByUid(requestUser.uid);
+
+    if (!hasApiSubscriptionAccess(userAccount, requestUser)) {
+      const error = new Error("API access is not enabled for this account.");
+      (error as any).statusCode = 403;
+      throw error;
+    }
+
+    return { requestUser, userAccount };
+  };
+  const getApiKeyAuthContext = async (req: express.Request) => {
+    const apiKeyToken = getApiKeyCandidateFromRequest(req);
+
+    if (apiKeyToken) {
+      const parsedKey = parseApiKeyToken(apiKeyToken);
+      if (!parsedKey) {
+        const error = new Error("Invalid API key.");
+        (error as any).statusCode = 401;
+        throw error;
+      }
+
+      const adminDb = getAdminDb();
+      const keySnapshot = await adminDb.collection(API_KEYS_COLLECTION).doc(parsedKey.prefix).get();
+      if (!keySnapshot.exists) {
+        const error = new Error("API key not found.");
+        (error as any).statusCode = 401;
+        throw error;
+      }
+
+      const keyRecord = keySnapshot.data() || {};
+      if (keyRecord.status !== "active") {
+        const error = new Error("API key is inactive.");
+        (error as any).statusCode = 403;
+        throw error;
+      }
+
+      if (!safeEqualHexDigest(String(keyRecord.tokenHash || ""), hashApiKey(parsedKey.token))) {
+        const error = new Error("API key is invalid.");
+        (error as any).statusCode = 401;
+        throw error;
+      }
+
+      const userAccount = await getUserAccountByUid(String(keyRecord.ownerUid || ""));
+      if (!hasApiSubscriptionAccess(userAccount)) {
+        const error = new Error("API access is not enabled for this customer.");
+        (error as any).statusCode = 403;
+        throw error;
+      }
+
+      const now = new Date().toISOString();
+      await keySnapshot.ref.set(
+        {
+          lastUsedAt: now,
+          lastUsedIp: String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").slice(0, 255),
+          lastUsedUserAgent: String(req.headers["user-agent"] || "").slice(0, 500),
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+
+      return {
+        authType: "api_key" as const,
+        ownerUid: String(keyRecord.ownerUid || ""),
+        ownerEmail: String(keyRecord.ownerEmail || ""),
+        apiKeyPrefix: parsedKey.prefix,
+      };
+    }
+
+    const requestUser = await getVerifiedServerUser(req);
+    const userAccount = await getUserAccountByUid(requestUser.uid);
+    if (!hasApiSubscriptionAccess(userAccount, requestUser)) {
+      const error = new Error("API access is not enabled for this account.");
+      (error as any).statusCode = 403;
+      throw error;
+    }
+
+    return {
+      authType: "firebase" as const,
+      ownerUid: requestUser.uid,
+      ownerEmail: requestUser.email,
+      apiKeyPrefix: "",
+    };
   };
   const sendMail = async (options: nodemailer.SendMailOptions) => {
     if (canUseResendApi()) {
@@ -455,6 +606,130 @@ async function startServer() {
     } catch (error) {
       console.error("Error syncing auth user:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Failed to sync user" });
+    }
+  });
+
+  app.get("/api/api-keys", async (req, res) => {
+    try {
+      const { requestUser } = await requireSignedInApiManager(req);
+      const snapshot = await getAdminDb()
+        .collection(API_KEYS_COLLECTION)
+        .where("ownerUid", "==", requestUser.uid)
+        .get();
+
+      const apiKeys = snapshot.docs
+        .map((doc) => {
+          const data = doc.data() || {};
+          return {
+            id: doc.id,
+            prefix: data.prefix || doc.id,
+            maskedKey: maskApiKey(data.prefix || doc.id, data.lastFour || ""),
+            name: data.name || "Default key",
+            status: data.status || "active",
+            createdAt: data.createdAt || "",
+            updatedAt: data.updatedAt || "",
+            lastUsedAt: data.lastUsedAt || null,
+          };
+        })
+        .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+
+      res.json({ apiKeys });
+    } catch (error) {
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to load API keys",
+      });
+    }
+  });
+
+  app.post("/api/api-keys", async (req, res) => {
+    try {
+      const { requestUser, userAccount } = await requireSignedInApiManager(req);
+      const name = String(req.body?.name || "Default key").trim() || "Default key";
+      const now = new Date().toISOString();
+      const generatedKey = createApiKeySecret();
+      const keyRecord = buildApiKeyRecord({
+        prefix: generatedKey.prefix,
+        tokenHash: generatedKey.tokenHash,
+        lastFour: generatedKey.lastFour,
+        name,
+        ownerUid: requestUser.uid,
+        ownerEmail: requestUser.email,
+        ownerRole: userAccount?.role || "",
+        subscriptionLevel: userAccount?.subscriptionLevel || "none",
+        createdByUid: requestUser.uid,
+        createdByEmail: requestUser.email,
+        createdAt: now,
+      });
+
+      await getAdminDb().collection(API_KEYS_COLLECTION).doc(generatedKey.prefix).set(keyRecord);
+
+      res.status(201).json({
+        apiKey: {
+          id: generatedKey.prefix,
+          prefix: generatedKey.prefix,
+          maskedKey: maskApiKey(generatedKey.prefix, generatedKey.lastFour),
+          token: generatedKey.token,
+          name,
+          status: "active",
+          createdAt: now,
+        },
+      });
+    } catch (error) {
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to create API key",
+      });
+    }
+  });
+
+  app.post("/api/api-keys/:keyId/revoke", async (req, res) => {
+    try {
+      const { requestUser } = await requireSignedInApiManager(req);
+      const keyId = String(req.params.keyId || "").trim();
+      if (!keyId) {
+        res.status(400).json({ error: "API key id is required." });
+        return;
+      }
+
+      const keyRef = getAdminDb().collection(API_KEYS_COLLECTION).doc(keyId);
+      const keySnapshot = await keyRef.get();
+      if (!keySnapshot.exists) {
+        res.status(404).json({ error: "API key not found." });
+        return;
+      }
+
+      const keyRecord = keySnapshot.data() || {};
+      if (String(keyRecord.ownerUid || "") !== requestUser.uid && !requestUser.isAdmin) {
+        res.status(403).json({ error: "You do not have permission to revoke this API key." });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      await keyRef.set(
+        {
+          status: "revoked",
+          revokedAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+
+      res.json({
+        apiKey: {
+          id: keyId,
+          prefix: keyRecord.prefix || keyId,
+          maskedKey: maskApiKey(keyRecord.prefix || keyId, keyRecord.lastFour || ""),
+          name: keyRecord.name || "Default key",
+          status: "revoked",
+          revokedAt: now,
+        },
+      });
+    } catch (error) {
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to revoke API key",
+      });
     }
   });
 
