@@ -104,6 +104,23 @@ export default function Landing() {
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
   };
 
+  const formatPreviewJobDescription = (value?: string) => {
+    const words = String(value || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (words.length === 0) {
+      return 'No description';
+    }
+
+    if (words.length <= 5) {
+      return words.join(' ');
+    }
+
+    return `${words.slice(0, 5).join(' ')}...`;
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/session-ended');
@@ -344,14 +361,14 @@ export default function Landing() {
             <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
               <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-black tracking-tight">Recently Issued Permits Preview</h2>
+                  <h2 className="text-base font-black tracking-tight">Recently Filed Permits Preview</h2>
                   <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase tracking-widest">NYC DOB</p>
                 </div>
                 <div />
                 </div>
               <div className="border-b border-slate-100 px-4 py-4">
                 <p className="text-xs font-bold text-rose-600">
-                  Full Permit data available with subscription, full address, company name, contact number.
+                  Full permit data available with subscription, including address, company name, and contact number if available.
                 </p>
               </div>
               {!loading && permitData.length > 0 && (
@@ -450,7 +467,12 @@ export default function Landing() {
                                 ? Number(row.estimated_job_costs || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
                                 : 'Unavailable'}
                             </td>
-                            <td className="px-4 py-3 text-sm font-medium text-slate-600 italic whitespace-nowrap">{row.job_description}</td>
+                            <td
+                              className="px-4 py-3 text-sm font-medium italic text-slate-600 whitespace-nowrap"
+                              title={row.job_description || 'No description'}
+                            >
+                              {formatPreviewJobDescription(row.job_description)}
+                            </td>
                             <td className="px-4 py-3 text-sm font-medium">
                               <span className={cn(
                                 "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",

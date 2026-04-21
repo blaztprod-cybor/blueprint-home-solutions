@@ -111,6 +111,49 @@ export interface DOBPermit {
   duplicate_group_key?: string;
 }
 
+export type ElevatorOpportunityTier = 'High' | 'Medium' | 'Watch';
+
+export interface ElevatorIntelligenceSourceStatus {
+  key: string;
+  label: string;
+  sourceUrl: string;
+  count: number;
+  latestAt?: string;
+  note: string;
+}
+
+export interface ElevatorOpportunity {
+  id: string;
+  jobFilingNumber: string;
+  address: string;
+  borough: string;
+  zipCode?: string;
+  bbl?: string;
+  ownerName?: string;
+  managementCompany?: string;
+  applicantBusinessName?: string;
+  buildingType?: string;
+  estimatedCost?: number;
+  filingDate?: string;
+  permitStatus?: string;
+  filingIncludes?: string;
+  descriptionOfWork?: string;
+  deviceId?: string;
+  deviceType?: string;
+  deviceStatus?: string;
+  elevatorType?: string;
+  latestCertificateOfOccupancyDate?: string;
+  recentSaleDate?: string;
+  recentSaleAmount?: number;
+  recentRecordedParty?: string;
+  hpdRegistrationDate?: string;
+  hpdRegistrationEndDate?: string;
+  modernizationSignalScore: number;
+  modernizationSignalTier: ElevatorOpportunityTier;
+  signalSummary: string[];
+  recommendedAction: string;
+}
+
 export type FilingEntityType =
   | 'Contractor'
   | 'Architect / Engineer'

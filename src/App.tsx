@@ -57,6 +57,7 @@ import ContractorLeads from './pages/ContractorLeads';
 import HomeownerDashboard from './pages/HomeownerDashboard';
 import SelectImprovement from './pages/SelectImprovement';
 import ApiProductBridge from './pages/ApiProductBridge';
+import ElevatorModernizationIntelligence from './pages/ElevatorModernizationIntelligence';
 
 class PortalErrorBoundary extends React.Component<
   { children: React.ReactNode; pathname: string },
@@ -161,6 +162,7 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
     { to: "/projects", icon: Briefcase, label: "Project Leads" },
     { to: hasPaidContractorAccess ? "/permit-feed" : "/contractor-paywall", icon: Building2, label: hasPaidContractorAccess ? "Filing Leads" : "Filing Leads Locked" },
     { to: "/api-intelligence", icon: ChevronRight, label: "API Intelligence" },
+    { to: "/elevator-intelligence", icon: Building2, label: "Elevator Intelligence" },
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/reviews", icon: Star, label: "Reviews" },
     { to: "/portfolio-gallery", icon: ImageIcon, label: "Gallery" },
@@ -398,6 +400,7 @@ export default function App() {
         <Route path="/home-pro-trial" element={<Navigate to="/contractor-paywall" replace />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/api-intelligence" element={<ApiProductBridge />} />
+        <Route path="/elevator-intelligence" element={<ElevatorModernizationIntelligence />} />
         <Route path="/select-improvement" element={<SelectImprovement />} />
         <Route path="/start-project" element={<PublicStartProjectPage />} />
 
@@ -410,6 +413,7 @@ export default function App() {
                 <Route path="/lead-marketplace" element={<Navigate to="/projects" replace />} />
                 <Route path="/permit-feed" element={<ContractorSubscriptionRoute><DOBLeads /></ContractorSubscriptionRoute>} />
                 <Route path="/permit-map" element={<ContractorSubscriptionRoute><PermitMap /></ContractorSubscriptionRoute>} />
+                <Route path="/elevator-intelligence" element={<ElevatorModernizationIntelligence />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/reviews" element={<Reviews />} />
                 <Route path="/portfolio-gallery" element={<PortfolioGallery />} />
