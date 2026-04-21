@@ -17,24 +17,6 @@ type OccupancyApiPayload = {
   };
 };
 
-type ApiAccessDebugPayload = {
-  requestUser?: {
-    uid?: string;
-    email?: string;
-    isAdmin?: boolean;
-  };
-  userAccount?: {
-    email?: string;
-    role?: string;
-    subscriptionLevel?: string;
-    accountPlan?: string;
-    isDisabled?: boolean;
-    isVerified?: boolean;
-  } | null;
-  hasApiAccess?: boolean;
-  error?: string;
-};
-
 function isDobIntelligenceJobType(jobType?: string) {
   const normalized = String(jobType || '')
     .toUpperCase()
@@ -54,7 +36,6 @@ export default function ApiProductBridge() {
   const PAGE_BUTTON_WINDOW = 8;
   const [filings, setFilings] = useState<DOBPermit[]>([]);
   const [meta, setMeta] = useState<OccupancyApiPayload['meta'] | null>(null);
-  const [apiAccessDebug, setApiAccessDebug] = useState<ApiAccessDebugPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accessMode, setAccessMode] = useState<'protected' | 'preview'>('protected');
@@ -244,37 +225,6 @@ export default function ApiProductBridge() {
   }, [user]);
 
   useEffect(() => {
-    const loadApiAccessDebug = async () => {
-      try {
-        const response = await authorizedApiFetch('/api/debug/api-access', {
-          method: 'GET',
-        });
-        const payload = (await response.json().catch(() => null)) as ApiAccessDebugPayload | null;
-
-        if (!response.ok) {
-          setApiAccessDebug({
-            error: payload?.error || 'Could not load API access debug status.',
-          });
-          return;
-        }
-
-        setApiAccessDebug(payload);
-      } catch (debugError) {
-        setApiAccessDebug({
-          error: debugError instanceof Error ? debugError.message : 'Could not load API access debug status.',
-        });
-      }
-    };
-
-    if (!user) {
-      setApiAccessDebug(null);
-      return;
-    }
-
-    void loadApiAccessDebug();
-  }, [user]);
-
-  useEffect(() => {
     setPage(1);
   }, [boroughFilter, statusFilter, searchQuery, limit]);
 
@@ -403,19 +353,6 @@ export default function ApiProductBridge() {
             </div>
           </div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">DOB Intelligence</h1>
-          {apiAccessDebug && (
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Account Status</p>
-              {apiAccessDebug.error ? (
-                <p className="mt-2 text-rose-600">{apiAccessDebug.error}</p>
-              ) : (
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <p><span className="font-bold text-slate-900">Subscription:</span> {user?.subscriptionLevel || apiAccessDebug.userAccount?.subscriptionLevel || 'N/A'}</p>
-                  <p><span className="font-bold text-slate-900">API access:</span> {apiAccessDebug.hasApiAccess ? 'Enabled' : 'Disabled'}</p>
-                </div>
-              )}
-            </div>
-          )}
         </section>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/40">
