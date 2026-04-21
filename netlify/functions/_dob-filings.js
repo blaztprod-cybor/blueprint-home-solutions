@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const CERTIFICATE_OF_OCCUPANCY_FILTER = 'certificate_of_occupancy';
+const DOB_INTELLIGENCE_FILTER = 'dob_intelligence';
 
 export function createSupabaseAdminClient() {
   const url = process.env.VITE_SUPABASE_URL;
@@ -52,6 +53,21 @@ export function isOccupancyJobType(jobType) {
   return normalized === 'CO' || normalized.includes(' CO') || normalized.includes('CO ') || normalized.includes('OCCUPANCY');
 }
 
+export function isDobIntelligenceJobType(jobType) {
+  const normalized = String(jobType || '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return [
+    'ALT-CO',
+    'ALTERATION CO',
+    'ALTERATION',
+    'FULL DEMOLITION',
+    'NEW BUILDING',
+  ].some((match) => normalized.includes(match));
+}
+
 /**
  * @param {any} query
  * @param {string | null | undefined} filter
@@ -59,6 +75,10 @@ export function isOccupancyJobType(jobType) {
 function applyPermitFilterQuery(query, filter) {
   if (filter === CERTIFICATE_OF_OCCUPANCY_FILTER) {
     return query.or('work_type.eq.CO,work_type.ilike.%CO%,work_type.ilike.%occupancy%');
+  }
+
+  if (filter === DOB_INTELLIGENCE_FILTER) {
+    return query.or('work_type.ilike.%alt-co%,work_type.ilike.%alteration co%,work_type.ilike.%alteration%,work_type.ilike.%full demolition%,work_type.ilike.%new building%');
   }
 
   return query;
@@ -71,6 +91,10 @@ function applyPermitFilterQuery(query, filter) {
 function matchesRequestedPermitFilter(permit, filter) {
   if (filter === CERTIFICATE_OF_OCCUPANCY_FILTER) {
     return isOccupancyJobType(permit.job_type);
+  }
+
+  if (filter === DOB_INTELLIGENCE_FILTER) {
+    return isDobIntelligenceJobType(permit.job_type);
   }
 
   return true;
@@ -88,6 +112,7 @@ function buildPermitFeedMeta(permits, data, filter) {
     latestIssuedDate: permits[0]?.filing_date || null,
     latestUpdatedAt: Array.isArray(data) && data[0]?.updated_at ? data[0].updated_at : null,
     occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
+    dobIntelligenceOnly: filter === DOB_INTELLIGENCE_FILTER,
     filter: filter || 'all',
   };
 }

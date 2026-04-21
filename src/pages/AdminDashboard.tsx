@@ -1276,6 +1276,7 @@ const AdminDashboard = () => {
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">User</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Joined</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Role / License</th>
+                    <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">UID</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Verification</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subscription</th>
                     <th className="px-8 py-5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">API Access</th>
@@ -1313,6 +1314,11 @@ const AdminDashboard = () => {
                       <td className="px-8 py-5">
                         <p className="text-sm font-bold text-slate-700">{user.role}</p>
                         <p className="text-xs text-slate-500 font-medium">{user.licenseNumber || 'No License Number'}</p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="max-w-[220px] truncate font-mono text-xs font-bold text-slate-700" title={user.id}>
+                          {user.id}
+                        </p>
                       </td>
                       <td className="px-8 py-5">
                         <div className="space-y-2">

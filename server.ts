@@ -41,6 +41,7 @@ const PERMIT_SYNC_SECRET = process.env.PERMIT_SYNC_SECRET || "";
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "Blueprint Home Solutions";
 const SMTP_FROM_EMAIL = process.env.SMTP_FROM_EMAIL || "info@blueprinthomesolutions.com";
 const CERTIFICATE_OF_OCCUPANCY_FILTER = "certificate_of_occupancy";
+const DOB_INTELLIGENCE_FILTER = "dob_intelligence";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TEXTBELT_API_KEY = process.env.TEXTBELT_API_KEY;
@@ -55,6 +56,17 @@ function isOccupancyJobType(jobType: string | undefined) {
     .trim();
 
   return normalized === "CO" || normalized.includes(" CO") || normalized.includes("CO ") || normalized.includes("OCCUPANCY");
+}
+
+function isDobIntelligenceJobType(jobType: string | undefined) {
+  const normalized = String(jobType || "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return ["ALT-CO", "ALTERATION CO", "ALTERATION", "FULL DEMOLITION", "NEW BUILDING"].some((match) =>
+    normalized.includes(match)
+  );
 }
 
 function getAdminAppInstance() {
@@ -265,6 +277,8 @@ async function readPermitFeed(limit: number, filter?: string | null) {
 
   const permits = filter === CERTIFICATE_OF_OCCUPANCY_FILTER
     ? readLocalPermitFeed(5000).filter((permit) => isOccupancyJobType(permit?.job_type)).slice(0, limit)
+    : filter === DOB_INTELLIGENCE_FILTER
+      ? readLocalPermitFeed(5000).filter((permit) => isDobIntelligenceJobType(permit?.job_type)).slice(0, limit)
     : readLocalPermitFeed(limit);
 
   return {
@@ -369,6 +383,59 @@ async function startServer() {
 
   app.get("/api/dob-certificate-of-occupancy-filings", handleProtectedCertificateOfOccupancyFeed);
   app.get("/api/recent-occupancy-filings", handleProtectedCertificateOfOccupancyFeed);
+
+  app.get("/api/dob-intelligence-filings", async (req, res) => {
+    const limitParam = Number.parseInt(String(req.query.limit || "20"), 10);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
+
+    try {
+      await getApiKeyAuthContext(req);
+      const payload = await readPermitFeed(limit, DOB_INTELLIGENCE_FILTER);
+      const filings = payload.permits;
+
+      res.json({
+        filings,
+        permits: filings,
+        meta: payload.meta,
+      });
+    } catch (error) {
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to load DOB intelligence filings",
+      });
+    }
+  });
+
+  app.get("/api/debug/api-access", async (req, res) => {
+    try {
+      const requestUser = await getVerifiedServerUser(req);
+      const userAccount = await getUserAccountByUid(requestUser.uid);
+
+      res.json({
+        requestUser: {
+          uid: requestUser.uid,
+          email: requestUser.email,
+          isAdmin: !!requestUser.isAdmin,
+        },
+        userAccount: userAccount
+          ? {
+              email: userAccount.email || "",
+              role: userAccount.role || "",
+              subscriptionLevel: userAccount.subscriptionLevel || "none",
+              accountPlan: userAccount.accountPlan || "",
+              isDisabled: !!userAccount.isDisabled,
+              isVerified: !!userAccount.isVerified,
+            }
+          : null,
+        hasApiAccess: hasApiSubscriptionAccess(userAccount, requestUser),
+      });
+    } catch (error) {
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to load API access debug status",
+      });
+    }
+  });
 
   app.get("/api/public-contracts", async (_req, res) => {
     try {
