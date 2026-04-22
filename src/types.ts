@@ -148,6 +148,10 @@ export interface ElevatorOpportunity {
   recentRecordedParty?: string;
   hpdRegistrationDate?: string;
   hpdRegistrationEndDate?: string;
+  complaintCount311?: number;
+  lastComplaintDate311?: string;
+  complaintDescriptor311?: string;
+  activeModernizationFiling?: boolean;
   modernizationSignalScore: number;
   modernizationSignalTier: ElevatorOpportunityTier;
   signalSummary: string[];

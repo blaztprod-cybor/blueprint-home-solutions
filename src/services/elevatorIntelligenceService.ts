@@ -96,6 +96,17 @@ type AcrisPartyRow = {
   name?: string;
 };
 
+type Complaint311Row = {
+  unique_key?: string;
+  created_date?: string;
+  descriptor?: string;
+  incident_address?: string;
+  borough?: string;
+  incident_zip?: string;
+  bbl?: string;
+  status?: string;
+};
+
 export interface ElevatorIntelligencePayload {
   sources: ElevatorIntelligenceSourceStatus[];
   opportunities: ElevatorOpportunity[];
@@ -182,6 +193,33 @@ function chunkIds(ids: string[], size = 40) {
 
 function buildInClause(ids: string[]) {
   return ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+}
+
+function buildAddressInWhere(field: string, values: string[]) {
+  return `${field} in(${buildInClause(values)})`;
+}
+
+function parseBblParts(bbl?: string | null) {
+  const digits = normalizeDigits(bbl);
+  if (digits.length !== 10) return null;
+
+  return {
+    borough: digits.slice(0, 1),
+    block: String(Number(digits.slice(1, 6))),
+    lot: String(Number(digits.slice(6, 10))),
+  };
+}
+
+function buildBblTripletWhere(values: string[], fieldNames: { borough: string; block: string; lot: string }) {
+  const clauses = values
+    .map((value) => parseBblParts(value))
+    .filter((value): value is NonNullable<ReturnType<typeof parseBblParts>> => !!value)
+    .map(
+      (value) =>
+        `(${fieldNames.borough}='${value.borough}' and ${fieldNames.block}='${value.block}' and ${fieldNames.lot}='${value.lot}')`,
+    );
+
+  return clauses.join(' or ');
 }
 
 function formatDate(value?: string) {
@@ -501,6 +539,330 @@ export async function fetchElevatorIntelligence(): Promise<ElevatorIntelligenceP
       count: acrisParties.length,
       latestAt: recentDeeds[0]?.document_date,
       note: 'Recorded party names are joined to recent deed activity.',
+    },
+  ];
+
+  return {
+    sources,
+    opportunities,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function fetchPreFilingElevatorOpportunities(): Promise<ElevatorIntelligencePayload> {
+  const [violations, complaints311] = await Promise.all([
+    fetchRows<ViolationRow>('8qed-xr5q', {
+      $select: 'ecb_violation_number,issue_date,severity,violation_type,respondent_name',
+      $order: 'issue_date DESC',
+      $limit: '120',
+    }),
+    fetchRows<Complaint311Row>('erm2-nwe9', {
+      $select: 'unique_key,created_date,descriptor,incident_address,borough,incident_zip,bbl,status',
+      $where: "complaint_type = 'Elevator'",
+      $order: 'created_date DESC',
+      $limit: '1200',
+    }),
+  ]);
+
+  const complaintsByAddress = new Map<
+    string,
+    {
+      count: number;
+      latest?: string;
+      descriptor?: string;
+      borough?: string;
+      zip?: string;
+      bbl?: string;
+    }
+  >();
+
+  complaints311.forEach((complaint) => {
+    const addressKey = normalizeLooseAddress(complaint.incident_address);
+    if (!addressKey) return;
+    const existing = complaintsByAddress.get(addressKey) || { count: 0 };
+    complaintsByAddress.set(addressKey, {
+      count: existing.count + 1,
+      latest: existing.latest && existing.latest > String(complaint.created_date || '') ? existing.latest : complaint.created_date,
+      descriptor: existing.descriptor || complaint.descriptor,
+      borough: existing.borough || complaint.borough,
+      zip: existing.zip || complaint.incident_zip,
+      bbl: existing.bbl || complaint.bbl,
+    });
+  });
+
+  const targetComplaintEntries = Array.from(complaintsByAddress.entries())
+    .sort((left, right) => right[1].count - left[1].count)
+    .slice(0, 120);
+  const targetAddresses = targetComplaintEntries.map(([address]) => address).filter(Boolean);
+  const targetBbls = Array.from(
+    new Set(targetComplaintEntries.map(([, complaint]) => normalizeDigits(complaint.bbl)).filter((value) => value.length === 10)),
+  );
+
+  const [permits, devices, hpdRegistrations, acrisLegals] = await Promise.all([
+    Promise.all(
+      chunkIds(targetBbls, 40).map((chunk) =>
+        fetchRows<ElevatorPermitRow>('kfp4-dz4h', {
+          $select: 'job_filing_number,filing_date,filing_status,house_number,street_name,borough,zip,bbl,descriptionofwork',
+          $where: `bbl in(${buildInClause(chunk)})`,
+          $order: 'filing_date DESC',
+          $limit: '500',
+        }),
+      ),
+    ).then((groups) => groups.flat()),
+    Promise.all(
+      chunkIds(targetAddresses, 40).map((chunk) =>
+        fetchRows<ElevatorDeviceRow>('juyv-2jek', {
+          $select: 'job_filing_number,device_id,device_type,device_status,elevator_type,physical_address',
+          $where: buildAddressInWhere('physical_address', chunk),
+          $limit: '500',
+        }),
+      ),
+    ).then((groups) => groups.flat()),
+    Promise.all(
+      chunkIds(targetBbls, 20).map((chunk) =>
+        fetchRows<HpdRegistrationRow>('tesw-yqqr', {
+          $select: 'boro,housenumber,streetname,zip,block,lot,bin,lastregistrationdate,registrationenddate',
+          $where: buildBblTripletWhere(chunk, { borough: 'boroid', block: 'block', lot: 'lot' }),
+          $limit: '500',
+        }),
+      ),
+    ).then((groups) => groups.flat()),
+    Promise.all(
+      chunkIds(targetBbls, 20).map((chunk) =>
+        fetchRows<AcrisLegalRow>('8h5j-fqxa', {
+          $select: 'document_id,borough,block,lot,street_number,street_name,unit',
+          $where: buildBblTripletWhere(chunk, { borough: 'borough', block: 'block', lot: 'lot' }),
+          $limit: '500',
+        }),
+      ),
+    ).then((groups) => groups.flat()),
+  ]);
+
+  const legalDocumentIds = Array.from(new Set(acrisLegals.map((row) => String(row.document_id || '').trim()).filter(Boolean)));
+  const deedChunks = chunkIds(legalDocumentIds, 40);
+  const [recentDeeds, acrisParties] = await Promise.all([
+    Promise.all(
+      deedChunks.map((chunk) =>
+        fetchRows<AcrisMasterRow>('bnx9-e6tj', {
+          $select: 'document_id,doc_type,document_date,document_amt,recorded_datetime,recorded_borough',
+          $where: `document_id in(${buildInClause(chunk)}) and doc_type = 'DEED'`,
+          $limit: '500',
+        }),
+      ),
+    ).then((groups) => groups.flat()),
+    Promise.all(
+      deedChunks.map((chunk) =>
+        fetchRows<AcrisPartyRow>('636b-3b5g', {
+          $select: 'document_id,party_type,name',
+          $where: `document_id in(${buildInClause(chunk)})`,
+          $limit: '500',
+        }),
+      ),
+    ).then((groups) => groups.flat()),
+  ]);
+
+  const activePermitAddresses = new Set(
+    permits
+      .filter((permit) => {
+        const description = normalizeText(permit.descriptionofwork);
+        return /MODERN|ALTERATION|REPLACEMENT/.test(description || 'MODERN');
+      })
+      .map((permit) => normalizeAddress(permit.house_number, permit.street_name))
+      .filter(Boolean),
+  );
+
+  const deviceCountByAddress = new Map<string, number>();
+  const representativeDeviceByAddress = new Map<string, ElevatorDeviceRow>();
+  devices.forEach((device) => {
+    const addressKey = normalizeLooseAddress(device.physical_address);
+    if (!addressKey) return;
+    deviceCountByAddress.set(addressKey, (deviceCountByAddress.get(addressKey) || 0) + 1);
+    if (!representativeDeviceByAddress.has(addressKey)) {
+      representativeDeviceByAddress.set(addressKey, device);
+    }
+  });
+
+  const hpdByBbl = new Map<string, HpdRegistrationRow>();
+  hpdRegistrations.forEach((record) => {
+    const bblKey = buildBblKey(record.boro, record.block, record.lot);
+    if (bblKey && !hpdByBbl.has(bblKey)) {
+      hpdByBbl.set(bblKey, record);
+    }
+  });
+
+  const acrisMasterByDocumentId = new Map<string, AcrisMasterRow>();
+  recentDeeds.forEach((record) => {
+    const documentId = String(record.document_id || '').trim();
+    if (documentId) acrisMasterByDocumentId.set(documentId, record);
+  });
+
+  const acrisPartyByDocumentId = new Map<string, AcrisPartyRow[]>();
+  acrisParties.forEach((record) => {
+    const documentId = String(record.document_id || '').trim();
+    if (!documentId) return;
+    const existing = acrisPartyByDocumentId.get(documentId) || [];
+    existing.push(record);
+    acrisPartyByDocumentId.set(documentId, existing);
+  });
+
+  const recentSaleByBbl = new Map<string, { documentDate?: string; amount?: number; partyName?: string }>();
+  const ownerByAddress = new Map<string, string>();
+  acrisLegals.forEach((record) => {
+    const documentId = String(record.document_id || '').trim();
+    const bblKey = buildBblKey(record.borough, record.block, record.lot);
+    const addressKey = normalizeAddress(record.street_number, record.street_name);
+    const deed = acrisMasterByDocumentId.get(documentId);
+    const parties = acrisPartyByDocumentId.get(documentId) || [];
+    const namedParty = parties.find((party) => normalizeText(party.name));
+
+    if (addressKey && namedParty?.name && !ownerByAddress.has(addressKey)) {
+      ownerByAddress.set(addressKey, namedParty.name);
+    }
+
+    if (!documentId || !bblKey || recentSaleByBbl.has(bblKey)) return;
+
+    recentSaleByBbl.set(bblKey, {
+      documentDate: deed?.document_date || deed?.recorded_datetime,
+      amount: toNumber(deed?.document_amt),
+      partyName: namedParty?.name,
+    });
+  });
+
+  const opportunities: ElevatorOpportunity[] = targetComplaintEntries
+    .map(([addressKey, complaint]) => {
+      const device = representativeDeviceByAddress.get(addressKey);
+      const activeFiling = activePermitAddresses.has(addressKey);
+      const bblKey = normalizeDigits(complaint.bbl);
+      const hpdMatch = hpdByBbl.get(bblKey);
+      const recentSale = recentSaleByBbl.get(bblKey);
+      const ownerFromAddress = ownerByAddress.get(addressKey);
+      const deviceCount = deviceCountByAddress.get(addressKey) || 0;
+
+      let score = 0;
+      const signals: string[] = [];
+
+      if (complaint.count >= 4) {
+        score += 35;
+        signals.push('Multiple 311 elevator complaints at this address');
+      } else if (complaint.count >= 2) {
+        score += 20;
+        signals.push('Repeat 311 elevator complaints at this address');
+      } else {
+        score += 8;
+        signals.push('Recent 311 elevator complaint on file');
+      }
+
+      if (deviceCount > 1) {
+        score += 18;
+        signals.push('Multiple elevator devices on property');
+      }
+
+      if (device && normalizeText(device.device_status) !== 'WORK IN PROGRESS') {
+        score += 15;
+        signals.push(`Device status is ${device.device_status || 'active'}, not work in progress`);
+      }
+
+      if (recentSale?.documentDate) {
+        score += 10;
+        signals.push('Recent deed activity suggests ownership attention or capital review');
+      }
+
+      if (hpdMatch?.lastregistrationdate) {
+        score += 8;
+        signals.push('HPD registration available for owner lookup');
+      }
+
+      if (activeFiling) {
+        score -= 30;
+        signals.push('Modernization or related filing already in motion');
+      } else {
+        score += 18;
+        signals.push('No recent modernization filing detected yet');
+      }
+
+      const tier = computeTier(score);
+
+      return {
+        id: `prefiling-${addressKey}`,
+        jobFilingNumber: activeFiling ? 'In motion elsewhere' : 'No active filing',
+        address: addressKey,
+        borough: complaint.borough || 'Unknown',
+        zipCode: complaint.zip,
+        bbl: bblKey || undefined,
+        ownerName: recentSale?.partyName || ownerFromAddress || undefined,
+        managementCompany: recentSale?.partyName || ownerFromAddress || undefined,
+        deviceId: device?.device_id,
+        deviceType: device?.device_type,
+        deviceStatus: device?.device_status,
+        elevatorType: device?.elevator_type,
+        recentSaleDate: formatDate(recentSale?.documentDate),
+        recentSaleAmount: recentSale?.amount || undefined,
+        recentRecordedParty: recentSale?.partyName || ownerFromAddress || undefined,
+        hpdRegistrationDate: formatDate(hpdMatch?.lastregistrationdate),
+        hpdRegistrationEndDate: formatDate(hpdMatch?.registrationenddate),
+        complaintCount311: complaint.count,
+        lastComplaintDate311: formatDate(complaint.latest),
+        complaintDescriptor311: complaint.descriptor,
+        activeModernizationFiling: activeFiling,
+        modernizationSignalScore: score,
+        modernizationSignalTier: tier,
+        signalSummary: signals,
+        recommendedAction: activeFiling
+          ? 'Review this address as a competitive account, not a clean pre-filing opportunity.'
+          : recommendedActionForTier(tier),
+      };
+    })
+    .sort((left, right) => right.modernizationSignalScore - left.modernizationSignalScore)
+    .slice(0, 100);
+
+  const sources: ElevatorIntelligenceSourceStatus[] = [
+    {
+      key: '311',
+      label: '311 elevator complaints',
+      sourceUrl: 'https://data.cityofnewyork.us/d/erm2-nwe9',
+      count: complaints311.length,
+      latestAt: complaints311[0]?.created_date,
+      note: 'Primary pre-filing pain signal for repeated elevator complaints.',
+    },
+    {
+      key: 'devices',
+      label: 'DOB inspections and device status',
+      sourceUrl: SOURCE_URLS.devices,
+      count: devices.length,
+      latestAt: devices[0]?.job_filing_number,
+      note: 'Used to identify device count and exclude work-in-progress conditions.',
+    },
+    {
+      key: 'hpd',
+      label: 'HPD registration',
+      sourceUrl: SOURCE_URLS.hpd,
+      count: hpdRegistrations.length,
+      latestAt: hpdRegistrations[0]?.lastregistrationdate,
+      note: 'Used for owner and registration context.',
+    },
+    {
+      key: 'sales',
+      label: 'ACRIS sales',
+      sourceUrl: SOURCE_URLS.acrisMaster,
+      count: recentDeeds.length,
+      latestAt: recentDeeds[0]?.recorded_datetime,
+      note: 'Used for ownership and recent transfer signals.',
+    },
+    {
+      key: 'owner-records',
+      label: 'Owner and management records',
+      sourceUrl: SOURCE_URLS.acrisParties,
+      count: acrisParties.length,
+      latestAt: recentDeeds[0]?.document_date,
+      note: 'Recorded party names used for outreach context.',
+    },
+    {
+      key: 'violations',
+      label: 'DOB violations',
+      sourceUrl: SOURCE_URLS.violations,
+      count: violations.length,
+      latestAt: violations[0]?.issue_date,
+      note: 'Loaded as a source layer; this dataset does not expose address/BBL for clean per-building matching.',
     },
   ];
 
