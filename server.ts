@@ -248,14 +248,20 @@ async function syncPermitFeed() {
   }
 }
 
-function readLocalPermitFeed(limit: number) {
+function readLocalPermitPayload(limit: number) {
   if (!fs.existsSync(LOCAL_PERMIT_FEED_PATH)) {
-    return [];
+    return {
+      permits: [],
+      latestUpdatedAt: null,
+    };
   }
 
   const payload = JSON.parse(fs.readFileSync(LOCAL_PERMIT_FEED_PATH, "utf8"));
   const permits = Array.isArray(payload) ? payload : payload.permits || [];
-  return permits.slice(0, limit);
+  return {
+    permits: permits.slice(0, limit),
+    latestUpdatedAt: typeof payload?.generatedAt === "string" ? payload.generatedAt : null,
+  };
 }
 
 function canUseSupabasePermitFeed() {
@@ -275,11 +281,12 @@ async function readPermitFeed(limit: number, filter?: string | null) {
     }
   }
 
+  const localPayload = readLocalPermitPayload(filter ? 5000 : limit);
   const permits = filter === CERTIFICATE_OF_OCCUPANCY_FILTER
-    ? readLocalPermitFeed(5000).filter((permit) => isOccupancyJobType(permit?.job_type)).slice(0, limit)
+    ? localPayload.permits.filter((permit) => isOccupancyJobType(permit?.job_type)).slice(0, limit)
     : filter === DOB_INTELLIGENCE_FILTER
-      ? readLocalPermitFeed(5000).filter((permit) => isDobIntelligenceJobType(permit?.job_type)).slice(0, limit)
-    : readLocalPermitFeed(limit);
+      ? localPayload.permits.filter((permit) => isDobIntelligenceJobType(permit?.job_type)).slice(0, limit)
+      : localPayload.permits;
 
   return {
     permits,
@@ -287,6 +294,7 @@ async function readPermitFeed(limit: number, filter?: string | null) {
       source: "local-file",
       count: permits.length,
       latestIssuedDate: permits[0]?.filing_date || null,
+      latestUpdatedAt: localPayload.latestUpdatedAt,
       occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
       filter: filter || "all",
     },
@@ -364,7 +372,7 @@ async function startServer() {
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
 
     try {
-      await getApiKeyAuthContext(req);
+      await requirePermitFeedAccess(req);
       const payload = await readPermitFeed(limit, CERTIFICATE_OF_OCCUPANCY_FILTER);
       const filings = payload.permits;
 
@@ -389,7 +397,7 @@ async function startServer() {
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 5000) : 20;
 
     try {
-      await getApiKeyAuthContext(req);
+      await requirePermitFeedAccess(req);
       const payload = await readPermitFeed(limit, DOB_INTELLIGENCE_FILTER);
       const filings = payload.permits;
 
@@ -449,17 +457,41 @@ async function startServer() {
   });
 
   app.post("/api/admin/sync-permits", async (req, res) => {
-    if (!isAuthorizedPermitSyncRequest(req)) {
-      res.status(401).json({ error: "Unauthorized permit sync request" });
-      return;
-    }
-
     try {
+      if (!isAuthorizedPermitSyncRequest(req)) {
+        await requireSignedInUser(req);
+      }
+
       await syncPermitFeed();
-      res.json({ ok: true, message: "Permit sync completed" });
+      const payload = await readPermitFeed(1);
+      res.json({
+        ok: true,
+        message: "Permit sync completed",
+        meta: payload.meta,
+      });
     } catch (error) {
-      res.status(500).json({
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
         error: error instanceof Error ? error.message : "Permit sync failed",
+      });
+    }
+  });
+
+  app.get("/api/admin/sync-permits", async (req, res) => {
+    try {
+      if (!isAuthorizedPermitSyncRequest(req)) {
+        await requireSignedInUser(req);
+      }
+
+      const payload = await readPermitFeed(1);
+      res.json({
+        ok: true,
+        meta: payload.meta,
+      });
+    } catch (error) {
+      const statusCode = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : 500;
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : "Failed to inspect permit sync status",
       });
     }
   });
@@ -498,6 +530,12 @@ async function startServer() {
     const snapshot = await getAdminDb().collection(USERS_COLLECTION).doc(uid).get().catch(() => null);
     return snapshot?.exists ? snapshot.data() : null;
   };
+  const requireSignedInUser = async (req: express.Request) => {
+    const requestUser = await getVerifiedServerUser(req);
+    const userAccount = await getUserAccountByUid(requestUser.uid);
+
+    return { requestUser, userAccount };
+  };
   const requireSignedInApiManager = async (req: express.Request) => {
     const requestUser = await getVerifiedServerUser(req);
     const userAccount = await getUserAccountByUid(requestUser.uid);
@@ -509,6 +547,13 @@ async function startServer() {
     }
 
     return { requestUser, userAccount };
+  };
+  const requirePermitFeedAccess = async (req: express.Request) => {
+    if (getApiKeyCandidateFromRequest(req)) {
+      return getApiKeyAuthContext(req);
+    }
+
+    return requireSignedInUser(req);
   };
   const getApiKeyAuthContext = async (req: express.Request) => {
     const apiKeyToken = getApiKeyCandidateFromRequest(req);

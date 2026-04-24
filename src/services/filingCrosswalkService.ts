@@ -7,6 +7,93 @@ import {
 } from '../types';
 
 const CROSSWALK_FEED = '/data/filing-contact-crosswalk.json';
+const PLACEHOLDER_BUSINESS_NAMES = new Set([
+  '',
+  'PR',
+  'N A',
+  'NA',
+  'NOT APPLICABLE',
+  'NONE',
+  'UNKNOWN',
+  'OWNER',
+  'OWNERS REP',
+  'OWNER REP',
+]);
+
+const PUBLIC_AGENCY_KEYWORDS = [
+  'CITY OF NEW YORK',
+  'DEPARTMENT OF',
+  'NYC PARKS',
+  'NYCHA',
+  'SCHOOL CONSTRUCTION AUTHORITY',
+  'NEW YORK CITY HOUSING AUTHORITY',
+  'NYC SCA',
+  'MTA',
+  'PORT AUTHORITY',
+];
+
+const PROFESSIONAL_SERVICE_KEYWORDS = [
+  'ARCHITECT',
+  'ENGINEER',
+  'CONSULTING',
+  'CONSULTANT',
+  'DESIGN',
+];
+
+const EXPEDITER_KEYWORDS = [
+  'EXPEDIT',
+  'FILING REP',
+  'PERMIT EXPEDITOR',
+];
+
+const DEVELOPER_OWNER_KEYWORDS = [
+  'DEVELOP',
+  'DEVELOPER',
+  'HOLDINGS',
+  'HOLDING',
+  'PROPERTIES',
+  'PROPERTY',
+  'REALTY',
+  'VENTURES',
+  'CAPITAL',
+  'INVEST',
+  'ASSET',
+  'ESTATE',
+  'OWNER',
+  'LAND',
+  'ACQUISITION',
+  'MANAGEMENT',
+  'MANAGER',
+];
+
+const CONTRACTOR_KEYWORDS = [
+  'CONSTRUCTION',
+  'CONTRACTING',
+  'CONTRACTOR',
+  'BUILDERS',
+  'BUILDER',
+  'BUILDING',
+  'GC',
+  'GENERAL CONTRACT',
+  'ROOFING',
+  'MASONRY',
+  'CARPENTRY',
+  'RENOVATION',
+  'MECHANICAL',
+  'PLUMBING',
+  'ELECTRICAL',
+  'EXCAVATION',
+  'DEMO',
+  'DEMOLITION',
+  'IRONWORK',
+  'STEEL',
+  'SIDING',
+  'PAVING',
+  'RESTORATION',
+  'INTERIOR',
+  'PAINTING',
+  'FLOORING',
+];
 
 function normalizeLicenseKey(value: string | number | null | undefined): string {
   const digitsOnly = String(value || '').replace(/\D/g, '');
@@ -32,6 +119,18 @@ function normalizeZip(value: string | undefined): string {
   return String(value || '').replace(/\D/g, '').slice(0, 5);
 }
 
+function includesAnyKeyword(value: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function isPlaceholderBusinessName(value: string): boolean {
+  return PLACEHOLDER_BUSINESS_NAMES.has(value);
+}
+
+function scoreBusinessName(value: string, keywords: string[]): number {
+  return keywords.reduce((score, keyword) => (value.includes(keyword) ? score + 1 : score), 0);
+}
+
 function scoreCrosswalkRecord(record: FilingContactCrosswalkRecord): number {
   const confidenceWeight: Record<CrosswalkConfidence, number> = {
     High: 300,
@@ -50,44 +149,46 @@ function scoreCrosswalkRecord(record: FilingContactCrosswalkRecord): number {
 }
 
 export function classifyPermitEntity(permit: DOBPermit): FilingEntityType {
-  const businessName = normalizeCrosswalkText(permit.owner_business_name || permit.applicant_business_name || permit.owner_name);
+  const ownerBusinessName = normalizeCrosswalkText(permit.owner_business_name || permit.owner_name);
+  const applicantBusinessName = normalizeCrosswalkText(permit.applicant_business_name || permit.licensed_business_name);
+  const businessName = !isPlaceholderBusinessName(ownerBusinessName)
+    ? ownerBusinessName
+    : !isPlaceholderBusinessName(applicantBusinessName)
+      ? applicantBusinessName
+      : ownerBusinessName || applicantBusinessName;
   const applicantName = normalizeCrosswalkText(permit.contact_name || permit.licensed_contact_name || permit.owner_name);
   const licenseType = normalizeCrosswalkText(permit.license_type);
 
-  if (
-    businessName.includes('CITY OF NEW YORK') ||
-    businessName.includes('DEPARTMENT OF') ||
-    businessName.includes('NYC PARKS') ||
-    businessName.includes('NYCHA') ||
-    businessName.includes('SCHOOL CONSTRUCTION AUTHORITY')
-  ) {
+  if (includesAnyKeyword(businessName, PUBLIC_AGENCY_KEYWORDS)) {
     return 'Public Agency';
   }
 
   if (
     licenseType.includes('ARCHITECT') ||
     licenseType.includes('ENGINEER') ||
-    businessName.includes('ARCHITECT') ||
-    businessName.includes('ENGINEER')
+    includesAnyKeyword(businessName, PROFESSIONAL_SERVICE_KEYWORDS)
   ) {
     return 'Architect / Engineer';
   }
 
-  if (businessName.includes('EXPEDIT') || applicantName.includes('EXPEDIT')) {
+  if (includesAnyKeyword(businessName, EXPEDITER_KEYWORDS) || includesAnyKeyword(applicantName, EXPEDITER_KEYWORDS)) {
     return 'Expediter';
   }
 
-  if (
-    businessName.includes('DEVELOP') ||
-    businessName.includes('HOLDINGS') ||
-    businessName.includes('PROPERTIES') ||
-    businessName.includes('REALTY') ||
-    businessName.includes('OWNER')
-  ) {
+  const developerOwnerScore =
+    scoreBusinessName(ownerBusinessName, DEVELOPER_OWNER_KEYWORDS) * 3 +
+    scoreBusinessName(applicantBusinessName, DEVELOPER_OWNER_KEYWORDS);
+  const contractorScore =
+    scoreBusinessName(ownerBusinessName, CONTRACTOR_KEYWORDS) * 2 +
+    scoreBusinessName(applicantBusinessName, CONTRACTOR_KEYWORDS) * 2 +
+    (permit.applicant_license ? 2 : 0) +
+    (licenseType.includes('CONTRACTOR') ? 2 : 0);
+
+  if (developerOwnerScore >= Math.max(2, contractorScore)) {
     return 'Developer / Owner';
   }
 
-  if (permit.applicant_license || licenseType.includes('CONTRACTOR')) {
+  if (contractorScore >= 2) {
     return 'Contractor';
   }
 
@@ -100,12 +201,12 @@ export function classifyPermitEntity(permit: DOBPermit): FilingEntityType {
 
 export function deriveLeadPath(entityType: FilingEntityType): FilingLeadPath {
   switch (entityType) {
-    case 'Contractor':
+    case 'Developer / Owner':
       return 'Direct';
     case 'Architect / Engineer':
     case 'Expediter':
-    case 'Developer / Owner':
     case 'Business / Organization':
+    case 'Contractor':
       return 'Indirect';
     case 'Public Agency':
       return 'Procurement';

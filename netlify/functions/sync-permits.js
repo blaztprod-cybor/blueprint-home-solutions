@@ -1,7 +1,7 @@
 import { syncDobPermits } from './_permit-sync.js';
 
 export const config = {
-  schedule: '@daily',
+  schedule: '0 */6 * * *',
 };
 
 export default async () => {

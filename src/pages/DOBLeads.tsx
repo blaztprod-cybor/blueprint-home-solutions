@@ -119,6 +119,32 @@ export default function DOBLeads() {
     return amount.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
   };
 
+  const isPlaceholderName = (value?: string) => {
+    const normalized = String(value || '').trim().toUpperCase();
+    return (
+      !normalized ||
+      normalized === 'PR' ||
+      normalized === 'N/A' ||
+      normalized === 'NA' ||
+      normalized === 'NOT APPLICABLE' ||
+      normalized === 'NONE' ||
+      normalized === 'UNKNOWN'
+    );
+  };
+
+  const getPreferredBusinessOrOwner = (permit: DOBPermit) => {
+    const candidates = [
+      { label: 'Business', value: permit.owner_business_name },
+      { label: 'Business', value: permit.applicant_business_name },
+      { label: 'Owner', value: permit.potential_owner_name },
+      { label: 'Owner', value: permit.owner_name },
+    ];
+
+    const match = candidates.find((candidate) => !isPlaceholderName(candidate.value));
+
+    return match || { label: 'Unavailable', value: 'Unavailable' };
+  };
+
   const visiblePages = Array.from(
     { length: Math.min(5, totalPages) },
     (_, index) => {
@@ -369,8 +395,7 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Filed</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Projected Cost</th>
                 <th className="w-[195px] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Description</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Business Name</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Business Phone</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Business / Owner</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Licensed Contact</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Licensed Phone</th>
@@ -380,7 +405,7 @@ export default function DOBLeads() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-20 text-center">
+                  <td colSpan={13} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB filings...</p>
@@ -389,7 +414,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-6 py-20 text-center">
+                  <td colSpan={13} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No filings match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -480,18 +505,13 @@ export default function DOBLeads() {
                       </p>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-slate-600">
-                        {permit.owner_business_name || permit.applicant_business_name || permit.owner_name || 'Unavailable'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <div className="space-y-1">
-                        <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
-                          {permit.business_phone || 'Unavailable'}
+                        <span className="text-sm font-medium text-slate-600">
+                          {getPreferredBusinessOrOwner(permit).value}
                         </span>
-                        {permit.business_phone_source && (
+                        {getPreferredBusinessOrOwner(permit).label !== 'Unavailable' && (
                           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                            {permit.business_phone_source}
+                            {getPreferredBusinessOrOwner(permit).label}
                           </p>
                         )}
                       </div>
@@ -572,7 +592,7 @@ export default function DOBLeads() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm font-semibold text-slate-700">
-                    {permit.job_type || 'N/A'} · {formatProjectedCost(permit.estimated_job_costs)} · {permit.owner_business_name || permit.owner_name || 'Unavailable'}
+                    {permit.job_type || 'N/A'} · {formatProjectedCost(permit.estimated_job_costs)} · {getPreferredBusinessOrOwner(permit).value}
                   </p>
                   <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                     {permit.contact_confidence || 'Unresolved'} · License {permit.applicant_license || 'Unavailable'}

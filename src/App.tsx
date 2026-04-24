@@ -179,6 +179,10 @@ const Navigation = ({ isMobileMenuOpen, setIsMobileMenuOpen }: { isMobileMenuOpe
   const adminLinks = [
     { to: "/admin", icon: ShieldCheck, label: "Admin Dashboard" },
     { to: "/admin/leads", icon: MessageSquare, label: "Lead Intake" },
+    { to: "/permit-feed", icon: Building2, label: "Filing Leads" },
+    { to: "/api-intelligence", icon: ChevronRight, label: "API Intelligence" },
+    { to: "/elevator-intelligence", icon: Building2, label: "Pre-Filing Elevator" },
+    { to: "/elevator-filings", icon: Building2, label: "Elevator Filings" },
     { to: "/projects", icon: Briefcase, label: "All Projects" },
   ];
 

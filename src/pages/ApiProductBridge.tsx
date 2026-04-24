@@ -46,6 +46,9 @@ export default function ApiProductBridge() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [estimatedCostSort, setEstimatedCostSort] = useState<'none' | 'desc' | 'asc'>('none');
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
@@ -170,15 +173,12 @@ export default function ApiProductBridge() {
       try {
         setLoading(true);
         setError('');
+        setSyncMessage('');
 
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 4000);
-        const response = await fetch('/api/dob-permits?limit=5000', {
+        const response = await authorizedApiFetch('/api/dob-intelligence-filings?limit=5000', {
           method: 'GET',
-          signal: controller.signal,
           cache: 'no-store',
         });
-        window.clearTimeout(timeoutId);
         const raw = (await response.json().catch(() => null)) as OccupancyApiPayload | null;
 
         if (!response.ok) {
@@ -187,19 +187,18 @@ export default function ApiProductBridge() {
         }
 
         const nextPermits = Array.isArray(raw?.filings) ? raw?.filings : Array.isArray(raw?.permits) ? raw?.permits : [];
-        const nextFilings = nextPermits.filter((permit) => isDobIntelligenceJobType(permit.job_type));
-        setFilings(nextFilings);
+        setFilings(nextPermits);
         setMeta({
           ...(raw?.meta || {}),
-          count: nextFilings.length,
+          count: nextPermits.length,
           filter: 'dob_intelligence',
           source: raw?.meta?.source || 'local-file',
         });
-        setAccessMode('preview');
+        setAccessMode('protected');
       } catch (previewError) {
         const message = previewError instanceof Error ? previewError.message : 'Could not load live DOB intelligence preview.';
 
-        if (previewError instanceof Error && (previewError.name === 'AbortError' || message.includes('Failed to fetch'))) {
+        if (previewError instanceof Error && (message.includes('Failed to fetch') || message.includes('Could not load live DOB intelligence filings.'))) {
           try {
             await loadPreviewFallback();
             return;
@@ -222,7 +221,7 @@ export default function ApiProductBridge() {
     }
 
     void loadPreview();
-  }, [user]);
+  }, [refreshNonce, user]);
 
   useEffect(() => {
     setPage(1);
@@ -322,6 +321,35 @@ export default function ApiProductBridge() {
     await logout();
   };
 
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return 'N/A';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  };
+
+  const handleManualSync = async () => {
+    try {
+      setSyncing(true);
+      setSyncMessage('');
+
+      const response = await authorizedApiFetch('/api/admin/sync-permits', {
+        method: 'POST',
+      });
+      const payload = (await response.json().catch(() => null)) as OccupancyApiPayload & { ok?: boolean; message?: string; error?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Manual permit sync failed.');
+      }
+
+      setSyncMessage(payload?.message || 'Permit sync completed.');
+      setRefreshNonce((current) => current + 1);
+    } catch (syncError) {
+      setSyncMessage(syncError instanceof Error ? syncError.message : 'Manual permit sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 lg:px-8">
       <main className="mx-auto max-w-[96rem] space-y-6">
@@ -353,6 +381,20 @@ export default function ApiProductBridge() {
             </div>
           </div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">DOB Intelligence</h1>
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+            <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+              Source: {meta?.source || 'N/A'}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+              Latest filing: {formatDateTime(meta?.latestIssuedDate)}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+              Last sync: {formatDateTime(meta?.latestUpdatedAt)}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+              Feed mode: {accessMode}
+            </span>
+          </div>
         </section>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/40">
@@ -433,6 +475,14 @@ export default function ApiProductBridge() {
               >
                 Reset
               </button>
+              <button
+                type="button"
+                onClick={() => void handleManualSync()}
+                disabled={syncing}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {syncing ? 'Syncing...' : 'Run Manual Sync'}
+              </button>
             </div>
 
             <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
@@ -448,6 +498,12 @@ export default function ApiProductBridge() {
               </select>
             </label>
           </div>
+
+          {!loading && syncMessage ? (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+              {syncMessage}
+            </div>
+          ) : null}
 
           {!loading && !error && filteredFilings.length > limit && (
             <div className="mt-4 flex flex-wrap items-center gap-2">

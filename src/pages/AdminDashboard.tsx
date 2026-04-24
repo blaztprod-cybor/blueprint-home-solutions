@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Ban,
+  Building2,
   CheckCircle2,
+  ChevronRight,
   Image as ImageIcon,
   Loader2,
   Mail,
@@ -98,6 +100,33 @@ const BROADCAST_SEGMENT_LABELS: Record<BroadcastSegment, string> = {
   licensed: 'Licensed',
   unlicensed: 'Unlicensed',
 };
+
+const ADMIN_TOOL_LINKS = [
+  {
+    href: '/permit-feed',
+    label: 'Filing Leads',
+    description: 'DOB filing lead board',
+    icon: Building2,
+  },
+  {
+    href: '/api-intelligence',
+    label: 'API Intelligence',
+    description: 'Protected DOB intelligence feed',
+    icon: ChevronRight,
+  },
+  {
+    href: '/elevator-intelligence',
+    label: 'Pre-Filing Elevator',
+    description: 'Opportunity scan before filing',
+    icon: Building2,
+  },
+  {
+    href: '/elevator-filings',
+    label: 'Elevator Filings',
+    description: 'Live elevator modernization feed',
+    icon: Building2,
+  },
+];
 
 function toIsoDateString(value: unknown) {
   if (!value) return undefined;
@@ -1067,6 +1096,37 @@ const AdminDashboard = () => {
           <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
             <ShieldAlert size={20} />
           </div>
+        </div>
+      </div>
+
+      <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black tracking-tight text-slate-900">Admin Tools</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              Open the live filing and elevator intelligence surfaces directly from the dashboard.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {ADMIN_TOOL_LINKS.map(({ href, label, description, icon: Icon }) => (
+            <a
+              key={href}
+              href={href}
+              className="group rounded-3xl border border-slate-200 bg-slate-50 p-5 transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60"
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                <Icon size={20} />
+              </div>
+              <div className="mt-4">
+                <p className="text-base font-black tracking-tight text-slate-900">{label}</p>
+                <p className="mt-1 text-sm font-medium leading-6 text-slate-500">{description}</p>
+              </div>
+              <div className="mt-4 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400 transition-colors group-hover:text-slate-700">
+                Open
+              </div>
+            </a>
+          ))}
         </div>
       </div>
 
