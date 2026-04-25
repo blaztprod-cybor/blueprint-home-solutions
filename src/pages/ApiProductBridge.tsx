@@ -4,6 +4,8 @@ import { Loader2 } from 'lucide-react';
 import { DOBPermit } from '../types';
 import { authorizedApiFetch } from '../lib/authorizedApi';
 import { useAuth } from '../AuthContext';
+import { formatPermitPhase } from '../lib/utils';
+import { fetchDOBPermits } from '../services/dobService';
 
 type OccupancyApiPayload = {
   filings?: DOBPermit[];
@@ -52,6 +54,7 @@ export default function ApiProductBridge() {
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
   const syncingScrollRef = useRef<'top' | 'bottom' | null>(null);
 
   const boroughOptions = useMemo(
@@ -152,17 +155,14 @@ export default function ApiProductBridge() {
   }, [currentPage, filteredFilings, limit]);
 
   const loadPreviewFallback = async () => {
-    const previewResponse = await fetch('/api/dob-permits?limit=5000', { cache: 'no-store' });
-    const previewPayload = (await previewResponse.json().catch(() => null)) as OccupancyApiPayload | null;
-    const previewPermits = Array.isArray(previewPayload?.permits) ? previewPayload?.permits : [];
+    const previewPermits = await fetchDOBPermits(5000);
     const previewFilings = previewPermits.filter((permit) => isDobIntelligenceJobType(permit.job_type));
 
     setFilings(previewFilings);
     setMeta({
-      ...(previewPayload?.meta || {}),
       count: previewFilings.length,
       filter: 'dob_intelligence',
-      source: `${previewPayload?.meta?.source || 'local-file'} (preview fallback)`,
+      source: 'permit-feed fallback',
     });
     setAccessMode('preview');
     setError('');
@@ -187,6 +187,12 @@ export default function ApiProductBridge() {
         }
 
         const nextPermits = Array.isArray(raw?.filings) ? raw?.filings : Array.isArray(raw?.permits) ? raw?.permits : [];
+        if (nextPermits.length === 0) {
+          await loadPreviewFallback();
+          setSyncMessage('Live DOB Intelligence returned 0 filings, so Blueprint loaded the permit-feed fallback.');
+          return;
+        }
+
         setFilings(nextPermits);
         setMeta({
           ...(raw?.meta || {}),
@@ -237,10 +243,20 @@ export default function ApiProductBridge() {
     if (!bottomScrollRef.current) return;
 
     const updateScrollWidth = () => {
-      setTableScrollWidth(bottomScrollRef.current?.scrollWidth || 0);
+      const bottomScroller = bottomScrollRef.current;
+      if (!bottomScroller) return;
+
+      const measuredWidth = Math.max(
+        tableRef.current?.scrollWidth || 0,
+        bottomScroller.scrollWidth || 0,
+        bottomScroller.clientWidth + 1,
+      );
+
+      setTableScrollWidth(measuredWidth);
     };
 
     updateScrollWidth();
+    const animationFrameId = window.requestAnimationFrame(updateScrollWidth);
 
     const resizeObserver = new ResizeObserver(() => {
       updateScrollWidth();
@@ -248,18 +264,18 @@ export default function ApiProductBridge() {
 
     resizeObserver.observe(bottomScrollRef.current);
 
-    const table = bottomScrollRef.current.querySelector('table');
-    if (table) {
-      resizeObserver.observe(table);
+    if (tableRef.current) {
+      resizeObserver.observe(tableRef.current);
     }
 
     window.addEventListener('resize', updateScrollWidth);
 
     return () => {
+      window.cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateScrollWidth);
     };
-  }, [rows.length, loading]);
+  }, [rows.length, filteredFilings.length, loading]);
 
   const syncScroll = (source: 'top' | 'bottom') => {
     const top = topScrollRef.current;
@@ -559,16 +575,16 @@ export default function ApiProductBridge() {
                 <div
                   ref={topScrollRef}
                   onScroll={() => syncScroll('top')}
-                  className="overflow-x-auto border-b border-slate-200 bg-slate-100"
+                  className="overflow-x-scroll border-b border-slate-200 bg-slate-100"
                 >
-                  <div className="h-4" style={{ width: `${tableScrollWidth}px` }} />
+                  <div className="h-4" style={{ width: `${tableScrollWidth || 1}px` }} />
                 </div>
                 <div
                   ref={bottomScrollRef}
                   onScroll={() => syncScroll('bottom')}
                   className="max-h-[65vh] overflow-auto bg-white"
                 >
-                  <table className="w-full border-collapse text-left text-sm">
+                  <table ref={tableRef} className="w-full min-w-[1280px] border-collapse text-left text-sm">
                   <thead className="bg-slate-900 text-slate-100">
                     <tr>
                       {['ID', 'Borough', 'Address', 'Job Type', 'Status', 'Filing Date', 'Owner Business', 'Estimated Cost'].map((label) => (
@@ -599,7 +615,7 @@ export default function ApiProductBridge() {
                             </div>
                           </td>
                           <td className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-slate-700">{permit.job_type}</td>
-                          <td className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-slate-700">{permit.permit_status}</td>
+                          <td className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-slate-700">{formatPermitPhase(permit.permit_status)}</td>
                           <td className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-slate-700">{formatDate(permit.filing_date)}</td>
                           <td className="border-b border-slate-200 px-4 py-3 text-slate-700">{permit.owner_business_name || permit.owner_name}</td>
                           <td className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-slate-700">{formatCurrency(permit.estimated_job_costs)}</td>

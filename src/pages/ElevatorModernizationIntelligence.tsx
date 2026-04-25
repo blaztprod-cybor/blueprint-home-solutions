@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Building2, Database, ExternalLink, Loader2, Search, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Building2, Database, Loader2, Search, ShieldCheck } from 'lucide-react';
 import { ElevatorIntelligenceSourceStatus, ElevatorOpportunity } from '../types';
 import { ElevatorIntelligencePayload, fetchElevatorIntelligence } from '../services/elevatorIntelligenceService';
 
@@ -139,15 +139,6 @@ export default function ElevatorModernizationIntelligence() {
             View Pre-Filing Opportunities
             <ArrowRight size={16} />
           </Link>
-          <a
-            href="https://data.cityofnewyork.us/"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            Source Catalog
-            <ExternalLink size={15} />
-          </a>
         </div>
       </section>
 
@@ -188,25 +179,21 @@ export default function ElevatorModernizationIntelligence() {
 
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
           {sources.map((source) => (
-            <a
+            <div
               key={source.key}
-              href={source.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5 transition-colors hover:border-slate-300 hover:bg-white"
+              className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-black text-slate-900">{source.label}</p>
                   <p className="mt-2 text-sm font-medium leading-6 text-slate-600">{source.note}</p>
                 </div>
-                <ExternalLink size={16} className="mt-1 shrink-0 text-slate-400" />
               </div>
               <div className="mt-4 flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.16em] text-slate-500">
                 <span className="rounded-full bg-white px-3 py-2">{source.count.toLocaleString()} rows</span>
                 <span className="rounded-full bg-white px-3 py-2">Latest {sourceLatestLabel(source)}</span>
               </div>
-            </a>
+            </div>
           ))}
         </div>
       </section>

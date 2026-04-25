@@ -19,6 +19,7 @@ import {
   createUserWithEmailAndPassword, 
   signOut,
   signInWithPopup,
+  signInWithRedirect,
   GoogleAuthProvider,
   sendPasswordResetEmail,
   User as FirebaseUser
@@ -129,6 +130,7 @@ const MISSING_ACCOUNT_NOTICE =
   'This account is no longer active in Blueprint Home Solutions. Contact admin if you need access restored.';
 const PENDING_PUBLIC_SUBMISSIONS_KEY = 'blueprint_pending_public_submissions';
 const AUTH_ROLE_HINTS_KEY = 'blueprint_auth_role_hints';
+const PENDING_GOOGLE_ROLE_KEY = 'blueprint_pending_google_role';
 const EMAIL_WARNING_NOTICE_KEY = 'blueprint_email_warning_notice';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -216,16 +218,41 @@ function saveAuthRoleHint(email: string | null | undefined, role: UserRole | und
   localStorage.setItem(AUTH_ROLE_HINTS_KEY, JSON.stringify(hints));
 }
 
+function getPendingGoogleRole() {
+  try {
+    const role = sessionStorage.getItem(PENDING_GOOGLE_ROLE_KEY);
+    return role === 'Homeowner' || role === 'Contractor' || role === 'admin' ? role : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function savePendingGoogleRole(role: UserRole | undefined) {
+  try {
+    if (role) {
+      sessionStorage.setItem(PENDING_GOOGLE_ROLE_KEY, role);
+    } else {
+      sessionStorage.removeItem(PENDING_GOOGLE_ROLE_KEY);
+    }
+  } catch {
+    // Ignore storage failures; Google sign-in can still continue.
+  }
+}
+
 function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
   const cachedUser = loadCachedBlueprintUser();
   const hintedRole = getAuthRoleHint(firebaseUser.email);
+  const pendingGoogleRole = getPendingGoogleRole();
+  const isAdminEmail = firebaseUser.email?.trim().toLowerCase() === 'blaztprod@gmail.com';
   const cachedMatchesIdentity =
     cachedUser?.id === firebaseUser.uid &&
     cachedUser?.email &&
     firebaseUser.email &&
     cachedUser.email.trim().toLowerCase() === firebaseUser.email.trim().toLowerCase();
 
-  const role = hintedRole || (cachedMatchesIdentity && cachedUser?.role ? cachedUser.role : 'Homeowner');
+  const role = isAdminEmail
+    ? 'admin'
+    : hintedRole || pendingGoogleRole || (cachedMatchesIdentity && cachedUser?.role ? cachedUser.role : 'Homeowner');
   const createdAt = new Date().toISOString();
   const avatar =
     (cachedMatchesIdentity && cachedUser?.avatar && !cachedUser.avatar.startsWith('data:image/svg+xml')
@@ -235,7 +262,9 @@ function buildRecoveredUserFromAuth(firebaseUser: FirebaseUser) {
     getInitialsAvatar(cachedUser?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User');
 
   const recoveredIsVerified =
-    role === 'Contractor'
+    role === 'admin'
+      ? true
+      : role === 'Contractor'
       ? false
       : cachedMatchesIdentity
         ? (cachedUser?.isVerified ?? false)
@@ -523,6 +552,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(userData);
             localStorage.setItem('blueprint_user', JSON.stringify(userData));
             saveAuthRoleHint(userData.email, userData.role);
+            savePendingGoogleRole(undefined);
             await claimPendingPublicSubmissions(userData);
           } else {
             const { recoveredUser, createdAt } = buildRecoveredUserFromAuth(firebaseUser);
@@ -558,6 +588,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(recoveredUser);
             localStorage.setItem('blueprint_user', JSON.stringify(recoveredUser));
             saveAuthRoleHint(recoveredUser.email, recoveredUser.role);
+            savePendingGoogleRole(undefined);
             await claimPendingPublicSubmissions(recoveredUser);
           }
         } else {
@@ -637,6 +668,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(fallbackUser);
           localStorage.setItem('blueprint_user', JSON.stringify(fallbackUser));
           saveAuthRoleHint(fallbackUser.email, fallbackUser.role);
+          savePendingGoogleRole(undefined);
         } else {
           setUser(null);
           localStorage.removeItem('blueprint_user');
@@ -694,7 +726,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (requestedRole?: UserRole) => {
     try {
       const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
+      savePendingGoogleRole(requestedRole);
+      let userCredential;
+      try {
+        userCredential = await signInWithPopup(auth, provider);
+      } catch (popupError: any) {
+        const shouldFallbackToRedirect = [
+          'auth/popup-blocked',
+          'auth/cancelled-popup-request',
+          'auth/operation-not-supported-in-this-environment',
+        ].includes(popupError?.code);
+
+        if (!shouldFallbackToRedirect) {
+          throw popupError;
+        }
+
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
       const firebaseUser = userCredential.user;
       
       // Check if user doc exists, if not create it with a default role
@@ -741,6 +791,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(userData);
         localStorage.setItem('blueprint_user', JSON.stringify(userData));
         saveAuthRoleHint(userData.email, userData.role);
+        savePendingGoogleRole(undefined);
         await claimPendingPublicSubmissions(userData);
 
         // Send signup confirmation email
@@ -760,6 +811,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       }
     } catch (error) {
+      savePendingGoogleRole(undefined);
       console.error('Google login error:', error);
       throw error;
     }

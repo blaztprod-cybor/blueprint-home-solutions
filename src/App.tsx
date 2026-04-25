@@ -48,6 +48,7 @@ import SessionEnded from './pages/SessionEnded';
 import StartProject from './pages/StartProject';
 import MessagingWindow from './components/MessagingWindow';
 import ScrollToTop from './components/ScrollToTop';
+import SiteFooter from './components/SiteFooter';
 import ContractorPaywall from './pages/ContractorPaywall';
 import AboutUs from './pages/AboutUs';
 import DOBLeads from './pages/DOBLeads';
@@ -339,6 +340,14 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           )}
 
           <div className="flex items-center gap-2 md:gap-4">
+            {user?.role === 'Contractor' && location.pathname !== '/projects' && (
+              <Link
+                to="/projects"
+                className="hidden rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 md:inline-flex"
+              >
+                Home Pro Portal
+              </Link>
+            )}
             <button 
               onClick={() => setIsMessagingOpen(prev => !prev)}
               className="p-2 text-muted-foreground hover:bg-slate-100 rounded-full transition-colors relative"
@@ -364,6 +373,8 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
           </PortalErrorBoundary>
         </div>
 
+        <SiteFooter />
+
         <MessagingWindow 
           isOpen={isMessagingOpen} 
           onClose={() => setIsMessagingOpen(false)} 
@@ -380,6 +391,13 @@ const PublicStartProjectPage = () => (
   </div>
 );
 
+const PublicPageLayout = ({ children }: { children: React.ReactNode }) => (
+  <div className="min-h-screen bg-slate-50">
+    {children}
+    <SiteFooter />
+  </div>
+);
+
 export default function App() {
   const { user } = useAuth();
   const defaultPortalPath =
@@ -393,23 +411,47 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/thank-you" element={<ThankYou />} />
-        <Route path="/session-ended" element={<SessionEnded />} />
-        <Route path="/how-it-works" element={<HowItWorks />} />
-        <Route path="/terms" element={<TermsOfService />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/contractor-paywall" element={<ContractorPaywall />} />
+        <Route path="/" element={<PublicPageLayout><Landing /></PublicPageLayout>} />
+        <Route path="/login" element={<PublicPageLayout><Login /></PublicPageLayout>} />
+        <Route path="/signup" element={<PublicPageLayout><SignUp /></PublicPageLayout>} />
+        <Route path="/forgot-password" element={<PublicPageLayout><ForgotPassword /></PublicPageLayout>} />
+        <Route path="/thank-you" element={<PublicPageLayout><ThankYou /></PublicPageLayout>} />
+        <Route path="/session-ended" element={<PublicPageLayout><SessionEnded /></PublicPageLayout>} />
+        <Route path="/how-it-works" element={<PublicPageLayout><HowItWorks /></PublicPageLayout>} />
+        <Route path="/terms" element={<PublicPageLayout><TermsOfService /></PublicPageLayout>} />
+        <Route path="/privacy" element={<PublicPageLayout><PrivacyPolicy /></PublicPageLayout>} />
+        <Route path="/contractor-paywall" element={<PublicPageLayout><ContractorPaywall /></PublicPageLayout>} />
         <Route path="/home-pro-trial" element={<Navigate to="/contractor-paywall" replace />} />
-        <Route path="/about" element={<AboutUs />} />
-        <Route path="/api-intelligence" element={<ApiProductBridge />} />
-        <Route path="/elevator-intelligence" element={<PreFilingElevatorOpportunities />} />
-        <Route path="/elevator-filings" element={<ElevatorModernizationIntelligence />} />
-        <Route path="/select-improvement" element={<SelectImprovement />} />
-        <Route path="/start-project" element={<PublicStartProjectPage />} />
+        <Route path="/about" element={<PublicPageLayout><AboutUs /></PublicPageLayout>} />
+        <Route path="/api-intelligence" element={
+          user ? (
+            <ProtectedRoute>
+              <DashboardLayout><ApiProductBridge /></DashboardLayout>
+            </ProtectedRoute>
+          ) : (
+            <PublicPageLayout><ApiProductBridge /></PublicPageLayout>
+          )
+        } />
+        <Route path="/elevator-intelligence" element={
+          user ? (
+            <ProtectedRoute>
+              <DashboardLayout><PreFilingElevatorOpportunities /></DashboardLayout>
+            </ProtectedRoute>
+          ) : (
+            <PublicPageLayout><PreFilingElevatorOpportunities /></PublicPageLayout>
+          )
+        } />
+        <Route path="/elevator-filings" element={
+          user ? (
+            <ProtectedRoute>
+              <DashboardLayout><ElevatorModernizationIntelligence /></DashboardLayout>
+            </ProtectedRoute>
+          ) : (
+            <PublicPageLayout><ElevatorModernizationIntelligence /></PublicPageLayout>
+          )
+        } />
+        <Route path="/select-improvement" element={<PublicPageLayout><SelectImprovement /></PublicPageLayout>} />
+        <Route path="/start-project" element={<PublicPageLayout><PublicStartProjectPage /></PublicPageLayout>} />
 
         {/* Protected Portal Routes */}
         <Route path="/*" element={

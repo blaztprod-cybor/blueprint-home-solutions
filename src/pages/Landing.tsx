@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Building2, ShieldCheck, Zap, Users, Hammer, CheckCircle2, Home, DraftingCompass, LogOut, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, formatPermitPhase, isApprovedPermitPhase } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
@@ -476,11 +476,11 @@ export default function Landing() {
                             <td className="px-4 py-3 text-sm font-medium">
                               <span className={cn(
                                 "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                                row.permit_status === 'Approved' || row.permit_status === 'Permit Entire' || row.permit_status === 'Filed'
+                                isApprovedPermitPhase(row.permit_status)
                                   ? "bg-emerald-50 text-emerald-600"
                                   : "bg-slate-50 text-slate-600"
                               )}>
-                                {row.permit_status}
+                                {formatPermitPhase(row.permit_status)}
                               </span>
                             </td>
                           </tr>
@@ -611,44 +611,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-12 mb-16">
-            <div className="col-span-2">
-              <div className="mb-6 flex flex-col items-center">
-                <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-12 w-auto rounded-xl object-contain py-1" />
-                <a href="tel:7187019090" className="mt-2 text-sm font-black tracking-[0.14em] text-slate-300 hover:text-white">
-                  718-701-9090
-                </a>
-              </div>
-              <p className="text-slate-400 max-w-md leading-relaxed">
-                The vital link between vision and execution. Simplifying home improvement through technology and trust.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs text-slate-500">Platform</h4>
-              <ul className="space-y-4 text-sm font-bold text-slate-300">
-                <li><Link to="/how-it-works" className="hover:text-white transition-colors">How it Works</Link></li>
-                <li><Link to="/api-intelligence" className="hover:text-white transition-colors">Blueprint DOB Intelligence API</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs text-slate-500">Company</h4>
-              <ul className="space-y-4 text-sm font-bold text-slate-300">
-                <li><Link to="/about" className="hover:text-white transition-colors">About Us</Link></li>
-              </ul>
-            </div>
-          </div>
-          <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">© 2024 Blueprint Home Solutions. All rights reserved.</p>
-            <div className="flex gap-6 text-xs font-bold text-slate-500 uppercase tracking-widest">
-              <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-            </div>
-          </div>
-        </div>
-      </footer>
       </div>
     </div>
   );

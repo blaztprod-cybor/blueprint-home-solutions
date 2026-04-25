@@ -129,15 +129,6 @@ export default function PreFilingElevatorOpportunities() {
             View In-Motion Filings
             <ArrowRight size={16} />
           </Link>
-          <a
-            href="https://data.cityofnewyork.us/d/erm2-nwe9"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-700 transition-colors hover:bg-slate-50"
-          >
-            311 Source
-            <ExternalLink size={15} />
-          </a>
         </div>
       </section>
 

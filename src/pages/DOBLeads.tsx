@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchDOBPermits, isPublicAgencyPermit } from '../services/dobService';
 import { DOBPermit } from '../types';
-import { cn } from '../lib/utils';
+import { cn, formatPermitPhase, isApprovedPermitPhase } from '../lib/utils';
 import { authorizedApiFetch } from '../lib/authorizedApi';
 import { useAuth } from '../AuthContext';
 
@@ -143,6 +143,26 @@ export default function DOBLeads() {
     const match = candidates.find((candidate) => !isPlaceholderName(candidate.value));
 
     return match || { label: 'Unavailable', value: 'Unavailable' };
+  };
+
+  const getLeadSourceContact = (permit: DOBPermit) => {
+    const isPublicAgency = permit.contact_confidence === 'Public Agency' || permit.entity_type === 'Public Agency';
+
+    if (isPublicAgency) {
+      return {
+        label: 'SCA',
+        value: 'SCA',
+        tone: 'agency',
+      };
+    }
+
+    return {
+      label: 'Contractor Contact',
+      value: permit.licensed_business_name || permit.licensed_contact_name || permit.business_phone || permit.licensed_phone
+        ? [permit.licensed_business_name, permit.licensed_contact_name].filter(Boolean).join(' · ') || permit.business_phone || permit.licensed_phone || 'Unavailable'
+        : 'Not resolved',
+      tone: permit.licensed_business_name || permit.licensed_contact_name || permit.business_phone || permit.licensed_phone ? 'found' : 'unresolved',
+    };
   };
 
   const visiblePages = Array.from(
@@ -376,7 +396,7 @@ export default function DOBLeads() {
         </div>
 
         <div className="overflow-x-scroll pb-3">
-          <table className="w-full text-left border-collapse min-w-[2380px]">
+          <table className="w-full text-left border-collapse min-w-[2720px]">
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -399,13 +419,14 @@ export default function DOBLeads() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Applicant License</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Licensed Contact</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Licensed Phone</th>
+                <th className="w-[240px] px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Source Trail</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Confidence</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="px-6 py-20 text-center">
+                  <td colSpan={14} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="animate-spin text-primary mb-4" size={40} />
                       <p className="font-bold text-slate-500">Processing NYC DOB filings...</p>
@@ -414,7 +435,7 @@ export default function DOBLeads() {
                 </tr>
               ) : filteredPermits.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-6 py-20 text-center">
+                  <td colSpan={14} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-bold text-slate-700">No filings match these filters</p>
                       <p className="mt-2 text-sm text-slate-500">Try a different borough or work type.</p>
@@ -473,11 +494,11 @@ export default function DOBLeads() {
                         </span>
                         <span className={cn(
                           "inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                          permit.permit_status === 'Approved' || permit.permit_status === 'Permit Entire' || permit.permit_status === 'Filed'
+                          isApprovedPermitPhase(permit.permit_status)
                             ? "bg-emerald-50 text-emerald-600"
                             : "bg-slate-50 text-slate-600"
                         )}>
-                          {permit.permit_status}
+                          {formatPermitPhase(permit.permit_status)}
                         </span>
                       </div>
                     </td>
@@ -530,6 +551,32 @@ export default function DOBLeads() {
                       <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
                         {permit.licensed_phone || 'Unavailable'}
                       </span>
+                    </td>
+                    <td className="w-[240px] px-6 py-4 align-top">
+                      {(() => {
+                        const sourceContact = getLeadSourceContact(permit);
+
+                        return (
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">
+                              {sourceContact.label}
+                            </p>
+                            <p className="mt-1 max-w-[180px] truncate text-xs font-semibold text-slate-700" title={sourceContact.value}>
+                              {sourceContact.value}
+                            </p>
+                            <span className={cn(
+                              "mt-2 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em]",
+                              sourceContact.tone === 'agency'
+                                ? "bg-amber-50 text-amber-700"
+                                : sourceContact.tone === 'found'
+                                  ? "bg-emerald-50 text-emerald-600"
+                                  : "bg-slate-100 text-slate-500"
+                            )}>
+                              {sourceContact.tone === 'agency' ? 'SCA' : sourceContact.tone === 'found' ? 'Found' : 'Unresolved'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <span className={cn(

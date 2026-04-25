@@ -5,6 +5,7 @@ import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaf
 import L from 'leaflet';
 import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
+import { formatPermitPhase } from '../lib/utils';
 
 function formatPermitDate(value: string) {
   if (!value) return 'N/A';
@@ -246,7 +247,7 @@ export default function PermitMap() {
                               <div className="font-bold text-slate-900">{addressForPermit(permit)}</div>
                               <div className="text-xs text-slate-500">{permit.borough}</div>
                               <div><span className="font-semibold">Code:</span> {permit.job_type || 'N/A'}</div>
-                              <div><span className="font-semibold">Status:</span> {permit.permit_status || 'N/A'}</div>
+                              <div><span className="font-semibold">Status:</span> {formatPermitPhase(permit.permit_status)}</div>
                               <div><span className="font-semibold">Filed:</span> {formatPermitDate(permit.filing_date)}</div>
                               <div><span className="font-semibold">Projected Cost:</span> {Number(permit.estimated_job_costs || 0) > 0 ? Number(permit.estimated_job_costs || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : 'Unavailable'}</div>
                               <div><span className="font-semibold">Lat/Lng:</span> {latitude.toFixed(5)}, {longitude.toFixed(5)}</div>
@@ -286,7 +287,7 @@ export default function PermitMap() {
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Status</p>
-                      <p className="mt-2 text-sm font-bold text-slate-700">{selectedPermit.permit_status}</p>
+                      <p className="mt-2 text-sm font-bold text-slate-700">{formatPermitPhase(selectedPermit.permit_status)}</p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Projected Cost</p>

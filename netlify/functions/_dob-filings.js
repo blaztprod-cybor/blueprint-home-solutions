@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const CERTIFICATE_OF_OCCUPANCY_FILTER = 'certificate_of_occupancy';
 const DOB_INTELLIGENCE_FILTER = 'dob_intelligence';
+const LOCAL_PERMIT_FEED_PATH = path.join(process.cwd(), 'public', 'data', 'permits.json');
 
 export function createSupabaseAdminClient() {
   const url = process.env.VITE_SUPABASE_URL;
@@ -117,51 +120,96 @@ function buildPermitFeedMeta(permits, data, filter) {
   };
 }
 
+function readLocalPermitRows({ limit = 20, filter } = {}) {
+  if (!fs.existsSync(LOCAL_PERMIT_FEED_PATH)) {
+    return {
+      permits: [],
+      meta: {
+        source: 'local-file',
+        count: 0,
+        latestIssuedDate: null,
+        latestUpdatedAt: null,
+        occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
+        dobIntelligenceOnly: filter === DOB_INTELLIGENCE_FILTER,
+        filter: filter || 'all',
+      },
+    };
+  }
+
+  const payload = JSON.parse(fs.readFileSync(LOCAL_PERMIT_FEED_PATH, 'utf8'));
+  const localPermits = Array.isArray(payload) ? payload : payload.permits || [];
+  const filteredPermits = localPermits
+    .filter((permit) => matchesRequestedPermitFilter(permit, filter))
+    .slice(0, limit);
+
+  return {
+    permits: filteredPermits,
+    meta: {
+      source: 'local-file',
+      count: filteredPermits.length,
+      latestIssuedDate: filteredPermits[0]?.filing_date || null,
+      latestUpdatedAt: typeof payload?.generatedAt === 'string' ? payload.generatedAt : null,
+      occupancyOnly: filter === CERTIFICATE_OF_OCCUPANCY_FILTER,
+      dobIntelligenceOnly: filter === DOB_INTELLIGENCE_FILTER,
+      filter: filter || 'all',
+    },
+  };
+}
+
 /**
  * @param {{ limit?: number; occupancyOnly?: boolean; filter?: string | null }} [options]
  */
 export async function fetchPermitRows({ limit = 20, occupancyOnly = false, filter } = {}) {
   const normalizedFilter = filter || (occupancyOnly ? CERTIFICATE_OF_OCCUPANCY_FILTER : null);
-  const supabase = createSupabaseAdminClient();
-  let query = supabase
-    .from('dob_permits')
-    .select(`
-      id,
-      borough,
-      house_no,
-      street_name,
-      address,
-      zip_code,
-      latitude,
-      longitude,
-      work_type,
-      permit_status,
-      approved_date,
-      issued_date,
-      job_description,
-      owner_name,
-      owner_business_name,
-      applicant_business_name,
-      applicant_license,
-      estimated_job_costs,
-      source,
-      updated_at
-    `)
-    .order('approved_date', { ascending: false });
 
-  query = applyPermitFilterQuery(query, normalizedFilter);
+  try {
+    const supabase = createSupabaseAdminClient();
+    let query = supabase
+      .from('dob_permits')
+      .select(`
+        id,
+        borough,
+        house_no,
+        street_name,
+        address,
+        zip_code,
+        latitude,
+        longitude,
+        work_type,
+        permit_status,
+        approved_date,
+        issued_date,
+        job_description,
+        owner_name,
+        owner_business_name,
+        applicant_business_name,
+        applicant_license,
+        estimated_job_costs,
+        source,
+        updated_at
+      `)
+      .order('approved_date', { ascending: false });
 
-  const { data, error } = await query.limit(limit);
+    query = applyPermitFilterQuery(query, normalizedFilter);
 
-  if (error) {
-    throw new Error(error.message);
+    const { data, error } = await query.limit(limit);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const permits = Array.isArray(data) ? data.map(mapPermit) : [];
+    const filteredPermits = permits.filter((permit) => matchesRequestedPermitFilter(permit, normalizedFilter));
+
+    if (filteredPermits.length > 0 || !fs.existsSync(LOCAL_PERMIT_FEED_PATH)) {
+      return {
+        permits: filteredPermits,
+        meta: buildPermitFeedMeta(filteredPermits, data, normalizedFilter),
+      };
+    }
+  } catch (error) {
+    console.warn('[DOB FILINGS] Supabase read failed, falling back to local permit feed.', error);
   }
 
-  const permits = Array.isArray(data) ? data.map(mapPermit) : [];
-  const filteredPermits = permits.filter((permit) => matchesRequestedPermitFilter(permit, normalizedFilter));
-
-  return {
-    permits: filteredPermits,
-    meta: buildPermitFeedMeta(filteredPermits, data, normalizedFilter),
-  };
+  return readLocalPermitRows({ limit, filter: normalizedFilter });
 }
