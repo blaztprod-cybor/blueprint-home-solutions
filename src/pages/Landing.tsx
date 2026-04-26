@@ -135,6 +135,7 @@ export default function Landing() {
         : { to: '/contractor-paywall', label: 'Sign Up as a Home Professional' };
   const topRowCategories = projectCategories.slice(0, 8);
   const bottomRowCategories = projectCategories.slice(8, 16);
+  const mobileCategories = projectCategories.slice(0, 6);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-slate-50">
@@ -147,6 +148,112 @@ export default function Landing() {
       </div>
 
       <div className="relative z-10">
+      <div className="md:hidden">
+        <header className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/" className="flex items-center gap-2">
+              <img src="/logo.jpg" alt="Blueprint Home Solutions" className="h-12 w-auto rounded-xl object-contain" />
+            </Link>
+            <div className="flex items-center gap-2">
+              <a href="tel:7187019090" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-700">
+                Call
+              </a>
+              {!user ? (
+                <Link to="/login" className="rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-black text-white">
+                  Login
+                </Link>
+              ) : (
+                <Link to={primaryAccountCta.to} className="rounded-xl bg-slate-900 px-3 py-2 text-[11px] font-black text-white">
+                  Portal
+                </Link>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="px-4 pb-10 pt-6">
+          <section className="space-y-5">
+            <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+              <div className="bg-slate-100 p-2">
+                <img
+                  src="/hero-image-v2.jpg"
+                  alt="Blueprint Home Solutions"
+                  className="max-h-52 w-full rounded-[1.1rem] object-contain"
+                />
+              </div>
+              <div className="space-y-4 p-5">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Blueprint Home Solutions</p>
+                  <h1 className="mt-2 text-3xl font-black leading-tight tracking-tight text-slate-950">
+                    Home projects, routed to local pros.
+                  </h1>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+                    Submit photos and project details. Blueprint helps route your request to relevant Home Pros.
+                  </p>
+                </div>
+                <Link
+                  to="/start-project"
+                  className="flex h-13 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-4 text-sm font-black uppercase tracking-[0.16em] text-white shadow-xl shadow-blue-500/25"
+                >
+                  Start a Project
+                </Link>
+              </div>
+            </div>
+
+            <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-lg shadow-slate-200/40">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Popular Projects</h2>
+                <Link to="/select-improvement" className="text-xs font-black text-blue-600">
+                  View All
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {mobileCategories.map((category) => (
+                  <Link
+                    key={category.id}
+                    to={`/start-project?category=${encodeURIComponent(category.id)}`}
+                    className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"
+                  >
+                    <div
+                      className="h-20 bg-cover bg-center"
+                      style={{ backgroundImage: `url('${category.image}')`, backgroundPosition: category.imagePosition ?? 'center' }}
+                    />
+                    <p className="flex min-h-[48px] items-center px-3 py-2 text-[11px] font-black uppercase leading-4 tracking-[0.08em] text-slate-700">
+                      {category.title}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            <section className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Local Pros', value: 'Vetted' },
+                { label: 'Requests', value: 'Photo-Based' },
+                { label: 'Updates', value: 'In App' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+                  <p className="text-sm font-black text-slate-900">{item.value}</p>
+                  <p className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">{item.label}</p>
+                </div>
+              ))}
+            </section>
+
+            <section className="rounded-[1.5rem] border border-slate-200 bg-slate-950 p-5 text-white shadow-xl shadow-slate-300/50">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">For Home Pros</p>
+              <h2 className="mt-2 text-xl font-black tracking-tight">Review project and filing opportunities.</h2>
+              <Link
+                to={primaryAccountCta.to}
+                className="mt-4 flex h-12 items-center justify-center rounded-2xl bg-white px-4 text-xs font-black uppercase tracking-[0.16em] text-slate-950"
+              >
+                {primaryAccountCta.label}
+              </Link>
+            </section>
+          </section>
+        </main>
+      </div>
+
+      <div className="hidden md:block">
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
@@ -611,6 +718,7 @@ export default function Landing() {
         </div>
       </section>
 
+      </div>
       </div>
     </div>
   );

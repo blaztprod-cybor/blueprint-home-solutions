@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchDOBPermits, isPublicAgencyPermit } from '../services/dobService';
+import { fetchDOBPermits } from '../services/dobService';
 import { DOBPermit } from '../types';
 import { cn, formatPermitPhase, isApprovedPermitPhase } from '../lib/utils';
 import { authorizedApiFetch } from '../lib/authorizedApi';
@@ -22,7 +22,6 @@ export default function DOBLeads() {
   const [emailLabel, setEmailLabel] = useState('Email Selected To Me');
   const [selectedPermitIds, setSelectedPermitIds] = useState<string[]>([]);
   const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
-  const [showPublicAgencyFilings, setShowPublicAgencyFilings] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -55,7 +54,6 @@ export default function DOBLeads() {
 
   const filteredPermits = permits
     .filter((permit) => {
-      const matchesAgencyFilter = showPublicAgencyFilings || !isPublicAgencyPermit(permit);
       const matchesBorough = boroughFilter === 'All Boroughs' || permit.borough === boroughFilter;
       const matchesWorkType = workTypeFilter === 'All Work Types' || permit.job_type === workTypeFilter;
       const haystack = [
@@ -76,7 +74,7 @@ export default function DOBLeads() {
         .join(' ')
         .toLowerCase();
       const matchesSearch = haystack.includes(searchQuery.toLowerCase());
-      return matchesAgencyFilter && matchesBorough && matchesWorkType && matchesSearch;
+      return matchesBorough && matchesWorkType && matchesSearch;
     })
     .sort((a, b) => {
       if (sortOrder === 'none') return 0;
@@ -87,7 +85,7 @@ export default function DOBLeads() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [boroughFilter, workTypeFilter, searchQuery, sortOrder, showPublicAgencyFilings]);
+  }, [boroughFilter, workTypeFilter, searchQuery, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPermits.length / ITEMS_PER_PAGE));
   const paginatedPermits = filteredPermits.slice(
@@ -175,8 +173,6 @@ export default function DOBLeads() {
       return startPage + index;
     }
   );
-
-  const publicAgencyPermitCount = permits.filter((permit) => isPublicAgencyPermit(permit)).length;
 
   const handleEmailSelected = async () => {
     if (permitsToEmail.length === 0) {
@@ -369,24 +365,6 @@ export default function DOBLeads() {
             placeholder="Search"
             className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-colors focus:border-primary"
           />
-        </label>
-      </div>
-
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-5 py-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Lead Scope</p>
-          <p className="mt-1 text-sm font-semibold text-slate-700">
-            Public-agency filings are hidden by default because they are usually procurement-driven rather than direct outbound leads.
-          </p>
-        </div>
-        <label className="flex items-center gap-3 text-sm font-semibold text-slate-700">
-          <input
-            type="checkbox"
-            checked={showPublicAgencyFilings}
-            onChange={(event) => setShowPublicAgencyFilings(event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-          />
-          Show public agency filings ({publicAgencyPermitCount})
         </label>
       </div>
 
