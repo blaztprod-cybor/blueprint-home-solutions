@@ -12,7 +12,6 @@
         <div>
           <p id="exam-mode-label" class="eyebrow" style="margin: 0 0 8px;">Full Exam</p>
           <h1>NYC DOB Elevator Inspector Exam</h1>
-          <p id="question-source-label" class="question-source-label">Loading question bank...</p>
         </div>
         <div class="topbar-actions">
           <a href="./start.html" class="nav-link">Opening Screen</a>
@@ -31,21 +30,19 @@
           <p class="eyebrow">Reference Materials</p>
           <div class="reference-placeholder-list" aria-label="Reference material placeholders">
             <div class="reference-group">
-              <span class="reference-group-title">Required Reference Books</span>
-              <button type="button" class="book-item reference-book" data-book-key="a17-1">A17.1<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="a17-2">A17.2<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="a17-3">A17.3<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="a17-5">A17.5<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="ansi-a10-4">ANSI A10.4<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="asme-a90-1">ASME A90.1<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="b20-1">B20.1<span class="book-meta">Use PDF picker for this session</span></button>
-              <button type="button" class="book-item reference-book" data-book-key="icc-a117-1">ICC A117.1 ADA<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-1">A17.1</button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-2">A17.2</button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-3">A17.3</button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-5">A17.5</button>
+              <button type="button" class="book-item reference-book" data-book-key="ansi-a10-4">ANSI A10.4</button>
+              <button type="button" class="book-item reference-book" data-book-key="asme-a90-1">ASME A90.1</button>
+              <button type="button" class="book-item reference-book" data-book-key="b20-1">B20.1</button>
+              <button type="button" class="book-item reference-book" data-book-key="icc-a117-1">ICC A117.1 ADA</button>
             </div>
             <div class="reference-group">
-              <span class="reference-group-title">Available Online</span>
-              <button type="button" class="book-item online-reference" data-book-key="ny-appendix-k">New York Appendix K<span class="book-meta">Opens online</span></button>
-              <button type="button" class="book-item online-reference" data-book-key="nyc-chapter-33">NYC Chapter 33<span class="book-meta">Opens online</span></button>
-              <button type="button" class="book-item online-reference" data-book-key="nyc-electrical-code">NYC Electrical Code<span class="book-meta">Opens online</span></button>
+              <button type="button" class="book-item online-reference" data-book-key="ny-appendix-k">New York Appendix K</button>
+              <button type="button" class="book-item online-reference" data-book-key="nyc-chapter-33">NYC Chapter 33</button>
+              <button type="button" class="book-item online-reference" data-book-key="nyc-electrical-code">NYC Electrical Code</button>
             </div>
           </div>
         </aside>
@@ -71,29 +68,6 @@
           </div>
         </section>
 
-        <aside class="card pdf-panel" aria-label="PDF reference viewer">
-          <div class="pdf-panel-header">
-            <div>
-              <p class="eyebrow">Codebook Viewer</p>
-              <h2 id="pdf-title">Select a reference</h2>
-            </div>
-          </div>
-          <label class="pdf-upload">
-            <span>Load PDF from phone or computer</span>
-            <input type="file" id="pdf-input" accept="application/pdf" />
-          </label>
-          <a id="pdf-open-link" class="pdf-open-link" href="#" target="_blank" rel="noopener" hidden>Open loaded PDF</a>
-          <div id="pdf-js-viewer" class="pdf-js-viewer" hidden>
-            <div class="pdf-js-toolbar">
-              <button type="button" id="pdf-prev-page" class="btn btn-secondary">Previous Page</button>
-              <span id="pdf-page-status">Page 1 / 1</span>
-              <button type="button" id="pdf-next-page" class="btn btn-secondary">Next Page</button>
-            </div>
-            <canvas id="pdf-canvas"></canvas>
-          </div>
-          <iframe id="pdf-viewer" title="Codebook PDF viewer"></iframe>
-          <p id="pdf-status" class="pdf-status">Choose a reference book or load a PDF from this device.</p>
-        </aside>
       </main>
     </div>
     <script src="./config.js?v=20260427-phone-pdf"></script>

@@ -321,7 +321,7 @@ a {
 
 .exam-layout {
   display: grid;
-  grid-template-columns: 280px minmax(420px, 1fr) minmax(360px, 42%);
+  grid-template-columns: 280px minmax(420px, 1fr);
   gap: 20px;
   min-height: calc(100vh - 152px);
 }
@@ -511,6 +511,23 @@ a {
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.4;
+}
+
+.viewer-shell {
+  width: min(1100px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 20px 0 32px;
+}
+
+.standalone-pdf-panel {
+  display: grid;
+  gap: 12px;
+  min-height: calc(100vh - 150px);
+  padding: 18px;
+}
+
+.standalone-pdf-panel .pdf-js-viewer {
+  min-height: calc(100vh - 220px);
 }
 
 .question-meta {

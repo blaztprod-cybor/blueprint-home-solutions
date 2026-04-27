@@ -4,6 +4,7 @@ const SAMPLE_ACCOUNT_KEY = "elevator_exam_sample_account_v1";
 const SESSION_PDF_DB_NAME = "elevator_exam_session_pdf_v1";
 const SESSION_PDF_STORE_NAME = "pdfs";
 const SESSION_PDF_RECORD_KEY = "active-codebook";
+const SESSION_PDF_BOOK_PREFIX = "book:";
 const DEFAULT_EXAM_QUESTION_COUNT = 50;
 const DEFAULT_EXAM_DURATION_SECONDS = 10800;
 const DEFAULT_SAMPLE_QUESTION_COUNT = 5;
@@ -112,7 +113,11 @@ function openSessionPdfDb() {
   });
 }
 
-async function saveSessionPdf(file) {
+function sessionPdfRecordKey(bookKey = "") {
+  return bookKey ? `${SESSION_PDF_BOOK_PREFIX}${bookKey}` : SESSION_PDF_RECORD_KEY;
+}
+
+async function saveSessionPdf(file, bookKey = "") {
   const db = await openSessionPdfDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(SESSION_PDF_STORE_NAME, "readwrite");
@@ -123,18 +128,18 @@ async function saveSessionPdf(file) {
         updatedAt: Date.now(),
         file,
       },
-      SESSION_PDF_RECORD_KEY
+      sessionPdfRecordKey(bookKey)
     );
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
 }
 
-async function loadSessionPdf() {
+async function loadSessionPdf(bookKey = "") {
   const db = await openSessionPdfDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(SESSION_PDF_STORE_NAME, "readonly");
-    const request = transaction.objectStore(SESSION_PDF_STORE_NAME).get(SESSION_PDF_RECORD_KEY);
+    const request = transaction.objectStore(SESSION_PDF_STORE_NAME).get(sessionPdfRecordKey(bookKey));
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
@@ -963,24 +968,7 @@ function renderReviewMap(state) {
 }
 
 async function updateReferenceStatuses() {
-  const linkedBooks = await fetchLinkedBooks();
-
-  document.querySelectorAll(".reference-book").forEach((button) => {
-    const book = books.find((entry) => entry.key === button.dataset.bookKey);
-    const meta = button.querySelector(".book-meta");
-    const linked = linkedBooks[button.dataset.bookKey];
-
-    if (!book || !meta) {
-      return;
-    }
-
-    if (!isLocalDesktopServer()) {
-      meta.textContent = "Use PDF picker for this session";
-      return;
-    }
-
-    meta.textContent = linked ? `Linked: ${linked.fileName}` : "Click to choose PDF, then load in viewer";
-  });
+  return Promise.resolve();
 }
 
 async function renderPreviewBookSetup() {
@@ -991,7 +979,6 @@ async function renderPreviewBookSetup() {
     return;
   }
 
-  const linkedBooks = await fetchLinkedBooks();
   const requiredBooks = books.filter((book) => book.requiresLocalCopy);
   const onlineBooks = books.filter((book) => book.online);
 
@@ -1005,42 +992,46 @@ async function renderPreviewBookSetup() {
 
   container.innerHTML = "";
 
-  if (!isLocalDesktopServer()) {
-    container.innerHTML = `
-      <div class="book-setup-row">
-        <div>
-          <strong>Temporary PDF loading</strong>
-          <span class="book-link-status">Open the exam and use the PDF picker to load a codebook from this phone for the current session.</span>
-        </div>
-      </div>
-    `;
-    return;
-  }
-
   requiredBooks.forEach((book) => {
-    const linked = linkedBooks[book.key];
     const row = document.createElement("div");
     row.className = "book-setup-row";
     row.innerHTML = `
       <div>
         <strong>${book.title}</strong>
-        <span class="book-link-status">${linked ? `Linked: ${linked.fileName}` : "Not linked yet"}</span>
+        <span class="book-link-status">No PDF selected</span>
       </div>
-      <button class="btn btn-secondary setup-reference-book" type="button">Link to my copy</button>
+      <label class="btn btn-secondary setup-reference-book">
+        Choose PDF
+        <input type="file" accept="application/pdf" hidden>
+      </label>
     `;
 
-    row.querySelector("button")?.addEventListener("click", async () => {
-      const button = row.querySelector("button");
-      button.disabled = true;
-      button.textContent = "Choose PDF...";
+    const status = row.querySelector(".book-link-status");
+    const input = row.querySelector("input");
 
-      try {
-        await linkReferenceBook(book);
-        await renderPreviewBookSetup();
-      } catch (error) {
-        window.alert(error instanceof Error ? error.message : `Unable to link ${book.title}`);
-        button.disabled = false;
-        button.textContent = "Link to my copy";
+    loadSessionPdf(book.key)
+      .then((record) => {
+        if (record?.file && status) {
+          status.textContent = record.name || record.file.name;
+        }
+      })
+      .catch(() => {});
+
+    input?.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+
+      if (!file) {
+        return;
+      }
+
+      if (status) {
+        status.textContent = "Saving...";
+      }
+
+      await saveSessionPdf(file, book.key);
+
+      if (status) {
+        status.textContent = file.name;
       }
     });
 
@@ -1058,30 +1049,7 @@ async function openReferenceBook(book) {
     return;
   }
 
-  try {
-    const response = await fetch("/open-book", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        key: book.key,
-        title: book.title,
-        linkIfMissing: true,
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({}));
-      throw new Error(detail.error || "Unable to open reference book");
-    }
-
-    await updateReferenceStatuses();
-  } catch (error) {
-    window.alert(
-      `${error instanceof Error ? error.message : "Unable to open reference book"}\n\nOpen the exam and use the PDF picker to load a PDF from this device for the current browser session.`
-    );
-  }
+  window.open(`./viewer.html?book=${encodeURIComponent(book.key)}`, "_blank", "noopener");
 }
 
 async function loadReferenceBookInPanel(book) {
@@ -1167,22 +1135,13 @@ async function loadReferenceBookInPanel(book) {
 function bindReferenceButtons() {
   document.querySelectorAll(".reference-book, .online-reference").forEach((button) => {
     const book = books.find((entry) => entry.key === button.dataset.bookKey);
-    button.addEventListener("click", () => loadReferenceBookInPanel(book));
+    button.addEventListener("click", () => openReferenceBook(book));
   });
 }
 
-function bindPdfUpload() {
-  const input = document.getElementById("pdf-input");
-  const viewer = document.getElementById("pdf-viewer");
-  const openLink = document.getElementById("pdf-open-link");
-  const title = document.getElementById("pdf-title");
-  const status = document.getElementById("pdf-status");
+function bindPdfPageButtons() {
   const previousButton = document.getElementById("pdf-prev-page");
   const nextButton = document.getElementById("pdf-next-page");
-
-  if (!input || !viewer) {
-    return;
-  }
 
   previousButton?.addEventListener("click", async () => {
     if (!activePdfDocument || activePdfPageNumber <= 1) {
@@ -1201,6 +1160,18 @@ function bindPdfUpload() {
     activePdfPageNumber += 1;
     await renderActivePdfPage();
   });
+}
+
+function bindPdfUpload() {
+  const input = document.getElementById("pdf-input");
+  const viewer = document.getElementById("pdf-viewer");
+  const status = document.getElementById("pdf-status");
+
+  if (!input || !viewer) {
+    return;
+  }
+
+  bindPdfPageButtons();
 
   input.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
@@ -1220,6 +1191,44 @@ function bindPdfUpload() {
       console.error("PDF render failed", error);
     }
   });
+}
+
+async function initViewerPage() {
+  bindPdfPageButtons();
+
+  const params = new URLSearchParams(window.location.search);
+  const bookKey = params.get("book") || "";
+  const book = books.find((entry) => entry.key === bookKey);
+  const title = document.getElementById("pdf-title");
+  const status = document.getElementById("pdf-status");
+
+  if (title) {
+    title.textContent = book?.title || "Reference PDF";
+  }
+
+  if (!bookKey) {
+    if (status) {
+      status.textContent = "No reference book was selected.";
+    }
+    return;
+  }
+
+  try {
+    const record = await loadSessionPdf(bookKey);
+
+    if (!record?.file) {
+      if (status) {
+        status.textContent = "This PDF was not selected on the opening screen.";
+      }
+      return;
+    }
+
+    await preparePdfFromFile(record.file);
+  } catch (error) {
+    if (status) {
+      status.textContent = "Could not open this PDF from local browser storage.";
+    }
+  }
 }
 
 async function loadPreparedPdfIntoExam() {
@@ -1350,16 +1359,8 @@ async function initExamPage() {
         : `Full Exam - ${state.questionCount} Questions - ${Math.round(state.durationSeconds / 60)} Minutes`;
   }
 
-  const sourceLabel = document.getElementById("question-source-label");
-  if (sourceLabel) {
-    sourceLabel.textContent = questionBankSource.label;
-    sourceLabel.dataset.sourceType = questionBankSource.type;
-  }
-
   bindReferenceButtons();
-  bindPdfUpload();
   await updateReferenceStatuses();
-  await loadPreparedPdfIntoExam();
 
   const timer = document.getElementById("timer");
   const previousButton = document.getElementById("prev-question");
@@ -1514,5 +1515,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     initReviewPage();
   } else if (page === "results") {
     await initResultsPage();
+  } else if (page === "viewer") {
+    await initViewerPage();
   }
 });
