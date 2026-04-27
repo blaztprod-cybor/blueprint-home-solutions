@@ -6,7 +6,7 @@ window.ELEVATOR_EXAM_CONFIG = {
   fullQuestionCount: 50,
   fullDurationMinutes: 180,
   sampleQuestionCount: 5,
-  sampleDurationMinutes: 20,
+  sampleDurationMinutes: 18,
   // Leave this empty to randomly pull every exam from the full live Sheet range.
   // Any valid new rows added to the Google Sheet become eligible automatically.
   sourceBlueprint: [],

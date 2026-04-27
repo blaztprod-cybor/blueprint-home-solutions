@@ -1,6 +1,9 @@
 const STORAGE_KEY = "elevator_exam_state_v1";
 const QUESTION_BANK_CACHE_KEY = "elevator_exam_question_bank_v1";
 const SAMPLE_ACCOUNT_KEY = "elevator_exam_sample_account_v1";
+const SESSION_PDF_DB_NAME = "elevator_exam_session_pdf_v1";
+const SESSION_PDF_STORE_NAME = "pdfs";
+const SESSION_PDF_RECORD_KEY = "active-codebook";
 const DEFAULT_EXAM_QUESTION_COUNT = 50;
 const DEFAULT_EXAM_DURATION_SECONDS = 10800;
 const DEFAULT_SAMPLE_QUESTION_COUNT = 5;
@@ -95,6 +98,47 @@ let pdfJsModule = null;
 let activePdfDocument = null;
 let activePdfPageNumber = 1;
 let activePdfRenderTask = null;
+
+function openSessionPdfDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(SESSION_PDF_DB_NAME, 1);
+
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(SESSION_PDF_STORE_NAME);
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveSessionPdf(file) {
+  const db = await openSessionPdfDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SESSION_PDF_STORE_NAME, "readwrite");
+    transaction.objectStore(SESSION_PDF_STORE_NAME).put(
+      {
+        name: file.name,
+        type: file.type,
+        updatedAt: Date.now(),
+        file,
+      },
+      SESSION_PDF_RECORD_KEY
+    );
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function loadSessionPdf() {
+  const db = await openSessionPdfDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SESSION_PDF_STORE_NAME, "readonly");
+    const request = transaction.objectStore(SESSION_PDF_STORE_NAME).get(SESSION_PDF_RECORD_KEY);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
 
 function getConfig() {
   const config = window.ELEVATOR_EXAM_CONFIG || {};
@@ -233,6 +277,42 @@ async function loadPdfFileIntoCanvas(file) {
   if (status) {
     status.textContent = "Loaded from this device for the current browser session.";
   }
+}
+
+async function preparePdfFromFile(file, { persist = false } = {}) {
+  const viewer = document.getElementById("pdf-viewer");
+  const openLink = document.getElementById("pdf-open-link");
+  const title = document.getElementById("pdf-title");
+  const status = document.getElementById("pdf-status");
+
+  if (uploadedPdfUrl) {
+    URL.revokeObjectURL(uploadedPdfUrl);
+  }
+
+  uploadedPdfUrl = URL.createObjectURL(file);
+
+  if (viewer) {
+    viewer.src = uploadedPdfUrl;
+  }
+
+  if (openLink) {
+    openLink.href = uploadedPdfUrl;
+    openLink.hidden = false;
+  }
+
+  if (title) {
+    title.textContent = file.name;
+  }
+
+  if (status) {
+    status.textContent = "Rendering PDF from this device...";
+  }
+
+  if (persist) {
+    await saveSessionPdf(file);
+  }
+
+  await loadPdfFileIntoCanvas(file);
 }
 
 async function fetchLinkedBooks() {
@@ -1129,28 +1209,8 @@ function bindPdfUpload() {
       return;
     }
 
-    if (uploadedPdfUrl) {
-      URL.revokeObjectURL(uploadedPdfUrl);
-    }
-
-    uploadedPdfUrl = URL.createObjectURL(file);
-    viewer.src = uploadedPdfUrl;
-
-    if (openLink) {
-      openLink.href = uploadedPdfUrl;
-      openLink.hidden = false;
-    }
-
-    if (title) {
-      title.textContent = file.name;
-    }
-
-    if (status) {
-      status.textContent = "Rendering PDF from this device...";
-    }
-
     try {
-      await loadPdfFileIntoCanvas(file);
+      await preparePdfFromFile(file, { persist: true });
     } catch (error) {
       viewer.hidden = false;
       document.getElementById("pdf-js-viewer")?.setAttribute("hidden", "");
@@ -1158,6 +1218,72 @@ function bindPdfUpload() {
         status.textContent = "Could not render the PDF in-page. Use the open link above.";
       }
       console.error("PDF render failed", error);
+    }
+  });
+}
+
+async function loadPreparedPdfIntoExam() {
+  const status = document.getElementById("pdf-status");
+
+  try {
+    const record = await loadSessionPdf();
+
+    if (!record?.file) {
+      return;
+    }
+
+    if (status) {
+      status.textContent = `Loading prepared PDF: ${record.name || record.file.name}`;
+    }
+
+    await preparePdfFromFile(record.file);
+  } catch (error) {
+    if (status) {
+      status.textContent = "Could not load the pre-selected PDF. Choose it again from this page.";
+    }
+  }
+}
+
+function bindPreExamPdfUpload() {
+  const input = document.getElementById("preexam-pdf-input");
+  const status = document.getElementById("preexam-pdf-status");
+
+  if (!input) {
+    return;
+  }
+
+  loadSessionPdf()
+    .then((record) => {
+      if (record?.file && status) {
+        status.textContent = `Ready for exam: ${record.name || record.file.name}`;
+      }
+    })
+    .catch(() => {
+      if (status) {
+        status.textContent = "No PDF loaded yet.";
+      }
+    });
+
+  input.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (status) {
+      status.textContent = "Saving PDF for this exam session...";
+    }
+
+    try {
+      await saveSessionPdf(file);
+      if (status) {
+        status.textContent = `Ready for exam: ${file.name}`;
+      }
+    } catch (error) {
+      if (status) {
+        status.textContent = "Could not prepare this PDF. You can still choose it from the exam page.";
+      }
     }
   });
 }
@@ -1173,6 +1299,7 @@ function initReviewPage() {
 
 async function initStartPage() {
   await renderPreviewBookSetup();
+  bindPreExamPdfUpload();
   const account = loadSampleAccount();
   const emailInput = document.getElementById("sample-email");
   const status = document.getElementById("sample-account-status");
@@ -1217,7 +1344,10 @@ async function initExamPage() {
 
   const modeLabel = document.getElementById("exam-mode-label");
   if (modeLabel) {
-    modeLabel.textContent = state.mode === "sample" ? "Sample Exam - 5 Questions" : "Full Exam - 50 Questions";
+    modeLabel.textContent =
+      state.mode === "sample"
+        ? `Sample Exam - ${state.questionCount} Questions - ${Math.round(state.durationSeconds / 60)} Minutes`
+        : `Full Exam - ${state.questionCount} Questions - ${Math.round(state.durationSeconds / 60)} Minutes`;
   }
 
   const sourceLabel = document.getElementById("question-source-label");
@@ -1229,6 +1359,7 @@ async function initExamPage() {
   bindReferenceButtons();
   bindPdfUpload();
   await updateReferenceStatuses();
+  await loadPreparedPdfIntoExam();
 
   const timer = document.getElementById("timer");
   const previousButton = document.getElementById("prev-question");

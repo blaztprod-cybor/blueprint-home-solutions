@@ -16,7 +16,7 @@
         <p class="eyebrow">Blueprint Solutions SIM</p>
         <h1>NYC DOB Elevator Inspector</h1>
         <p class="hero-copy">
-          Practice from the live question bank. The sample exam is 5 questions with a 20 minute timer.
+          Practice from the live question bank. The sample exam is 5 questions with an 18 minute timer.
           The full simulator is 50 questions with a 3 hour timer.
         </p>
         <form id="sample-account-form" class="sample-account-form">
@@ -33,9 +33,14 @@
             <p class="eyebrow">Reference Books</p>
             <h2>Reference book access</h2>
             <p class="muted">
-              During the exam, use the PDF picker to load a codebook from your phone, iCloud, Files, or Downloads for the current session.
+              Load your codebook before starting the timer. The selected PDF stays available for this browser session.
             </p>
           </div>
+          <label class="pdf-upload preexam-pdf-upload">
+            <span>Load PDF before exam</span>
+            <input type="file" id="preexam-pdf-input" accept="application/pdf" />
+          </label>
+          <p id="preexam-pdf-status" class="pdf-status">No PDF loaded yet.</p>
           <div id="preview-book-setup-list" class="book-setup-list"></div>
           <div class="online-reference-note">
             <strong>Available online:</strong>
