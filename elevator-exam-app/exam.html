@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NYC DOB Elevator Inspector Exam</title>
+    <link rel="stylesheet" href="./app.css?v=20260427-phone-pdf" />
+  </head>
+  <body data-page="exam">
+    <div class="shell">
+      <header class="card topbar">
+        <div>
+          <p id="exam-mode-label" class="eyebrow" style="margin: 0 0 8px;">Full Exam</p>
+          <h1>NYC DOB Elevator Inspector Exam</h1>
+          <p id="question-source-label" class="question-source-label">Loading question bank...</p>
+        </div>
+        <div class="topbar-actions">
+          <a href="./start.html" class="nav-link">Opening Screen</a>
+          <div class="timer-chip">
+            <div>
+              <div class="eyebrow" style="margin: 0;">Time Remaining</div>
+              <div id="timer" class="timer-value">03:00:00</div>
+            </div>
+          </div>
+          <button id="submit-exam" class="btn btn-danger">Submit Exam</button>
+        </div>
+      </header>
+
+      <main class="exam-layout">
+        <aside class="card sidebar">
+          <p class="eyebrow">Reference Materials</p>
+          <div class="reference-placeholder-list" aria-label="Reference material placeholders">
+            <div class="reference-group">
+              <span class="reference-group-title">Required Reference Books</span>
+              <button type="button" class="book-item reference-book" data-book-key="a17-1">A17.1<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-2">A17.2<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-3">A17.3<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="a17-5">A17.5<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="ansi-a10-4">ANSI A10.4<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="asme-a90-1">ASME A90.1<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="b20-1">B20.1<span class="book-meta">Use PDF picker for this session</span></button>
+              <button type="button" class="book-item reference-book" data-book-key="icc-a117-1">ICC A117.1 ADA<span class="book-meta">Use PDF picker for this session</span></button>
+            </div>
+            <div class="reference-group">
+              <span class="reference-group-title">Available Online</span>
+              <button type="button" class="book-item online-reference" data-book-key="ny-appendix-k">New York Appendix K<span class="book-meta">Opens online</span></button>
+              <button type="button" class="book-item online-reference" data-book-key="nyc-chapter-33">NYC Chapter 33<span class="book-meta">Opens online</span></button>
+              <button type="button" class="book-item online-reference" data-book-key="nyc-electrical-code">NYC Electrical Code<span class="book-meta">Opens online</span></button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="card exam-panel">
+          <div id="submit-warning" class="submit-warning" hidden></div>
+          <div class="question-meta">
+            <div>
+              <span class="muted">Question</span>
+              <strong id="q-number" style="font-size: 2.2rem; margin-left: 8px;">1</strong>
+              <span class="muted">/ <span id="total-questions">50</span></span>
+            </div>
+            <div id="review-status" class="muted">2 points each</div>
+          </div>
+
+          <div id="current-question" class="question-card"></div>
+
+          <div class="nav-row">
+            <button id="prev-question" class="btn btn-secondary">Previous</button>
+            <button id="mark-review" class="btn btn-secondary">Mark For Review</button>
+            <a href="./review.html" id="go-to-review" class="btn btn-secondary">Go To Review</a>
+            <button id="next-question" class="btn btn-primary">Next</button>
+          </div>
+        </section>
+
+        <aside class="card pdf-panel" aria-label="PDF reference viewer">
+          <div class="pdf-panel-header">
+            <div>
+              <p class="eyebrow">Codebook Viewer</p>
+              <h2 id="pdf-title">Select a reference</h2>
+            </div>
+          </div>
+          <label class="pdf-upload">
+            <span>Load PDF from phone or computer</span>
+            <input type="file" id="pdf-input" accept="application/pdf" />
+          </label>
+          <iframe id="pdf-viewer" title="Codebook PDF viewer"></iframe>
+          <p id="pdf-status" class="pdf-status">Choose a reference book or load a PDF from this device.</p>
+        </aside>
+      </main>
+    </div>
+    <script src="./config.js?v=20260427-phone-pdf"></script>
+    <script src="./app.js?v=20260427-phone-pdf"></script>
+  </body>
+  </html>

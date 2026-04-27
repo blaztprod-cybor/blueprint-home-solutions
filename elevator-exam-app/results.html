@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NYC DOB Elevator Inspector Results</title>
+    <link rel="stylesheet" href="./app.css?v=20260427-phone-pdf" />
+  </head>
+  <body data-page="results">
+    <main class="results-wrap results-detail-wrap">
+      <section class="card results-card">
+        <p id="results-mode-label" class="eyebrow">Exam Complete</p>
+        <div id="score-circle" class="score-circle"></div>
+        <h1>Score Page</h1>
+        <p id="score-text" class="muted" style="font-size: 1.2rem; line-height: 1.6;"></p>
+        <div class="results-actions" style="margin-top: 28px;">
+          <a id="results-start-link" href="./start.html" class="btn btn-primary btn-block">Back To Opening Screen</a>
+        </div>
+      </section>
+      <section class="card results-review-panel">
+        <div class="review-panel-header">
+          <div>
+            <p class="eyebrow">Answer Review</p>
+            <h2>Questions, correct answers, and references</h2>
+          </div>
+        </div>
+        <div id="answer-review-list" class="answer-review-list"></div>
+      </section>
+    </main>
+    <script src="./config.js?v=20260427-phone-pdf"></script>
+    <script src="./app.js?v=20260427-phone-pdf"></script>
+  </body>
+  </html>

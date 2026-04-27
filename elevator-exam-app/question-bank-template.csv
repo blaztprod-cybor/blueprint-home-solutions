@@ -1,0 +1,4 @@
+id,text,option_a,option_b,option_c,option_d,correct,source,topic,type
+1,"According to the ASME A17.1 table of contents, which section would you open first to find machine room requirements?","Section 2.7","Section 2.11","Section 2.2","Section 8.6","B","ASME A17.1","Table of contents navigation","toc_navigation"
+2,"You need the rules for escalator inspections. Based on the table of contents, which document should you open first?","A17.2","A17.1","A17.3","B20.1","A","ASME A17.2","Reference selection","toc_navigation"
+3,"What is the minimum clear height required in an elevator machine room?","6 ft 6 in","7 ft 0 in","7 ft 6 in","8 ft 0 in","C","ASME A17.1","Machine rooms","multiple_choice"

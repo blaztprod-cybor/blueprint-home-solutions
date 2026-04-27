@@ -10,8 +10,6 @@ tsconfig.json.bak
 # Local Netlify folder
 .netlify
 
-# Keep the elevator exam project out of the Blueprint repo
-elevator-exam-app/
 elevator-exam-sim-grok.html
 elevator-exam-sim-grok.rtf
 elevator-exam-webapp.html
