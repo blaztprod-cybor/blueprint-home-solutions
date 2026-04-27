@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT || 4175);
+const HOST = process.env.HOST || "127.0.0.1";
 const LINKED_BOOKS_PATH = path.join(__dirname, ".linked-books.json");
 
 app.use(express.json());
@@ -212,6 +213,6 @@ app.post("/link-book", async (req, res) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`Elevator exam app running at http://127.0.0.1:${PORT}/start.html`);
+app.listen(PORT, HOST, () => {
+  console.log(`Elevator exam app running at http://${HOST}:${PORT}/start.html`);
 });

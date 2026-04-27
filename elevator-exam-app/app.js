@@ -91,6 +91,10 @@ let questionBankSource = {
   label: "Built-in sample questions",
 };
 let uploadedPdfUrl = "";
+let pdfJsModule = null;
+let activePdfDocument = null;
+let activePdfPageNumber = 1;
+let activePdfRenderTask = null;
 
 function getConfig() {
   const config = window.ELEVATOR_EXAM_CONFIG || {};
@@ -139,6 +143,96 @@ function loadSampleAccount() {
 
 function isLocalDesktopServer() {
   return ["127.0.0.1", "localhost"].includes(window.location.hostname);
+}
+
+async function loadPdfJsModule() {
+  if (pdfJsModule) {
+    return pdfJsModule;
+  }
+
+  pdfJsModule = await import("./vendor/pdf.min.mjs");
+  pdfJsModule.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.min.mjs";
+  return pdfJsModule;
+}
+
+async function renderActivePdfPage() {
+  if (!activePdfDocument) {
+    return;
+  }
+
+  const canvas = document.getElementById("pdf-canvas");
+  const pageStatus = document.getElementById("pdf-page-status");
+  const previousButton = document.getElementById("pdf-prev-page");
+  const nextButton = document.getElementById("pdf-next-page");
+
+  if (!canvas) {
+    return;
+  }
+
+  if (activePdfRenderTask) {
+    activePdfRenderTask.cancel();
+    activePdfRenderTask = null;
+  }
+
+  const page = await activePdfDocument.getPage(activePdfPageNumber);
+  const container = document.getElementById("pdf-js-viewer");
+  const availableWidth = Math.max(320, (container?.clientWidth || 720) - 24);
+  const baseViewport = page.getViewport({ scale: 1 });
+  const scale = availableWidth / baseViewport.width;
+  const viewport = page.getViewport({ scale });
+  const context = canvas.getContext("2d");
+
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+
+  if (pageStatus) {
+    pageStatus.textContent = `Page ${activePdfPageNumber} / ${activePdfDocument.numPages}`;
+  }
+
+  if (previousButton) {
+    previousButton.disabled = activePdfPageNumber <= 1;
+  }
+
+  if (nextButton) {
+    nextButton.disabled = activePdfPageNumber >= activePdfDocument.numPages;
+  }
+
+  activePdfRenderTask = page.render({ canvasContext: context, viewport });
+
+  try {
+    await activePdfRenderTask.promise;
+  } catch (error) {
+    if (error?.name !== "RenderingCancelledException") {
+      throw error;
+    }
+  } finally {
+    activePdfRenderTask = null;
+  }
+}
+
+async function loadPdfFileIntoCanvas(file) {
+  const viewer = document.getElementById("pdf-viewer");
+  const canvasViewer = document.getElementById("pdf-js-viewer");
+  const status = document.getElementById("pdf-status");
+  const pdfjs = await loadPdfJsModule();
+  const bytes = await file.arrayBuffer();
+
+  activePdfDocument = await pdfjs.getDocument({ data: bytes }).promise;
+  activePdfPageNumber = 1;
+
+  if (viewer) {
+    viewer.hidden = true;
+  }
+
+  if (canvasViewer) {
+    canvasViewer.hidden = false;
+  }
+
+  await renderActivePdfPage();
+
+  if (status) {
+    status.textContent = "Loaded from this device for the current browser session.";
+  }
 }
 
 async function fetchLinkedBooks() {
@@ -928,6 +1022,11 @@ async function loadReferenceBookInPanel(book) {
     title.textContent = book.title;
   }
 
+  document.getElementById("pdf-js-viewer")?.setAttribute("hidden", "");
+  if (viewer) {
+    viewer.hidden = false;
+  }
+
   if (status) {
     status.textContent = book.online ? "Loading online reference..." : "Loading local PDF...";
   }
@@ -995,14 +1094,35 @@ function bindReferenceButtons() {
 function bindPdfUpload() {
   const input = document.getElementById("pdf-input");
   const viewer = document.getElementById("pdf-viewer");
+  const openLink = document.getElementById("pdf-open-link");
   const title = document.getElementById("pdf-title");
   const status = document.getElementById("pdf-status");
+  const previousButton = document.getElementById("pdf-prev-page");
+  const nextButton = document.getElementById("pdf-next-page");
 
   if (!input || !viewer) {
     return;
   }
 
-  input.addEventListener("change", (event) => {
+  previousButton?.addEventListener("click", async () => {
+    if (!activePdfDocument || activePdfPageNumber <= 1) {
+      return;
+    }
+
+    activePdfPageNumber -= 1;
+    await renderActivePdfPage();
+  });
+
+  nextButton?.addEventListener("click", async () => {
+    if (!activePdfDocument || activePdfPageNumber >= activePdfDocument.numPages) {
+      return;
+    }
+
+    activePdfPageNumber += 1;
+    await renderActivePdfPage();
+  });
+
+  input.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -1016,12 +1136,28 @@ function bindPdfUpload() {
     uploadedPdfUrl = URL.createObjectURL(file);
     viewer.src = uploadedPdfUrl;
 
+    if (openLink) {
+      openLink.href = uploadedPdfUrl;
+      openLink.hidden = false;
+    }
+
     if (title) {
       title.textContent = file.name;
     }
 
     if (status) {
-      status.textContent = "Loaded from this browser session. Select it again after refreshing the page.";
+      status.textContent = "Rendering PDF from this device...";
+    }
+
+    try {
+      await loadPdfFileIntoCanvas(file);
+    } catch (error) {
+      viewer.hidden = false;
+      document.getElementById("pdf-js-viewer")?.setAttribute("hidden", "");
+      if (status) {
+        status.textContent = "Could not render the PDF in-page. Use the open link above.";
+      }
+      console.error("PDF render failed", error);
     }
   });
 }

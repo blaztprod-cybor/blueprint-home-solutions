@@ -440,6 +440,63 @@ a {
   font: inherit;
 }
 
+.pdf-open-link {
+  width: fit-content;
+  color: var(--primary);
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.pdf-open-link[hidden] {
+  display: none;
+}
+
+.pdf-js-viewer {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+
+.pdf-js-viewer[hidden] {
+  display: none;
+}
+
+.pdf-js-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.pdf-js-toolbar .btn {
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+}
+
+#pdf-page-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+#pdf-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+}
+
 #pdf-viewer {
   width: 100%;
   min-height: 560px;
