@@ -1,0 +1,57 @@
+name: Deploy Elevator Exam Simulator
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "elevator-exam-app/app.css"
+      - "elevator-exam-app/app.js"
+      - "elevator-exam-app/config.js"
+      - "elevator-exam-app/*.html"
+      - "elevator-exam-app/question-bank-1000.csv"
+      - "elevator-exam-app/vendor/**"
+      - ".github/workflows/deploy-elevator-exam.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare static simulator
+        run: |
+          mkdir -p dist-elevator-exam/vendor
+          cp elevator-exam-app/*.html dist-elevator-exam/
+          cp elevator-exam-app/app.css dist-elevator-exam/
+          cp elevator-exam-app/app.js dist-elevator-exam/
+          cp elevator-exam-app/config.js dist-elevator-exam/
+          cp elevator-exam-app/question-bank-1000.csv dist-elevator-exam/
+          cp elevator-exam-app/vendor/*.mjs dist-elevator-exam/vendor/
+          touch dist-elevator-exam/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-elevator-exam
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

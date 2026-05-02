@@ -385,10 +385,22 @@ function parseCsv(text) {
     return [];
   }
 
-  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase().trim());
+  const headers = parseCsvLine(lines[0]).map((header, index) => {
+    const normalizedHeader = header
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    return normalizedHeader || (index === 0 ? "id" : "");
+  });
   return lines.slice(1).map((line) => {
     const cells = parseCsvLine(line);
     return headers.reduce((row, header, index) => {
+      if (!header) {
+        return row;
+      }
+
       row[header] = cells[index] || "";
       return row;
     }, {});
@@ -416,11 +428,20 @@ function normalizeQuestionSourceUrl(url) {
 }
 
 function normalizeQuestionRow(row, index) {
-  const options = [row.option_a, row.option_b, row.option_c, row.option_d]
+  const rowValue = (...keys) => {
+    const foundKey = keys.find((key) => String(row[key] || "").trim());
+    return foundKey ? row[foundKey] : "";
+  };
+  const options = [
+    rowValue("option_a", "a", "answer_a", "choice_a"),
+    rowValue("option_b", "b", "answer_b", "choice_b"),
+    rowValue("option_c", "c", "answer_c", "choice_c"),
+    rowValue("option_d", "d", "answer_d", "choice_d"),
+  ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
-  const correct = String(row.correct || "").trim().toUpperCase();
-  const text = String(row.text || row.question || "").trim();
+  const correct = String(rowValue("correct", "correct_answer", "answer", "key")).trim().toUpperCase();
+  const text = String(rowValue("text", "question", "question_text", "prompt")).trim();
 
   if (!text || options.length < 2 || !["A", "B", "C", "D"].includes(correct)) {
     return null;
@@ -432,18 +453,18 @@ function normalizeQuestionRow(row, index) {
   });
 
   return {
-    id: Number(row.id) || index + 1,
+    id: Number(rowValue("id", "number", "question_number", "question_id")) || index + 1,
     text,
     options: normalizedOptions,
     correct,
-    source: String(row.source || row.book || "").trim(),
-    topic: String(row.topic || row.category || "").trim(),
-    reference: String(row.reference || row.ref || "").trim(),
-    section: String(row.section || row.code_section || row.part || "").trim(),
-    page: String(row.page || row.page_number || "").trim(),
-    location: String(row.location || row.answer_location || "").trim(),
-    explanation: String(row.explanation || row.rationale || row.why || "").trim(),
-    type: String(row.type || row.question_type || "multiple_choice").trim(),
+    source: String(rowValue("source", "book", "reference_book")).trim(),
+    topic: String(rowValue("topic", "category", "subject")).trim(),
+    reference: String(rowValue("reference", "ref", "citation")).trim(),
+    section: String(rowValue("section", "code_section", "part")).trim(),
+    page: String(rowValue("page", "page_number")).trim(),
+    location: String(rowValue("location", "answer_location")).trim(),
+    explanation: String(rowValue("explanation", "rationale", "why")).trim(),
+    type: String(rowValue("type", "question_type") || "multiple_choice").trim(),
   };
 }
 
@@ -995,45 +1016,85 @@ async function renderPreviewBookSetup() {
   requiredBooks.forEach((book) => {
     const row = document.createElement("div");
     row.className = "book-setup-row";
-    row.innerHTML = `
-      <div>
-        <strong>${book.title}</strong>
-        <span class="book-link-status">No PDF selected</span>
-      </div>
-      <label class="btn btn-secondary setup-reference-book">
-        Choose PDF
-        <input type="file" accept="application/pdf" hidden>
-      </label>
-    `;
+    const localDesktop = isLocalDesktopServer();
+
+    row.innerHTML = localDesktop
+      ? `
+        <div>
+          <strong>${book.title}</strong>
+          <span class="book-link-status">Not linked yet</span>
+        </div>
+        <button class="btn btn-secondary setup-reference-book" type="button">Link to my copy</button>
+      `
+      : `
+        <div>
+          <strong>${book.title}</strong>
+          <span class="book-link-status">No PDF selected</span>
+        </div>
+        <label class="btn btn-secondary setup-reference-book">
+          Choose PDF
+          <input type="file" accept="application/pdf" hidden>
+        </label>
+      `;
 
     const status = row.querySelector(".book-link-status");
-    const input = row.querySelector("input");
 
-    loadSessionPdf(book.key)
-      .then((record) => {
-        if (record?.file && status) {
-          status.textContent = record.name || record.file.name;
+    if (localDesktop) {
+      fetchLinkedBooks()
+        .then((linkedBooks) => {
+          const linked = linkedBooks[book.key];
+          if (linked && status) {
+            status.textContent = linked.fileName;
+          }
+        })
+        .catch(() => {});
+
+      row.querySelector("button")?.addEventListener("click", async () => {
+        const button = row.querySelector("button");
+        button.disabled = true;
+        button.textContent = "Choose PDF...";
+
+        try {
+          const linked = await linkReferenceBook(book);
+          if (status) {
+            status.textContent = linked.fileName;
+          }
+          button.textContent = "Linked";
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : `Unable to link ${book.title}`);
+          button.disabled = false;
+          button.textContent = "Link to my copy";
         }
-      })
-      .catch(() => {});
+      });
+    } else {
+      const input = row.querySelector("input");
 
-    input?.addEventListener("change", async (event) => {
-      const file = event.target.files?.[0];
+      loadSessionPdf(book.key)
+        .then((record) => {
+          if (record?.file && status) {
+            status.textContent = record.name || record.file.name;
+          }
+        })
+        .catch(() => {});
 
-      if (!file) {
-        return;
-      }
+      input?.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
 
-      if (status) {
-        status.textContent = "Saving...";
-      }
+        if (!file) {
+          return;
+        }
 
-      await saveSessionPdf(file, book.key);
+        if (status) {
+          status.textContent = "Saving...";
+        }
 
-      if (status) {
-        status.textContent = file.name;
-      }
-    });
+        await saveSessionPdf(file, book.key);
+
+        if (status) {
+          status.textContent = file.name;
+        }
+      });
+    }
 
     container.appendChild(row);
   });
@@ -1049,87 +1110,32 @@ async function openReferenceBook(book) {
     return;
   }
 
+  if (isLocalDesktopServer()) {
+    try {
+      const response = await fetch("/open-book", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          key: book.key,
+          title: book.title,
+          linkIfMissing: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || `Unable to open ${book.title}`);
+      }
+      return;
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : `Unable to open ${book.title}`);
+      return;
+    }
+  }
+
   window.open(`./viewer.html?book=${encodeURIComponent(book.key)}`, "_blank", "noopener");
-}
-
-async function loadReferenceBookInPanel(book) {
-  if (!book) {
-    return;
-  }
-
-  const viewer = document.getElementById("pdf-viewer");
-  const title = document.getElementById("pdf-title");
-  const status = document.getElementById("pdf-status");
-
-  if (!viewer) {
-    await openReferenceBook(book);
-    return;
-  }
-
-  if (title) {
-    title.textContent = book.title;
-  }
-
-  document.getElementById("pdf-js-viewer")?.setAttribute("hidden", "");
-  if (viewer) {
-    viewer.hidden = false;
-  }
-
-  if (status) {
-    status.textContent = book.online ? "Loading online reference..." : "Loading local PDF...";
-  }
-
-  if (book.online) {
-    viewer.src = book.path;
-    if (status) {
-      status.textContent = "If this online PDF is blocked by the publisher, open it from the reference list in a new tab.";
-    }
-    return;
-  }
-
-  try {
-    let response = await fetch(book.path, { method: "HEAD", cache: "no-store" });
-
-    if (response.ok) {
-      viewer.src = `${book.path}#toolbar=1`;
-      if (status) {
-        status.textContent = "Loaded from the hosted reference PDF.";
-      }
-      return;
-    }
-
-    if (!isLocalDesktopServer()) {
-      if (status) {
-        status.textContent = "This reference is not hosted online. Use the PDF picker above to load your copy for this session.";
-      }
-      return;
-    }
-
-    response = await fetch(`/book-pdf/${encodeURIComponent(book.key)}`, { cache: "no-store" });
-
-    if (response.status === 404) {
-      await linkReferenceBook(book);
-      await updateReferenceStatuses();
-      response = await fetch(`/book-pdf/${encodeURIComponent(book.key)}`, { cache: "no-store" });
-    }
-
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(detail || `Unable to load ${book.title}`);
-    }
-
-    viewer.src = `/book-pdf/${encodeURIComponent(book.key)}#toolbar=1`;
-    if (status) {
-      status.textContent = "Loaded from your linked local PDF.";
-    }
-  } catch (error) {
-    if (status) {
-      status.textContent = "Could not load the PDF in the panel.";
-    }
-    window.alert(
-      `${error instanceof Error ? error.message : "Unable to load reference book"}\n\nUse the PDF picker to load a PDF from this device for the current browser session.`
-    );
-  }
 }
 
 function bindReferenceButtons() {
@@ -1159,37 +1165,6 @@ function bindPdfPageButtons() {
 
     activePdfPageNumber += 1;
     await renderActivePdfPage();
-  });
-}
-
-function bindPdfUpload() {
-  const input = document.getElementById("pdf-input");
-  const viewer = document.getElementById("pdf-viewer");
-  const status = document.getElementById("pdf-status");
-
-  if (!input || !viewer) {
-    return;
-  }
-
-  bindPdfPageButtons();
-
-  input.addEventListener("change", async (event) => {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    try {
-      await preparePdfFromFile(file, { persist: true });
-    } catch (error) {
-      viewer.hidden = false;
-      document.getElementById("pdf-js-viewer")?.setAttribute("hidden", "");
-      if (status) {
-        status.textContent = "Could not render the PDF in-page. Use the open link above.";
-      }
-      console.error("PDF render failed", error);
-    }
   });
 }
 
@@ -1227,28 +1202,6 @@ async function initViewerPage() {
   } catch (error) {
     if (status) {
       status.textContent = "Could not open this PDF from local browser storage.";
-    }
-  }
-}
-
-async function loadPreparedPdfIntoExam() {
-  const status = document.getElementById("pdf-status");
-
-  try {
-    const record = await loadSessionPdf();
-
-    if (!record?.file) {
-      return;
-    }
-
-    if (status) {
-      status.textContent = `Loading prepared PDF: ${record.name || record.file.name}`;
-    }
-
-    await preparePdfFromFile(record.file);
-  } catch (error) {
-    if (status) {
-      status.textContent = "Could not load the pre-selected PDF. Choose it again from this page.";
     }
   }
 }
