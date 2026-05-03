@@ -360,9 +360,6 @@ export default function Landing() {
           >
             <div className="flex flex-col gap-4 items-center text-center">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.26em] text-slate-500">
-                  Operated by Dzyn Indie Films LLC
-                </p>
                 <p className="text-2xl font-black leading-tight text-slate-900 sm:text-3xl md:text-4xl">
                   Home Improvement Marketplace
                 </p>
