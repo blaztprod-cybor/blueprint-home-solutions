@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reference PDF Viewer</title>
+    <link rel="stylesheet" href="./app.css?v=20260502-sheet-pool" />
+  </head>
+  <body data-page="viewer">
+    <main class="viewer-shell">
+      <header class="card topbar">
+        <div>
+          <p class="eyebrow" style="margin: 0 0 8px;">Reference Material</p>
+          <h1 id="pdf-title">Reference PDF</h1>
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="window.close()">Close</button>
+      </header>
+
+      <section class="card standalone-pdf-panel">
+        <div id="pdf-js-viewer" class="pdf-js-viewer">
+          <div class="pdf-js-toolbar">
+            <button type="button" id="pdf-prev-page" class="btn btn-secondary">Previous Page</button>
+            <span id="pdf-page-status">Page 1 / 1</span>
+            <button type="button" id="pdf-next-page" class="btn btn-secondary">Next Page</button>
+          </div>
+          <canvas id="pdf-canvas"></canvas>
+        </div>
+        <p id="pdf-status" class="pdf-status">Loading selected PDF...</p>
+      </section>
+    </main>
+    <script src="./config.js?v=20260502-sheet-pool"></script>
+    <script src="./app.js?v=20260502-sheet-pool"></script>
+  </body>
+</html>
