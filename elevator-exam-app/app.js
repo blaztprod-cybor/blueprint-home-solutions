@@ -1,5 +1,5 @@
 const STORAGE_KEY = "elevator_exam_state_v1";
-const QUESTION_BANK_CACHE_KEY = "elevator_exam_question_bank_v1";
+const QUESTION_BANK_CACHE_KEY = "elevator_exam_question_bank_v2";
 const SAMPLE_ACCOUNT_KEY = "elevator_exam_sample_account_v1";
 const SESSION_PDF_DB_NAME = "elevator_exam_session_pdf_v1";
 const SESSION_PDF_STORE_NAME = "pdfs";
@@ -154,11 +154,14 @@ function getConfig() {
 
   return {
     questionSheetUrl: String(config.questionSheetUrl || "").trim(),
+    questionSheetTabs: Array.isArray(config.questionSheetTabs) ? config.questionSheetTabs : [],
     localQuestionBankUrl: String(config.localQuestionBankUrl || "./question-bank-1000.csv").trim(),
     fullQuestionCount: fullQuestionCount > 0 ? fullQuestionCount : DEFAULT_EXAM_QUESTION_COUNT,
     fullDurationSeconds: fullDurationMinutes > 0 ? fullDurationMinutes * 60 : DEFAULT_EXAM_DURATION_SECONDS,
     sampleQuestionCount: sampleQuestionCount > 0 ? sampleQuestionCount : DEFAULT_SAMPLE_QUESTION_COUNT,
     sampleDurationSeconds: sampleDurationMinutes > 0 ? sampleDurationMinutes * 60 : DEFAULT_SAMPLE_DURATION_SECONDS,
+    fullSourceBlueprint: Array.isArray(config.fullSourceBlueprint) ? config.fullSourceBlueprint : [],
+    sampleSourceBlueprint: Array.isArray(config.sampleSourceBlueprint) ? config.sampleSourceBlueprint : [],
     sourceBlueprint: Array.isArray(config.sourceBlueprint) ? config.sourceBlueprint : [],
   };
 }
@@ -407,7 +410,7 @@ function parseCsv(text) {
   });
 }
 
-function normalizeQuestionSourceUrl(url) {
+function normalizeQuestionSourceUrl(url, source = {}) {
   if (!url) {
     return "";
   }
@@ -422,16 +425,23 @@ function normalizeQuestionSourceUrl(url) {
   }
 
   const sheetId = match[1];
-  const gidMatch = url.match(/[?&]gid=([0-9]+)/);
-  const gid = gidMatch ? gidMatch[1] : "0";
+  const sheetName = String(source.sheet || "").trim();
+  if (sheetName) {
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  }
+
+  const gidMatch = String(source.gid || "").trim() ? null : url.match(/[?&]gid=([0-9]+)/);
+  const gid = String(source.gid || "").trim() || (gidMatch ? gidMatch[1] : "0");
   return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 }
 
-function normalizeQuestionRow(row, index) {
+function normalizeQuestionRow(row, index, source = {}) {
   const rowValue = (...keys) => {
     const foundKey = keys.find((key) => String(row[key] || "").trim());
     return foundKey ? row[foundKey] : "";
   };
+  const pool = String(source.pool || "main").trim() || "main";
+  const rawId = Number(rowValue("id", "number", "question_number", "question_id")) || index + 1;
   const options = [
     rowValue("option_a", "a", "answer_a", "choice_a"),
     rowValue("option_b", "b", "answer_b", "choice_b"),
@@ -453,7 +463,9 @@ function normalizeQuestionRow(row, index) {
   });
 
   return {
-    id: Number(rowValue("id", "number", "question_number", "question_id")) || index + 1,
+    id: `${pool}:${rawId}`,
+    rawId,
+    pool,
     text,
     options: normalizedOptions,
     correct,
@@ -497,12 +509,13 @@ function cacheQuestionBank(bank) {
 }
 
 async function loadQuestionBank() {
-  const { questionSheetUrl, localQuestionBankUrl } = getConfig();
+  const { questionSheetUrl, questionSheetTabs, localQuestionBankUrl } = getConfig();
   const cachedQuestionBank = loadCachedQuestionBank();
   const fallback = cachedQuestionBank || [...SAMPLE_QUESTIONS];
 
-  async function loadCsvQuestionSource(url) {
-    const response = await fetch(normalizeQuestionSourceUrl(url), { cache: "no-store" });
+  async function loadCsvQuestionSource(source) {
+    const sourceConfig = typeof source === "string" ? { url: source } : source;
+    const response = await fetch(normalizeQuestionSourceUrl(sourceConfig.url, sourceConfig), { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Question source request failed with ${response.status}`);
     }
@@ -510,7 +523,7 @@ async function loadQuestionBank() {
     const csvText = await response.text();
     const parsedRows = parseCsv(csvText);
     const loadedQuestions = parsedRows
-      .map((row, index) => normalizeQuestionRow(row, index))
+      .map((row, index) => normalizeQuestionRow(row, index, sourceConfig))
       .filter(Boolean);
 
     if (!loadedQuestions.length) {
@@ -521,8 +534,14 @@ async function loadQuestionBank() {
   }
 
   try {
-    if (questionSheetUrl) {
-      const loadedQuestions = await loadCsvQuestionSource(questionSheetUrl);
+    const configuredSheetSources = questionSheetTabs.length
+      ? questionSheetTabs
+      : questionSheetUrl
+      ? [{ url: questionSheetUrl, pool: "main" }]
+      : [];
+
+    if (configuredSheetSources.length) {
+      const loadedQuestions = (await Promise.all(configuredSheetSources.map(loadCsvQuestionSource))).flat();
       questionBank = loadedQuestions;
       questionBankSource = {
         type: "google-sheet",
@@ -585,12 +604,15 @@ function normalizeMatchValue(value) {
 function questionMatchesBlueprint(question, rule) {
   const questionSource = normalizeMatchValue(question.source);
   const questionTopic = normalizeMatchValue(question.topic);
+  const questionPool = normalizeMatchValue(question.pool);
   const sourceMatch = normalizeMatchValue(rule.sourceMatch);
   const topicMatch = normalizeMatchValue(rule.topicMatch);
+  const poolMatch = normalizeMatchValue(rule.pool);
 
   const sourceOk = !sourceMatch || questionSource.includes(sourceMatch);
   const topicOk = !topicMatch || questionTopic.includes(topicMatch);
-  return sourceOk && topicOk;
+  const poolOk = !poolMatch || questionPool === poolMatch;
+  return sourceOk && topicOk && poolOk;
 }
 
 function selectQuestionsFromBlueprint(bank, questionCount, sourceBlueprint) {
@@ -751,7 +773,11 @@ async function startNewExam({ mode = "full", accountEmail = null } = {}) {
   const isSample = mode === "sample";
   const questionCount = isSample ? config.sampleQuestionCount : config.fullQuestionCount;
   const durationSeconds = isSample ? config.sampleDurationSeconds : config.fullDurationSeconds;
-  const sourceBlueprint = isSample ? [] : config.sourceBlueprint;
+  const sourceBlueprint = isSample
+    ? config.sampleSourceBlueprint
+    : config.fullSourceBlueprint.length
+    ? config.fullSourceBlueprint
+    : config.sourceBlueprint;
   const selectedQuestions = selectQuestionsFromBlueprint(questionBank, questionCount, sourceBlueprint);
   const state = {
     startedAt,
@@ -969,7 +995,7 @@ function renderReviewMap(state) {
       tile.classList.add("current");
     }
 
-    tile.textContent = String(question.id);
+    tile.textContent = String(index + 1);
     tile.addEventListener("click", () => {
       const nextState = loadState();
       nextState.currentQ = index;
