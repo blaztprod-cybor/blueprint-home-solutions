@@ -6,7 +6,7 @@ window.ELEVATOR_EXAM_CONFIG = {
     {
       url: "https://docs.google.com/spreadsheets/d/1XSD_CNSqc9tiPmReZV6k6F1mtNWdIqXu6hR29S5yN1s/edit?usp=sharing",
       sheet: "Sheet1",
-      pool: "main",
+      pool: "sheet1",
     },
     {
       url: "https://docs.google.com/spreadsheets/d/1XSD_CNSqc9tiPmReZV6k6F1mtNWdIqXu6hR29S5yN1s/edit?usp=sharing",
@@ -30,13 +30,13 @@ window.ELEVATOR_EXAM_CONFIG = {
   sampleQuestionCount: 5,
   sampleDurationMinutes: 18,
   fullSourceBlueprint: [
-    { pool: "main", count: 20 },
+    { pool: "sheet1", count: 20 },
     { pool: "escalator", count: 14 },
-    { pool: "inspection", count: 6 },
-    { pool: "existing", count: 10 },
+    { pool: "inspection", count: 8 },
+    { pool: "existing", count: 8 },
   ],
   sampleSourceBlueprint: [
-    { pool: "main", count: 2 },
+    { pool: "sheet1", count: 2 },
     { pool: "escalator", count: 1 },
     { pool: "inspection", count: 1 },
     { pool: "existing", count: 1 },

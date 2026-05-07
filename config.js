@@ -5,13 +5,23 @@ window.ELEVATOR_EXAM_CONFIG = {
   questionSheetTabs: [
     {
       url: "https://docs.google.com/spreadsheets/d/1XSD_CNSqc9tiPmReZV6k6F1mtNWdIqXu6hR29S5yN1s/edit?usp=sharing",
-      gid: "0",
-      pool: "main",
+      sheet: "Sheet1",
+      pool: "sheet1",
     },
     {
       url: "https://docs.google.com/spreadsheets/d/1XSD_CNSqc9tiPmReZV6k6F1mtNWdIqXu6hR29S5yN1s/edit?usp=sharing",
       sheet: "Escalators",
       pool: "escalator",
+    },
+    {
+      url: "https://docs.google.com/spreadsheets/d/1XSD_CNSqc9tiPmReZV6k6F1mtNWdIqXu6hR29S5yN1s/edit?usp=sharing",
+      sheet: "Inspections",
+      pool: "inspection",
+    },
+    {
+      url: "https://docs.google.com/spreadsheets/d/1XSD_CNSqc9tiPmReZV6k6F1mtNWdIqXu6hR29S5yN1s/edit?usp=sharing",
+      sheet: "Existing",
+      pool: "existing",
     },
   ],
   localQuestionBankUrl: "./question-bank-1000.csv",
@@ -20,12 +30,16 @@ window.ELEVATOR_EXAM_CONFIG = {
   sampleQuestionCount: 5,
   sampleDurationMinutes: 18,
   fullSourceBlueprint: [
-    { pool: "main", count: 36 },
+    { pool: "sheet1", count: 20 },
     { pool: "escalator", count: 14 },
+    { pool: "inspection", count: 8 },
+    { pool: "existing", count: 8 },
   ],
   sampleSourceBlueprint: [
-    { pool: "main", count: 3 },
-    { pool: "escalator", count: 2 },
+    { pool: "sheet1", count: 2 },
+    { pool: "escalator", count: 1 },
+    { pool: "inspection", count: 1 },
+    { pool: "existing", count: 1 },
   ],
   // Leave this empty to randomly pull every exam from the full live Sheet range.
   // Any valid new rows added to the Google Sheet become eligible automatically.
